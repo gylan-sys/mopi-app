@@ -1,0 +1,77 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User account information",
+      "type": "object",
+      "properties": {
+        "username": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "role": { "type": "string", "enum": ["admin", "cashier"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["username", "email", "role"]
+    },
+    "InventoryItem": {
+      "title": "Inventory Item",
+      "description": "Items in the inventory",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "quantity": { "type": "number" },
+        "unit": { "type": "string" },
+        "min_stock": { "type": "number" },
+        "unit_price": { "type": "number" },
+        "category": { "type": "string", "enum": ["Bahan", "Alat"] }
+      },
+      "required": ["name", "quantity", "unit"]
+    },
+    "Transaction": {
+      "title": "Transaction",
+      "description": "Financial transaction record",
+      "type": "object",
+      "properties": {
+        "type": { "type": "string", "enum": ["income", "expense"] },
+        "category": { "type": "string" },
+        "amount": { "type": "number" },
+        "description": { "type": "string" },
+        "date": { "type": "string", "format": "date-time" }
+      },
+      "required": ["type", "category", "amount", "date"]
+    },
+    "Menu": {
+      "title": "Menu",
+      "description": "Menu item definition",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "price": { "type": "number" },
+        "category": { "type": "string" },
+        "image_url": { "type": "string" },
+        "description": { "type": "string" }
+      },
+      "required": ["name", "price", "category"]
+    },
+    "Order": {
+      "title": "Order",
+      "description": "Customer order record",
+      "type": "object",
+      "properties": {
+        "orderId": { "type": "string" },
+        "customerName": { "type": "string" },
+        "total": { "type": "number" },
+        "paymentMethod": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "completed", "cancelled"] },
+        "date": { "type": "string", "format": "date-time" }
+      },
+      "required": ["orderId", "total", "status", "date"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": { "schema": "User", "description": "User profiles" },
+    "/inventory/{itemId}": { "schema": "InventoryItem", "description": "Inventory items" },
+    "/transactions/{txId}": { "schema": "Transaction", "description": "Financial transactions" },
+    "/menus/{menuId}": { "schema": "Menu", "description": "Menu items" },
+    "/orders/{orderId}": { "schema": "Order", "description": "Customer orders" }
+  }
+}

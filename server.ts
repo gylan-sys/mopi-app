@@ -148,6 +148,11 @@ function initDb() {
   // Safely add columns
   try { db.prepare("ALTER TABLE inventory ADD COLUMN type TEXT DEFAULT 'Bahan'").run(); } catch(e) {}
   try { db.prepare("ALTER TABLE menus ADD COLUMN type TEXT DEFAULT 'Internal'").run(); } catch(e) {}
+  try { db.prepare("ALTER TABLE transactions ADD COLUMN notes TEXT").run(); } catch(e) {}
+  try { db.prepare("ALTER TABLE transactions ADD COLUMN table_number TEXT").run(); } catch(e) {}
+  try { db.prepare("ALTER TABLE transactions ADD COLUMN promo_code TEXT").run(); } catch(e) {}
+  try { db.prepare("ALTER TABLE transactions ADD COLUMN discount_amount REAL DEFAULT 0").run(); } catch(e) {}
+  try { db.prepare("ALTER TABLE transactions ADD COLUMN customer_id INTEGER").run(); } catch(e) {}
   try { db.prepare("ALTER TABLE menus ADD COLUMN supplier_name TEXT").run(); } catch(e) {}
   try { db.prepare("ALTER TABLE menus ADD COLUMN supplier_price REAL DEFAULT 0").run(); } catch(e) {}
 
@@ -549,7 +554,7 @@ async function startServer() {
   });
 
   app.post("/api/orders/public", (req, res) => {
-    const { items, customerName, tableNumber, promoCode, discountAmount, paymentMethod } = req.body;
+    const { items, customerName, tableNumber, promoCode, discountAmount, paymentMethod, notes } = req.body;
     
     if (!items || !Array.isArray(items) || items.length === 0) {
       return res.status(400).json({ error: "Orderan kosong" });
@@ -571,8 +576,8 @@ async function startServer() {
 
           // Insert into transactions as pending
           db.prepare(`
-            INSERT INTO transactions (type, category, amount, description, customer_name, table_number, order_id, source, status, menu_id, quantity, date, promo_code, payment_method)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?, ?)
+            INSERT INTO transactions (type, category, amount, description, customer_name, table_number, order_id, source, status, menu_id, quantity, date, promo_code, payment_method, notes)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?, ?, ?)
           `).run(
             'income',
             menu.category,
@@ -586,7 +591,8 @@ async function startServer() {
             item.menuId,
             item.quantity,
             promoCode || null,
-            paymentMethod || 'Cash'
+            paymentMethod || 'Cash',
+            notes || null
           );
         }
 
@@ -640,10 +646,46 @@ async function startServer() {
       });
 
       const orderId = transaction();
+      io.emit("ORDER_UPDATED");
       res.json({ success: true, orderId });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
+  });
+
+  app.get("/api/public/orders/history/:customerName", (req, res) => {
+    const { customerName } = req.params;
+    const items = db.prepare(`
+      SELECT t.*, m.name as menu_name
+      FROM transactions t
+      LEFT JOIN menus m ON t.menu_id = m.id
+      WHERE t.customer_name = ?
+      ORDER BY t.date DESC
+      LIMIT 50
+    `).all(customerName) as any[];
+
+    const orders: any = {};
+    items.forEach(item => {
+      if (!orders[item.order_id]) {
+        orders[item.order_id] = {
+          orderId: item.order_id,
+          customerName: item.customer_name,
+          date: item.date,
+          source: item.source || 'POS',
+          status: item.status,
+          tableNumber: item.table_number,
+          paymentMethod: item.payment_method,
+          items: []
+        };
+      }
+      orders[item.order_id].items.push({
+        name: item.menu_name,
+        quantity: item.quantity,
+        amount: item.amount
+      });
+    });
+
+    res.json(Object.values(orders));
   });
 
   // Menus API
@@ -702,13 +744,18 @@ async function startServer() {
 
   // Orders API
   app.post("/api/orders", authenticateToken, (req, res) => {
-    const { items, paymentMethod, customerName, orderId: providedOrderId, source, tableNumber, customerId } = req.body;
+    const { items, paymentMethod, customerName, orderId: providedOrderId, source, tableNumber, customerId, notes } = req.body;
     
     if (!items || !Array.isArray(items) || items.length === 0) {
       return res.status(400).json({ error: "Orderan kosong" });
     }
 
     const transaction = db.transaction(() => {
+      // If orderId is provided, delete existing pending transactions for this order
+      if (providedOrderId) {
+        db.prepare("DELETE FROM transactions WHERE order_id = ? AND status = 'pending'").run(providedOrderId);
+      }
+
       const insufficientStock: string[] = [];
       const processedItems: any[] = [];
       const aggregatedIngredients: Map<number, { name: string, required: number, current: number, unit: string }> = new Map();
@@ -756,15 +803,15 @@ async function startServer() {
         return { error: "Stok bahan baku tidak mencukupi", details: insufficientStock };
       }
 
-      // All orders should go to processing to enter the queue, except if explicitly handled otherwise
+      // All orders should go to processing to enter the queue
       const status = 'processing';
       
-      const insertTx = db.prepare("INSERT INTO transactions (type, category, amount, description, menu_id, quantity, payment_method, order_id, source, customer_name, status, table_number, customer_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+      const insertTx = db.prepare("INSERT INTO transactions (type, category, amount, description, menu_id, quantity, payment_method, order_id, source, customer_name, status, table_number, customer_id, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
       const updateInv = db.prepare("UPDATE inventory SET quantity = quantity - ? WHERE id = ?");
 
       for (const item of processedItems) {
         const { menu, ingredients, quantity } = item;
-        insertTx.run('income', 'Sales', menu.price * quantity, `Order: ${menu.name} (x${quantity})`, menu.id, quantity, paymentMethod || 'Cash', orderId, source || 'POS', customerName || 'Umum', status, tableNumber || null, customerId || null);
+        insertTx.run('income', 'Sales', menu.price * quantity, `Order: ${menu.name} (x${quantity})`, menu.id, quantity, paymentMethod || 'Cash', orderId, source || 'POS', customerName || 'Umum', status, tableNumber || null, customerId || null, notes || null);
 
         for (const ing of ingredients) {
           updateInv.run(ing.quantity * quantity, ing.inventory_id);
@@ -862,11 +909,12 @@ async function startServer() {
           order_id as id,
           customer_name,
           table_number,
+          notes,
           status,
           date as created_at,
           json_group_array(json_object('menu_name', description, 'quantity', quantity)) as items
         FROM transactions
-        WHERE category = 'Sales' AND status != 'Selesai' AND status != 'Dibatalkan'
+        WHERE category = 'Sales' AND status IN ('pending', 'processing')
         GROUP BY order_id
         ORDER BY date DESC
       `).all() as any[];
@@ -896,6 +944,7 @@ async function startServer() {
           source: item.source || 'POS',
           status: item.status,
           tableNumber: item.table_number,
+          notes: item.notes,
           items: []
         };
       }

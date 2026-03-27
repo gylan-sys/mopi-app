@@ -21,6 +21,7 @@ import {
   User,
   Lock,
   Check,
+  ArrowRight,
   Printer,
   CreditCard,
   Settings,
@@ -68,7 +69,8 @@ import {
   Users,
   Sun,
   Moon,
-  FileDown
+  FileDown,
+  QrCode
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -286,6 +288,7 @@ export default function App() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<'Cash' | 'QRIS'>('Cash');
   const [customerName, setCustomerName] = useState('');
+  const [posNotes, setPosNotes] = useState('');
   const [cashReceived, setCashReceived] = useState<number | string>('');
   const [appSettings, setAppSettings] = useState({
     app_name: 'MOPI',
@@ -419,10 +422,13 @@ export default function App() {
   const [editingPromo, setEditingPromo] = useState<any>(null);
   const [newAd, setNewAd] = useState({ type: 'image', url: '', title: '', subtitle: '', active: true });
   const [newPromo, setNewPromo] = useState({ code: '', discount_type: 'percentage', discount_value: 0, target_type: 'all', target_ids: [], active: true });
-  const [customerOrder, setCustomerOrder] = useState({ name: '', table: '', paymentMethod: 'Cash' });
+  const [customerOrder, setCustomerOrder] = useState({ name: '', table: '', paymentMethod: 'Cash', notes: '' });
+  const [lastCustomerOrder, setLastCustomerOrder] = useState<any>(null);
   const [showCustomerOrderSuccess, setShowCustomerOrderSuccess] = useState(false);
   const [customerOrderId, setCustomerOrderId] = useState('');
   const [showCustomerOrderStatus, setShowCustomerOrderStatus] = useState(false);
+  const [customerOrderHistory, setCustomerOrderHistory] = useState<any[]>([]);
+  const [customerHistoryTab, setCustomerHistoryTab] = useState<'active' | 'history'>('active');
   const [customerActiveOrders, setCustomerActiveOrders] = useState<any[]>([]);
 
   // Forms
@@ -601,6 +607,26 @@ export default function App() {
       return () => clearInterval(interval);
     }
   }, [showCustomerOrderStatus]);
+
+  useEffect(() => {
+    if (socketRef.current) {
+      const handleOrderUpdate = () => {
+        fetchActiveOrders();
+        if (isCustomerMode) {
+          fetchCustomerActiveOrders();
+          if (customerOrder.name) fetchCustomerHistory(customerOrder.name);
+          toast.info("Ada pembaruan pada pesanan!", {
+            position: "bottom-right",
+            duration: 3000
+          });
+        }
+      };
+      socketRef.current.on('ORDER_UPDATED', handleOrderUpdate);
+      return () => {
+        socketRef.current?.off('ORDER_UPDATED', handleOrderUpdate);
+      };
+    }
+  }, [isCustomerMode, customerOrder.name]);
 
   const fetchData = async (filters = txFilter) => {
     if (!user) return;
@@ -1003,16 +1029,18 @@ export default function App() {
           tableNumber: customerOrder.table,
           promoCode: activePromo?.code,
           discountAmount: discount,
-          paymentMethod: customerOrder.paymentMethod
+          paymentMethod: customerOrder.paymentMethod,
+          notes: customerOrder.notes
         })
       });
 
       if (res.ok) {
         const data = await res.json();
         setCustomerOrderId(data.orderId);
+        setLastCustomerOrder({ ...customerOrder });
         setShowCustomerOrderSuccess(true);
         setCart([]);
-        setCustomerOrder({ name: '', table: '', paymentMethod: 'Cash' });
+        setCustomerOrder({ name: '', table: '', paymentMethod: 'Cash', notes: '' });
         setActivePromo(null);
         setPromoCode('');
         toast.success('Pesanan berhasil dikirim!');
@@ -1024,6 +1052,32 @@ export default function App() {
       toast.error('Terjadi kesalahan koneksi');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleMarkAsPaid = async (orderId: string) => {
+    try {
+      const res = await fetch(`/api/orders/${orderId}/status`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'processing' })
+      });
+      if (res.ok) {
+        fetchActiveOrders();
+        toast.success(`Orderan ${orderId} ditandai sudah bayar.`);
+      }
+    } catch (error) {
+      console.error('Error marking as paid:', error);
+    }
+  };
+
+  const fetchCustomerHistory = async (name: string) => {
+    if (!name) return;
+    try {
+      const res = await fetch(`/api/public/orders/history/${encodeURIComponent(name)}`);
+      if (res.ok) setCustomerOrderHistory(await res.json());
+    } catch (error) {
+      console.error('Error fetching customer history:', error);
     }
   };
 
@@ -1252,7 +1306,9 @@ export default function App() {
         cashReceived: paymentMethod === 'Cash' ? Number(cashReceived) : 0,
         cashier: user?.username || 'System',
         tableNumber,
-        customerId: selectedCustomerId
+        customerId: selectedCustomerId,
+        notes: posNotes,
+        source: 'POS'
       };
       
       const res = await fetch('/api/orders', {
@@ -1275,6 +1331,7 @@ export default function App() {
           cashReceived: paymentMethod === 'Cash' ? Number(cashReceived) : 0,
           change: paymentMethod === 'Cash' ? (Number(cashReceived) - total) : 0,
           cashier: user?.username || 'System',
+          notes: posNotes,
           date: formatDate(new Date(), 'dd MMM yyyy HH:mm')
         };
         
@@ -1291,6 +1348,7 @@ export default function App() {
         setCart([]);
         setCustomerName('');
         setTableNumber('');
+        setPosNotes('');
         setSelectedCustomerId(null);
         setCashReceived('');
         await fetchData();
@@ -1727,22 +1785,37 @@ export default function App() {
               exit={{ x: '100%' }}
               className="relative w-full max-w-md bg-white h-full shadow-2xl flex flex-col"
             >
-              <div className="p-6 border-b border-coffee-100 flex items-center justify-between">
+              <div className="p-6 border-b border-coffee-100 flex items-center justify-between bg-white sticky top-0 z-10">
                 <div className="flex items-center gap-3">
                   <div className="bg-coffee-900 p-2 rounded-xl text-white">
                     <ShoppingCart size={20} />
                   </div>
                   <h2 className="text-xl font-serif font-bold">Keranjang Saya</h2>
                 </div>
-                <button 
-                  onClick={() => setShowMobileCart(false)}
-                  className="p-2 hover:bg-coffee-50 rounded-xl transition-colors"
-                >
-                  <X size={24} />
-                </button>
+                <div className="flex items-center gap-2">
+                  {cart.length > 0 && (
+                    <button 
+                      onClick={() => {
+                        if (window.confirm('Hapus semua item di keranjang?')) {
+                          setCart([]);
+                        }
+                      }}
+                      className="p-2 text-rose-500 hover:bg-rose-50 rounded-xl transition-colors flex items-center gap-1 text-xs font-bold"
+                    >
+                      <Trash2 size={16} />
+                      Bersihkan
+                    </button>
+                  )}
+                  <button 
+                    onClick={() => setShowMobileCart(false)}
+                    className="p-2 hover:bg-coffee-50 rounded-xl transition-colors"
+                  >
+                    <X size={24} />
+                  </button>
+                </div>
               </div>
 
-              <div className="flex-1 overflow-y-auto p-6 space-y-4 custom-scrollbar">
+              <div className="flex-1 overflow-y-auto custom-scrollbar">
                 {cart.length === 0 ? (
                   <div className="h-full flex flex-col items-center justify-center text-center p-8">
                     <div className="w-24 h-24 bg-coffee-50 rounded-full flex items-center justify-center text-coffee-200 mb-6">
@@ -1752,83 +1825,89 @@ export default function App() {
                     <p className="text-coffee-500 text-sm">Pilih menu favorit Anda untuk mulai memesan.</p>
                   </div>
                 ) : (
-                  cart.map(item => (
-                    <div key={item.menu.id} className="flex gap-4 p-4 bg-coffee-50 rounded-2xl border border-coffee-100">
-                      <div className="w-20 h-20 rounded-xl overflow-hidden bg-white shrink-0">
-                        {item.menu.image_url ? (
-                          <img src={item.menu.image_url} alt={item.menu.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center text-coffee-200">
-                            <Coffee size={24} />
+                  <div className="p-6 space-y-6">
+                    {/* Cart Items */}
+                    <div className="space-y-4">
+                      <h3 className="text-xs font-black uppercase text-coffee-400 tracking-widest">Item Pesanan</h3>
+                      {cart.map(item => (
+                        <div key={item.menu.id} className="flex gap-4 p-4 bg-coffee-50 rounded-2xl border border-coffee-100">
+                          <div className="w-16 h-16 rounded-xl overflow-hidden bg-white shrink-0">
+                            {item.menu.image_url ? (
+                              <img src={item.menu.image_url} alt={item.menu.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center text-coffee-200">
+                                <Coffee size={20} />
+                              </div>
+                            )}
                           </div>
-                        )}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <h4 className="font-bold text-coffee-950 truncate">{item.menu.name}</h4>
-                        <p className="text-sm font-bold text-coffee-600 mt-1">{formatIDR(item.menu.price)}</p>
-                        <div className="flex items-center gap-3 mt-3">
+                          <div className="flex-1 min-w-0">
+                            <h4 className="font-bold text-coffee-950 truncate text-sm">{item.menu.name}</h4>
+                            <p className="text-xs font-bold text-coffee-600 mt-0.5">{formatIDR(item.menu.price)}</p>
+                            <div className="flex items-center gap-3 mt-2">
+                              <button 
+                                onClick={() => handleUpdateCartQuantity(item.menu.id, -1)}
+                                className="w-7 h-7 flex items-center justify-center bg-white border border-coffee-200 rounded-lg text-coffee-600 hover:bg-coffee-100 transition-colors"
+                              >
+                                <Minus size={12} />
+                              </button>
+                              <span className="font-bold text-xs w-4 text-center">{item.quantity}</span>
+                              <button 
+                                onClick={() => handleUpdateCartQuantity(item.menu.id, 1)}
+                                className="w-7 h-7 flex items-center justify-center bg-white border border-coffee-200 rounded-lg text-coffee-600 hover:bg-coffee-100 transition-colors"
+                              >
+                                <Plus size={12} />
+                              </button>
+                            </div>
+                          </div>
                           <button 
-                            onClick={() => handleUpdateCartQuantity(item.menu.id, -1)}
-                            className="w-8 h-8 flex items-center justify-center bg-white border border-coffee-200 rounded-lg text-coffee-600 hover:bg-coffee-100 transition-colors"
+                            onClick={() => handleRemoveFromCart(item.menu.id)}
+                            className="text-rose-400 hover:text-rose-600 p-1 self-start"
                           >
-                            <Minus size={14} />
-                          </button>
-                          <span className="font-bold text-sm w-4 text-center">{item.quantity}</span>
-                          <button 
-                            onClick={() => handleUpdateCartQuantity(item.menu.id, 1)}
-                            className="w-8 h-8 flex items-center justify-center bg-white border border-coffee-200 rounded-lg text-coffee-600 hover:bg-coffee-100 transition-colors"
-                          >
-                            <Plus size={14} />
+                            <Trash2 size={16} />
                           </button>
                         </div>
+                      ))}
+                    </div>
+
+                    {/* Order Details Form */}
+                    <div className="space-y-4 pt-6 border-t border-coffee-100">
+                      <h3 className="text-xs font-black uppercase text-coffee-400 tracking-widest">Informasi Pesanan</h3>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-[10px] font-bold uppercase text-coffee-500 mb-1.5 tracking-widest">Nama Pemesan</label>
+                          <input 
+                            type="text"
+                            value={customerOrder.name}
+                            onChange={e => setCustomerOrder({...customerOrder, name: e.target.value})}
+                            className="w-full bg-white border border-coffee-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-coffee-500"
+                            placeholder="Nama Anda"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold uppercase text-coffee-500 mb-1.5 tracking-widest">Nomor Meja</label>
+                          <input 
+                            type="text"
+                            value={customerOrder.table}
+                            onChange={e => setCustomerOrder({...customerOrder, table: e.target.value})}
+                            className="w-full bg-white border border-coffee-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-coffee-500"
+                            placeholder="Meja 01"
+                          />
+                        </div>
                       </div>
-                      <button 
-                        onClick={() => handleRemoveFromCart(item.menu.id)}
-                        className="text-rose-400 hover:text-rose-600 p-1"
-                      >
-                        <Trash2 size={18} />
-                      </button>
-                    </div>
-                  ))
-                )}
-              </div>
-
-              {cart.length > 0 && (
-                <div className="p-6 bg-coffee-50 border-t border-coffee-100 space-y-6">
-                  <div className="space-y-4">
-                    <div>
-                      <label className="block text-xs font-bold uppercase text-coffee-500 mb-2 tracking-widest">Nama Pemesan</label>
-                      <input 
-                        type="text"
-                        value={customerOrder.name}
-                        onChange={e => setCustomerOrder({...customerOrder, name: e.target.value})}
-                        className="w-full bg-white border border-coffee-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-coffee-500"
-                        placeholder="Masukkan nama Anda"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-bold uppercase text-coffee-500 mb-2 tracking-widest">Nomor Meja (Opsional)</label>
-                      <input 
-                        type="text"
-                        value={customerOrder.table}
-                        onChange={e => setCustomerOrder({...customerOrder, table: e.target.value})}
-                        className="w-full bg-white border border-coffee-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-coffee-500"
-                        placeholder="Contoh: Meja 05"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="space-y-2 pt-4 border-t border-coffee-200">
-                    <div className="flex justify-between text-sm">
-                      <span className="text-coffee-500">Subtotal</span>
-                      <span className="font-bold text-coffee-900">
-                        {formatIDR(cart.reduce((sum, item) => sum + (item.menu.price * item.quantity), 0))}
-                      </span>
+                      <div>
+                        <label className="block text-[10px] font-bold uppercase text-coffee-500 mb-1.5 tracking-widest">Catatan (Opsional)</label>
+                        <textarea 
+                          value={customerOrder.notes}
+                          onChange={e => setCustomerOrder({...customerOrder, notes: e.target.value})}
+                          className="w-full bg-white border border-coffee-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-coffee-500 min-h-[80px] resize-none"
+                          placeholder="Contoh: Gula dikit, Es dipisah..."
+                        />
+                      </div>
                     </div>
 
-                    {/* Promo Code Input - Moved below subtotal */}
-                    <div className="space-y-3 py-3 border-y border-coffee-100">
-                      <label className="block text-[10px] font-bold uppercase text-coffee-400 tracking-widest">Punya Kode Promo?</label>
+                    {/* Promo Code Section */}
+                    <div className="space-y-3 pt-6 border-t border-coffee-100">
+                      <label className="block text-[10px] font-black uppercase text-coffee-400 tracking-widest">Punya Kode Promo?</label>
                       <div className="flex gap-2">
                         <div className="relative flex-1">
                           <Tag className="absolute left-3 top-1/2 -translate-y-1/2 text-coffee-400" size={14} />
@@ -1852,7 +1931,7 @@ export default function App() {
                                   setActivePromo(data);
                                   toast.success(`Promo ${data.code} berhasil dipasang!`);
                                 } else {
-                                  toast.error('Kode promo tidak valid atau sudah berakhir');
+                                  toast.error('Kode promo tidak valid');
                                 }
                               } catch (error) {
                                 toast.error('Gagal mengecek promo');
@@ -1885,60 +1964,10 @@ export default function App() {
                       )}
                     </div>
 
-                    {activePromo && (
-                      <div className="flex justify-between text-sm text-emerald-600">
-                        <span>Diskon ({activePromo.code})</span>
-                        <span className="font-bold">
-                          -{formatIDR((() => {
-                            const subtotal = cart.reduce((sum, item) => sum + (item.menu.price * item.quantity), 0);
-                            if (activePromo.target_type === 'all') {
-                              return activePromo.discount_type === 'percentage' 
-                                ? subtotal * (activePromo.discount_value / 100)
-                                : activePromo.discount_value;
-                            }
-                            const targetSubtotal = cart.reduce((sum, item) => {
-                              const isTarget = activePromo.target_type === 'category' 
-                                ? activePromo.target_ids.includes(item.menu.category)
-                                : activePromo.target_ids.includes(item.menu.id.toString());
-                              return isTarget ? sum + (item.menu.price * item.quantity) : sum;
-                            }, 0);
-                            return activePromo.discount_type === 'percentage'
-                              ? targetSubtotal * (activePromo.discount_value / 100)
-                              : activePromo.discount_value;
-                          })())}
-                        </span>
-                      </div>
-                    )}
-                    <div className="flex justify-between text-sm">
-                      <span className="text-coffee-500">Pajak ({appSettings.tax_rate}%)</span>
-                      <span className="font-bold text-coffee-900">
-                        {formatIDR(Math.round((() => {
-                          const subtotal = cart.reduce((sum, item) => sum + (item.menu.price * item.quantity), 0);
-                          let discount = 0;
-                          if (activePromo) {
-                            if (activePromo.target_type === 'all') {
-                              discount = activePromo.discount_type === 'percentage' 
-                                ? subtotal * (activePromo.discount_value / 100)
-                                : activePromo.discount_value;
-                            } else {
-                              const targetSubtotal = cart.reduce((sum, item) => {
-                                const isTarget = activePromo.target_type === 'category' 
-                                  ? activePromo.target_ids.includes(item.menu.category)
-                                  : activePromo.target_ids.includes(item.menu.id.toString());
-                                return isTarget ? sum + (item.menu.price * item.quantity) : sum;
-                              }, 0);
-                              discount = activePromo.discount_type === 'percentage'
-                                ? targetSubtotal * (activePromo.discount_value / 100)
-                                : activePromo.discount_value;
-                            }
-                          }
-                          return (subtotal - discount) * (appSettings.tax_rate / 100);
-                        })()))}
-                      </span>
-                    </div>
-                    <div className="space-y-3">
+                    {/* Payment Method Selection */}
+                    <div className="space-y-3 pt-6 border-t border-coffee-100">
                       <label className="text-[10px] font-black uppercase text-coffee-400 tracking-widest">Metode Pembayaran</label>
-                      <div className="grid grid-cols-2 gap-3">
+                      <div className="grid grid-cols-3 gap-3">
                         <button
                           onClick={() => setCustomerOrder({ ...customerOrder, paymentMethod: 'Cash' })}
                           className={cn(
@@ -1948,8 +1977,20 @@ export default function App() {
                               : "bg-white border-coffee-100 text-coffee-600 hover:bg-coffee-50"
                           )}
                         >
-                          <Wallet size={20} />
-                          <span className="text-[10px] font-bold uppercase">Tunai / QRIS</span>
+                          <Wallet size={18} />
+                          <span className="text-[10px] font-bold uppercase">Tunai</span>
+                        </button>
+                        <button
+                          onClick={() => setCustomerOrder({ ...customerOrder, paymentMethod: 'QRIS' })}
+                          className={cn(
+                            "flex flex-col items-center gap-2 p-3 rounded-2xl border transition-all",
+                            customerOrder.paymentMethod === 'QRIS' 
+                              ? "bg-coffee-900 border-coffee-900 text-white shadow-lg" 
+                              : "bg-white border-coffee-100 text-coffee-600 hover:bg-coffee-50"
+                          )}
+                        >
+                          <QrCode size={18} />
+                          <span className="text-[10px] font-bold uppercase">QRIS</span>
                         </button>
                         <button
                           onClick={() => setCustomerOrder({ ...customerOrder, paymentMethod: 'COD' })}
@@ -1960,45 +2001,81 @@ export default function App() {
                               : "bg-white border-coffee-100 text-coffee-600 hover:bg-coffee-50"
                           )}
                         >
-                          <Truck size={20} />
-                          <span className="text-[10px] font-bold uppercase">Bayar di Tempat (COD)</span>
+                          <Truck size={18} />
+                          <span className="text-[10px] font-bold uppercase">COD</span>
                         </button>
                       </div>
                     </div>
 
-                    <div className="flex justify-between text-xl font-serif font-bold text-coffee-950 pt-4 border-t border-coffee-100">
-                      <span>Total</span>
-                      <span>
-                        {formatIDR((() => {
-                          const subtotal = cart.reduce((sum, item) => sum + (item.menu.price * item.quantity), 0);
-                          let discount = 0;
-                          if (activePromo) {
-                            if (activePromo.target_type === 'all') {
-                              discount = activePromo.discount_type === 'percentage' 
-                                ? subtotal * (activePromo.discount_value / 100)
-                                : activePromo.discount_value;
-                            } else {
+                    {/* Summary Details */}
+                    <div className="space-y-2 pt-6 border-t border-coffee-100">
+                      <div className="flex justify-between text-xs">
+                        <span className="text-coffee-500">Subtotal</span>
+                        <span className="font-bold text-coffee-900">
+                          {formatIDR(cart.reduce((sum, item) => sum + (item.menu.price * item.quantity), 0))}
+                        </span>
+                      </div>
+                      {activePromo && (
+                        <div className="flex justify-between text-xs text-emerald-600">
+                          <span>Diskon ({activePromo.code})</span>
+                          <span className="font-bold">
+                            -{formatIDR((() => {
+                              const subtotal = cart.reduce((sum, item) => sum + (item.menu.price * item.quantity), 0);
+                              if (activePromo.target_type === 'all') {
+                                return activePromo.discount_type === 'percentage' 
+                                  ? subtotal * (activePromo.discount_value / 100)
+                                  : activePromo.discount_value;
+                              }
                               const targetSubtotal = cart.reduce((sum, item) => {
                                 const isTarget = activePromo.target_type === 'category' 
                                   ? activePromo.target_ids.includes(item.menu.category)
                                   : activePromo.target_ids.includes(item.menu.id.toString());
                                 return isTarget ? sum + (item.menu.price * item.quantity) : sum;
                               }, 0);
-                              discount = activePromo.discount_type === 'percentage'
+                              return activePromo.discount_type === 'percentage'
                                 ? targetSubtotal * (activePromo.discount_value / 100)
                                 : activePromo.discount_value;
+                            })())}
+                          </span>
+                        </div>
+                      )}
+                      <div className="flex justify-between text-xs">
+                        <span className="text-coffee-500">Pajak ({appSettings.tax_rate}%)</span>
+                        <span className="font-bold text-coffee-900">
+                          {formatIDR(Math.round((() => {
+                            const subtotal = cart.reduce((sum, item) => sum + (item.menu.price * item.quantity), 0);
+                            let discount = 0;
+                            if (activePromo) {
+                              if (activePromo.target_type === 'all') {
+                                discount = activePromo.discount_type === 'percentage' 
+                                  ? subtotal * (activePromo.discount_value / 100)
+                                  : activePromo.discount_value;
+                              } else {
+                                const targetSubtotal = cart.reduce((sum, item) => {
+                                  const isTarget = activePromo.target_type === 'category' 
+                                    ? activePromo.target_ids.includes(item.menu.category)
+                                    : activePromo.target_ids.includes(item.menu.id.toString());
+                                  return isTarget ? sum + (item.menu.price * item.quantity) : sum;
+                                }, 0);
+                                discount = activePromo.discount_type === 'percentage'
+                                  ? targetSubtotal * (activePromo.discount_value / 100)
+                                  : activePromo.discount_value;
+                              }
                             }
-                          }
-                          const tax = Math.round((subtotal - discount) * (appSettings.tax_rate / 100));
-                          return subtotal - discount + tax;
-                        })())}
-                      </span>
+                            return (subtotal - discount) * (appSettings.tax_rate / 100);
+                          })()))}
+                        </span>
+                      </div>
                     </div>
                   </div>
+                )}
+              </div>
 
-                  <div className="pt-4 border-t border-coffee-200">
-                    <div className="flex justify-between items-center mb-4">
-                      <span className="text-coffee-600 font-medium">Total Pembayaran</span>
+              {cart.length > 0 && (
+                <div className="p-6 bg-white border-t border-coffee-100 shadow-[0_-10px_20px_-5px_rgba(0,0,0,0.05)]">
+                  <div className="flex justify-between items-center mb-4">
+                    <div className="flex flex-col">
+                      <span className="text-[10px] font-black uppercase text-coffee-400 tracking-widest">Total Bayar</span>
                       <span className="text-2xl font-bold text-coffee-950">
                         {formatIDR((() => {
                           const subtotal = cart.reduce((sum, item) => sum + (item.menu.price * item.quantity), 0);
@@ -2027,12 +2104,16 @@ export default function App() {
                     </div>
                     <button 
                       onClick={handleCustomerOrder}
-                      disabled={loading}
-                      className="w-full bg-coffee-900 text-white py-4 rounded-2xl font-bold text-lg hover:bg-coffee-800 transition-all shadow-lg shadow-coffee-200 flex items-center justify-center gap-2 disabled:opacity-50"
+                      disabled={loading || !customerOrder.name}
+                      className="bg-coffee-900 text-white px-8 py-4 rounded-2xl font-bold text-sm hover:bg-coffee-800 transition-all shadow-lg shadow-coffee-200 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      {loading ? 'Memproses...' : 'Kirim Pesanan Sekarang'}
+                      {loading ? 'Memproses...' : 'Order Sekarang'}
+                      <ArrowRight size={18} />
                     </button>
                   </div>
+                  {!customerOrder.name && (
+                    <p className="text-[10px] text-rose-500 font-bold text-center">Silakan masukkan nama pemesan untuk melanjutkan</p>
+                  )}
                 </div>
               )}
             </motion.div>
@@ -2052,9 +2133,27 @@ export default function App() {
               </div>
               <h2 className="text-3xl font-serif font-bold text-coffee-950 mb-4">Pesanan Terkirim!</h2>
               <p className="text-coffee-600 mb-8 leading-relaxed">
-                Terima kasih, <span className="font-bold text-coffee-900">{customerOrder.name || 'Pelanggan'}</span>! <br/>
-                Pesanan Anda dengan ID <span className="font-bold text-coffee-900">#{customerOrderId}</span> sedang kami siapkan. <br/>
-                Silakan lakukan pembayaran di kasir.
+                Terima kasih, <span className="font-bold text-coffee-900">{lastCustomerOrder?.name || 'Pelanggan'}</span>! <br/>
+                Pesanan Anda dengan ID <span className="font-bold text-coffee-900">#{customerOrderId}</span> sedang kami siapkan.
+              </p>
+              
+              {lastCustomerOrder?.paymentMethod === 'QRIS' && appSettings.payment_qris_url && (
+                <div className="bg-white p-6 rounded-[2rem] border-2 border-coffee-100 shadow-xl space-y-4 mb-8">
+                  <p className="text-xs font-black uppercase tracking-widest text-coffee-400">Scan QRIS Untuk Bayar</p>
+                  <img 
+                    src={appSettings.payment_qris_url} 
+                    alt="QRIS" 
+                    className="w-48 h-48 mx-auto object-contain rounded-2xl shadow-sm"
+                    referrerPolicy="no-referrer"
+                  />
+                  <p className="text-[10px] text-coffee-400 font-medium italic">Silakan tunjukkan bukti bayar ke kasir.</p>
+                </div>
+              )}
+
+              <p className="text-coffee-600 mb-8 leading-relaxed">
+                {lastCustomerOrder?.paymentMethod === 'QRIS' 
+                  ? "Silakan lakukan pembayaran melalui QRIS di atas dan tunjukkan bukti pembayaran ke kasir untuk konfirmasi."
+                  : "Silakan lakukan pembayaran di kasir untuk mengonfirmasi pesanan Anda."}
               </p>
               <div className="space-y-3">
                 <button 
@@ -4209,29 +4308,46 @@ export default function App() {
                             </div>
                           ))}
                         </div>
+                        {order.notes && (
+                          <div className="bg-amber-50 p-3 rounded-xl border border-amber-100">
+                            <p className="text-[10px] font-bold uppercase tracking-widest text-amber-600 mb-1 flex items-center gap-1">
+                              <Info size={10} /> Catatan
+                            </p>
+                            <p className="text-xs text-amber-900 italic">"{order.notes}"</p>
+                          </div>
+                        )}
                         <div className="flex items-center gap-2 text-[10px] text-coffee-400 font-bold uppercase tracking-wider mb-4">
                           <Clock size={12} />
                           Dipesan pada {formatDate(new Date(order.date), 'HH:mm')}
                         </div>
                         {order.status === 'pending' ? (
-                          <button 
-                            onClick={() => {
-                              // Load order into cart and open payment
-                              fetch(`/api/orders/${order.orderId}`)
-                                .then(res => res.json())
-                                .then(data => {
-                                  setCart(data.items);
-                                  setCustomerName(data.customerName || '');
-                                  setTableNumber(data.tableNumber || '');
-                                  setCurrentOrderId(order.orderId);
-                                  setShowPaymentModal(true);
-                                });
-                            }}
-                            className="w-full bg-amber-500 text-white py-3 rounded-xl font-bold hover:bg-amber-600 transition-all flex items-center justify-center gap-2"
-                          >
-                            <CreditCard size={18} />
-                            Bayar Sekarang
-                          </button>
+                          <div className="flex gap-2">
+                            <button 
+                              onClick={() => {
+                                // Load order into cart and open payment
+                                fetch(`/api/orders/${order.orderId}`)
+                                  .then(res => res.json())
+                                  .then(data => {
+                                    setCart(data.items);
+                                    setCustomerName(data.customerName || '');
+                                    setTableNumber(data.tableNumber || '');
+                                    setCurrentOrderId(order.orderId);
+                                    setShowPaymentModal(true);
+                                  });
+                              }}
+                              className="flex-1 bg-amber-500 text-white py-3 rounded-xl font-bold hover:bg-amber-600 transition-all flex items-center justify-center gap-2"
+                            >
+                              <CreditCard size={18} />
+                              Bayar
+                            </button>
+                            <button 
+                              onClick={() => handleMarkAsPaid(order.orderId)}
+                              className="px-4 bg-emerald-500 text-white py-3 rounded-xl font-bold hover:bg-emerald-600 transition-all flex items-center justify-center gap-2"
+                              title="Konfirmasi Bayar Manual"
+                            >
+                              <Check size={18} />
+                            </button>
+                          </div>
                         ) : (
                           <button 
                             onClick={() => handleCompleteOrder(order.orderId)}
@@ -7389,6 +7505,16 @@ export default function App() {
                   <span>Metode</span>
                   <span className="font-bold text-coffee-900">{paymentMethod}</span>
                 </div>
+
+                <div className="mt-4 space-y-1">
+                  <label className="text-[10px] font-bold uppercase text-coffee-400">Catatan Pesanan</label>
+                  <textarea 
+                    value={posNotes}
+                    onChange={(e) => setPosNotes(e.target.value)}
+                    placeholder="Contoh: Gula dikit, es dipisah..."
+                    className="w-full bg-coffee-50 border border-coffee-200 rounded-xl px-4 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-coffee-500 min-h-[60px] resize-none"
+                  />
+                </div>
               </div>
 
               {/* Payment Image Display */}
@@ -7423,19 +7549,13 @@ export default function App() {
                     </p>
                   )}
                   
-                  {/* Simulation Button for Demo */}
-                  <button 
-                    onClick={async () => {
-                      await fetch('/api/payment/simulate-success', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ order_id: currentOrderId })
-                      });
-                    }}
-                    className="mt-4 text-[10px] font-bold text-coffee-400 hover:text-coffee-600 transition-colors border border-coffee-200 px-3 py-1 rounded-full"
-                  >
-                    Simulasi Pembayaran Berhasil
-                  </button>
+                  {/* Manual Verification Instructions */}
+                  <div className="mt-4 p-3 bg-amber-50 rounded-xl border border-amber-100 text-left">
+                    <p className="text-[10px] font-bold text-amber-800 uppercase mb-1">Verifikasi Manual</p>
+                    <p className="text-[10px] text-amber-700 leading-relaxed">
+                      Silakan cek aplikasi <strong>{paymentMethod} / GoPay</strong> Anda secara manual untuk memastikan dana telah masuk sebelum menekan tombol konfirmasi di bawah.
+                    </p>
+                  </div>
                 </div>
               )}
             </div>
@@ -7450,13 +7570,13 @@ export default function App() {
               </button>
               <button 
                 onClick={handleProcessOrder}
-                className="flex-1 bg-emerald-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-emerald-700 transition-all flex items-center justify-center gap-2"
+                className={`flex-1 ${(paymentMethod === 'QRIS' || paymentMethod === 'DANA' || paymentMethod === 'OVO' || paymentMethod === 'ShopeePay') ? 'bg-amber-600 hover:bg-amber-700' : 'bg-emerald-600 hover:bg-emerald-700'} text-white px-6 py-3 rounded-xl font-bold transition-all flex items-center justify-center gap-2`}
                 disabled={loading}
               >
                 {loading ? 'Memproses...' : (
                   <>
                     <CreditCard size={18} />
-                    Bayar Sekarang
+                    {(paymentMethod === 'QRIS' || paymentMethod === 'DANA' || paymentMethod === 'OVO' || paymentMethod === 'ShopeePay') ? 'Konfirmasi (Sudah Bayar)' : 'Bayar Sekarang'}
                   </>
                 )}
               </button>
@@ -7603,6 +7723,11 @@ export default function App() {
 
               <div className="mt-6 pt-4 border-t border-coffee-100 text-[10px] text-center text-coffee-400">
                 <p>Metode Pembayaran: {lastOrder.paymentMethod}</p>
+                {lastOrder.notes && (
+                  <p className="mt-2 bg-coffee-50 p-2 rounded border border-coffee-100 italic">
+                    Catatan: {lastOrder.notes}
+                  </p>
+                )}
                 <p className="mt-2 whitespace-pre-line">{appSettings.receipt_footer}</p>
                 {appSettings.receipt_contact && (
                   <p className="mt-2 pt-2 border-t border-coffee-50 italic">{appSettings.receipt_contact}</p>
@@ -7710,7 +7835,29 @@ export default function App() {
                   </div>
                   <div>
                     <h2 className="text-2xl font-serif font-bold text-coffee-950">Status Pesanan</h2>
-                    <p className="text-xs text-coffee-500 font-medium">Daftar pesanan aktif saat ini</p>
+                    <div className="flex gap-4 mt-1">
+                      <button 
+                        onClick={() => setCustomerHistoryTab('active')}
+                        className={cn(
+                          "text-xs font-bold uppercase tracking-wider transition-all",
+                          customerHistoryTab === 'active' ? "text-coffee-900 border-b-2 border-coffee-900 pb-0.5" : "text-coffee-400 hover:text-coffee-600"
+                        )}
+                      >
+                        Aktif
+                      </button>
+                      <button 
+                        onClick={() => {
+                          setCustomerHistoryTab('history');
+                          if (customerOrder.name) fetchCustomerHistory(customerOrder.name);
+                        }}
+                        className={cn(
+                          "text-xs font-bold uppercase tracking-wider transition-all",
+                          customerHistoryTab === 'history' ? "text-coffee-900 border-b-2 border-coffee-900 pb-0.5" : "text-coffee-400 hover:text-coffee-600"
+                        )}
+                      >
+                        Riwayat
+                      </button>
+                    </div>
                   </div>
                 </div>
                 <button 
@@ -7722,28 +7869,28 @@ export default function App() {
               </div>
 
               <div className="flex-1 overflow-y-auto p-8 space-y-6 custom-scrollbar">
-                {customerActiveOrders.length === 0 ? (
-                  <div className="text-center py-12 space-y-4">
-                    <div className="w-20 h-20 bg-coffee-50 rounded-full flex items-center justify-center mx-auto text-coffee-200">
-                      <ClipboardList size={40} />
+                {customerHistoryTab === 'active' ? (
+                  customerActiveOrders.length === 0 ? (
+                    <div className="text-center py-12 space-y-4">
+                      <div className="w-20 h-20 bg-coffee-50 rounded-full flex items-center justify-center mx-auto text-coffee-200">
+                        <ClipboardList size={40} />
+                      </div>
+                      <p className="text-coffee-500 font-medium">Belum ada pesanan aktif.</p>
                     </div>
-                    <p className="text-coffee-500 font-medium">Belum ada pesanan aktif.</p>
-                  </div>
-                ) : (
-                  <div className="grid gap-4">
-                    {customerActiveOrders
-                      .map(order => (
+                  ) : (
+                    <div className="grid gap-4">
+                      {customerActiveOrders.map(order => (
                         <div key={order.id} className="bg-coffee-50/50 border border-coffee-100 rounded-3xl p-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
                           <div className="space-y-2">
                             <div className="flex items-center gap-3">
                               <span className="text-lg font-black text-coffee-900">#{order.id.toString().slice(-4)}</span>
                               <span className={cn(
                                 "px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest",
-                                order.status === 'Menunggu' ? "bg-amber-100 text-amber-600" :
-                                order.status === 'Diproses' ? "bg-blue-100 text-blue-600" :
+                                order.status === 'pending' ? "bg-amber-100 text-amber-600" :
+                                order.status === 'processing' ? "bg-blue-100 text-blue-600" :
                                 "bg-emerald-100 text-emerald-600"
                               )}>
-                                {order.status}
+                                {order.status === 'pending' ? 'Menunggu' : order.status === 'processing' ? 'Diproses' : 'Selesai'}
                               </span>
                             </div>
                             <div className="flex items-center gap-4 text-xs text-coffee-500 font-medium">
@@ -7754,13 +7901,51 @@ export default function App() {
                           <div className="flex flex-wrap gap-2">
                             {order.items.map((item: any, idx: number) => (
                               <span key={idx} className="bg-white border border-coffee-100 px-3 py-1.5 rounded-xl text-[10px] font-bold text-coffee-700 shadow-sm">
-                                {item.quantity}x {item.menu_name.replace('Order: ', '').split(' (x')[0]}
+                                {item.quantity}x {item.menu_name}
                               </span>
                             ))}
                           </div>
                         </div>
                       ))}
-                  </div>
+                    </div>
+                  )
+                ) : (
+                  customerOrderHistory.length === 0 ? (
+                    <div className="text-center py-12 space-y-4">
+                      <div className="w-20 h-20 bg-coffee-50 rounded-full flex items-center justify-center mx-auto text-coffee-200">
+                        <History size={40} />
+                      </div>
+                      <p className="text-coffee-500 font-medium">Belum ada riwayat pesanan.</p>
+                    </div>
+                  ) : (
+                    <div className="grid gap-4">
+                      {customerOrderHistory.map(order => (
+                        <div key={order.orderId} className="bg-white border border-coffee-100 rounded-3xl p-6 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-sm">
+                          <div className="space-y-2">
+                            <div className="flex items-center gap-3">
+                              <span className="text-lg font-black text-coffee-900">#{order.orderId.toString().slice(-4)}</span>
+                              <span className={cn(
+                                "px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest",
+                                order.status === 'completed' ? "bg-emerald-100 text-emerald-600" : "bg-coffee-100 text-coffee-600"
+                              )}>
+                                {order.status === 'completed' ? 'Selesai' : order.status}
+                              </span>
+                            </div>
+                            <div className="text-[10px] text-coffee-400 font-bold uppercase tracking-wider">
+                              {formatDate(new Date(order.date), 'dd MMM yyyy, HH:mm')}
+                            </div>
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            {order.items.map((item: any, idx: number) => (
+                              <span key={idx} className="bg-coffee-50 px-3 py-1.5 rounded-xl text-[10px] font-bold text-coffee-700">
+                                {item.quantity}x {item.name}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )
                 )}
               </div>
 

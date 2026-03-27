@@ -37,6 +37,8 @@ import {
   Menu as MenuIcon,
   ChevronRight,
   Search,
+  ClipboardList,
+  Truck,
   Milk,
   Utensils,
   Cookie,
@@ -417,9 +419,11 @@ export default function App() {
   const [editingPromo, setEditingPromo] = useState<any>(null);
   const [newAd, setNewAd] = useState({ type: 'image', url: '', title: '', subtitle: '', active: true });
   const [newPromo, setNewPromo] = useState({ code: '', discount_type: 'percentage', discount_value: 0, target_type: 'all', target_ids: [], active: true });
-  const [customerOrder, setCustomerOrder] = useState({ name: '', table: '' });
+  const [customerOrder, setCustomerOrder] = useState({ name: '', table: '', paymentMethod: 'Cash' });
   const [showCustomerOrderSuccess, setShowCustomerOrderSuccess] = useState(false);
   const [customerOrderId, setCustomerOrderId] = useState('');
+  const [showCustomerOrderStatus, setShowCustomerOrderStatus] = useState(false);
+  const [customerActiveOrders, setCustomerActiveOrders] = useState<any[]>([]);
 
   // Forms
   const [showInvModal, setShowInvModal] = useState(false);
@@ -444,6 +448,8 @@ export default function App() {
     ingredients: [] as { inventory_id: number, quantity: number }[] 
   });
   const [confirmUpdate, setConfirmUpdate] = useState<{ id: number, name: string, currentQty: number, delta: number } | null>(null);
+  const [dbRestoreFile, setDbRestoreFile] = useState<File | null>(null);
+  const [settingsRestoreFile, setSettingsRestoreFile] = useState<File | null>(null);
   const [showPurchaseModal, setShowPurchaseModal] = useState(false);
   const [purchaseData, setPurchaseData] = useState<{ id: number, name: string, unit: string, quantity: number, totalPrice: number } | null>(null);
   const [txFilter, setTxFilter] = useState({ type: '', category: '' });
@@ -578,6 +584,23 @@ export default function App() {
       console.error('Error fetching active orders:', error);
     }
   };
+
+  const fetchCustomerActiveOrders = async () => {
+    try {
+      const res = await fetch('/api/active-orders/public');
+      if (res.ok) setCustomerActiveOrders(await res.json());
+    } catch (error) {
+      console.error('Error fetching customer active orders:', error);
+    }
+  };
+
+  useEffect(() => {
+    if (showCustomerOrderStatus) {
+      fetchCustomerActiveOrders();
+      const interval = setInterval(fetchCustomerActiveOrders, 10000); // Poll every 10s
+      return () => clearInterval(interval);
+    }
+  }, [showCustomerOrderStatus]);
 
   const fetchData = async (filters = txFilter) => {
     if (!user) return;
@@ -774,6 +797,9 @@ export default function App() {
       const data = await res.json();
       if (res.ok) {
         toast.success(data.message);
+        if (type === 'database') setDbRestoreFile(null);
+        if (type === 'settings') setSettingsRestoreFile(null);
+        
         if (type === 'settings') {
           window.location.reload();
         } else {
@@ -973,7 +999,8 @@ export default function App() {
           customerName: customerOrder.name,
           tableNumber: customerOrder.table,
           promoCode: activePromo?.code,
-          discountAmount: discount
+          discountAmount: discount,
+          paymentMethod: customerOrder.paymentMethod
         })
       });
 
@@ -982,7 +1009,7 @@ export default function App() {
         setCustomerOrderId(data.orderId);
         setShowCustomerOrderSuccess(true);
         setCart([]);
-        setCustomerOrder({ name: '', table: '' });
+        setCustomerOrder({ name: '', table: '', paymentMethod: 'Cash' });
         setActivePromo(null);
         setPromoCode('');
         toast.success('Pesanan berhasil dikirim!');
@@ -1567,6 +1594,13 @@ export default function App() {
               </button>
               
               <button 
+                onClick={() => setShowCustomerOrderStatus(true)}
+                className="p-3 bg-white border border-coffee-100 text-coffee-600 rounded-2xl shadow-sm hover:bg-coffee-50 transition-all active:scale-95"
+              >
+                <ClipboardList size={20} />
+              </button>
+
+              <button 
                 onClick={() => setShowMobileCart(true)}
                 className="relative p-3 bg-coffee-900 text-white rounded-2xl shadow-lg shadow-coffee-200"
               >
@@ -1648,7 +1682,14 @@ export default function App() {
                   <div className="p-3 flex flex-col flex-1">
                     <div className="mb-2">
                       <h3 className="text-sm font-bold text-coffee-950 mb-0.5 group-hover:text-coffee-600 transition-colors line-clamp-1">{menu.name}</h3>
-                      {menu.size && <span className="text-[10px] font-medium text-coffee-400">{menu.size}</span>}
+                      <div className="flex items-center gap-2">
+                        {menu.size && <span className="text-[10px] font-bold text-coffee-600 bg-coffee-100 px-1.5 py-0.5 rounded uppercase tracking-wider">{menu.size}</span>}
+                        {menu.ingredients && menu.ingredients.length > 0 && (
+                          <span className="text-[10px] font-medium text-coffee-400 italic">
+                            {menu.ingredients.length} Bahan
+                          </span>
+                        )}
+                      </div>
                       <p className="text-[10px] text-coffee-500 line-clamp-2 mt-1 leading-tight">{menu.description || 'Tidak ada deskripsi'}</p>
                     </div>
                     <div className="mt-auto flex items-center justify-between pt-2 border-t border-coffee-50">
@@ -1892,6 +1933,36 @@ export default function App() {
                         })()))}
                       </span>
                     </div>
+                    <div className="space-y-3">
+                      <label className="text-[10px] font-black uppercase text-coffee-400 tracking-widest">Metode Pembayaran</label>
+                      <div className="grid grid-cols-2 gap-3">
+                        <button
+                          onClick={() => setCustomerOrder({ ...customerOrder, paymentMethod: 'Cash' })}
+                          className={cn(
+                            "flex flex-col items-center gap-2 p-3 rounded-2xl border transition-all",
+                            customerOrder.paymentMethod === 'Cash' 
+                              ? "bg-coffee-900 border-coffee-900 text-white shadow-lg" 
+                              : "bg-white border-coffee-100 text-coffee-600 hover:bg-coffee-50"
+                          )}
+                        >
+                          <Wallet size={20} />
+                          <span className="text-[10px] font-bold uppercase">Tunai / QRIS</span>
+                        </button>
+                        <button
+                          onClick={() => setCustomerOrder({ ...customerOrder, paymentMethod: 'COD' })}
+                          className={cn(
+                            "flex flex-col items-center gap-2 p-3 rounded-2xl border transition-all",
+                            customerOrder.paymentMethod === 'COD' 
+                              ? "bg-coffee-900 border-coffee-900 text-white shadow-lg" 
+                              : "bg-white border-coffee-100 text-coffee-600 hover:bg-coffee-50"
+                          )}
+                        >
+                          <Truck size={20} />
+                          <span className="text-[10px] font-bold uppercase">Bayar di Tempat (COD)</span>
+                        </button>
+                      </div>
+                    </div>
+
                     <div className="flex justify-between text-xl font-serif font-bold text-coffee-950 pt-4 border-t border-coffee-100">
                       <span>Total</span>
                       <span>
@@ -1982,15 +2053,24 @@ export default function App() {
                 Pesanan Anda dengan ID <span className="font-bold text-coffee-900">#{customerOrderId}</span> sedang kami siapkan. <br/>
                 Silakan lakukan pembayaran di kasir.
               </p>
-              <button 
-                onClick={() => {
-                  setShowCustomerOrderSuccess(false);
-                  setIsCustomerMode(false);
-                }}
-                className="w-full bg-coffee-900 text-white py-4 rounded-2xl font-bold text-lg hover:bg-coffee-800 transition-all"
-              >
-                Kembali ke Beranda
-              </button>
+              <div className="space-y-3">
+                <button 
+                  onClick={() => {
+                    setShowCustomerOrderSuccess(false);
+                    setShowCustomerOrderStatus(true);
+                  }}
+                  className="w-full bg-coffee-900 text-white py-4 rounded-2xl font-black shadow-xl shadow-coffee-200 hover:bg-coffee-800 transition-all active:scale-95 flex items-center justify-center gap-2"
+                >
+                  <ClipboardList size={20} />
+                  LIHAT STATUS PESANAN
+                </button>
+                <button 
+                  onClick={() => setShowCustomerOrderSuccess(false)}
+                  className="w-full bg-coffee-50 text-coffee-600 py-4 rounded-2xl font-black hover:bg-coffee-100 transition-all active:scale-95"
+                >
+                  KEMBALI KE BERANDA
+                </button>
+              </div>
             </motion.div>
           </div>
         )}
@@ -4985,15 +5065,26 @@ export default function App() {
                         <div className="pt-6 border-t border-coffee-100">
                           <h4 className="text-xs font-bold uppercase text-coffee-500 mb-4">{t('restore_database')}</h4>
                           <p className="text-[10px] text-rose-500 font-bold mb-4 uppercase tracking-widest">{t('restore_warning')}</p>
-                          <input 
-                            type="file" 
-                            accept=".json"
-                            onChange={(e) => {
-                              const file = e.target.files?.[0];
-                              if (file) handleRestore('database', file);
-                            }}
-                            className="block w-full text-sm text-coffee-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-bold file:bg-coffee-100 file:text-coffee-700 hover:file:bg-coffee-200"
-                          />
+                          <div className="space-y-4">
+                            <input 
+                              type="file" 
+                              accept=".json"
+                              onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                if (file) setDbRestoreFile(file);
+                              }}
+                              className="block w-full text-sm text-coffee-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-bold file:bg-coffee-100 file:text-coffee-700 hover:file:bg-coffee-200"
+                            />
+                            {dbRestoreFile && (
+                              <button 
+                                onClick={() => handleRestore('database', dbRestoreFile)}
+                                className="w-full bg-rose-600 text-white py-2 rounded-xl font-bold hover:bg-rose-700 transition-all flex items-center justify-center gap-2"
+                              >
+                                <Check size={16} />
+                                {appSettings.language === 'id' ? 'Terapkan Restore Database' : 'Apply Database Restore'}
+                              </button>
+                            )}
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -5021,15 +5112,26 @@ export default function App() {
                         <div className="pt-6 border-t border-coffee-100">
                           <h4 className="text-xs font-bold uppercase text-coffee-500 mb-4">{t('restore_settings')}</h4>
                           <p className="text-[10px] text-rose-500 font-bold mb-4 uppercase tracking-widest">{t('restore_warning')}</p>
-                          <input 
-                            type="file" 
-                            accept=".json"
-                            onChange={(e) => {
-                              const file = e.target.files?.[0];
-                              if (file) handleRestore('settings', file);
-                            }}
-                            className="block w-full text-sm text-coffee-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-bold file:bg-coffee-100 file:text-coffee-700 hover:file:bg-coffee-200"
-                          />
+                          <div className="space-y-4">
+                            <input 
+                              type="file" 
+                              accept=".json"
+                              onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                if (file) setSettingsRestoreFile(file);
+                              }}
+                              className="block w-full text-sm text-coffee-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-bold file:bg-coffee-100 file:text-coffee-700 hover:file:bg-coffee-200"
+                            />
+                            {settingsRestoreFile && (
+                              <button 
+                                onClick={() => handleRestore('settings', settingsRestoreFile)}
+                                className="w-full bg-rose-600 text-white py-2 rounded-xl font-bold hover:bg-rose-700 transition-all flex items-center justify-center gap-2"
+                              >
+                                <Check size={16} />
+                                {appSettings.language === 'id' ? 'Terapkan Restore Pengaturan' : 'Apply Settings Restore'}
+                              </button>
+                            )}
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -6895,7 +6997,12 @@ export default function App() {
               </div>
 
               <div className="space-y-2">
-                <label className="text-[10px] font-black uppercase text-coffee-400 tracking-widest">URL Konten</label>
+                <div className="flex justify-between items-center">
+                  <label className="text-[10px] font-black uppercase text-coffee-400 tracking-widest">URL Konten</label>
+                  <span className="text-[9px] font-bold text-coffee-400 italic">
+                    {newAd.type === 'video' ? 'Rekomendasi: 16:9 (Landscape) / 9:16 (Portrait)' : 'Rekomendasi: 1920x1080px'}
+                  </span>
+                </div>
                 <div className="relative group">
                   <input 
                     type="text" 
@@ -7575,6 +7682,97 @@ export default function App() {
           </motion.div>
         </div>
       )}
+
+      {/* Customer Order Status Modal */}
+      <AnimatePresence>
+        {showCustomerOrderStatus && (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowCustomerOrderStatus(false)}
+              className="absolute inset-0 bg-coffee-950/40 backdrop-blur-md"
+            />
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="relative w-full max-w-2xl bg-white rounded-[2.5rem] shadow-2xl overflow-hidden flex flex-col max-h-[80vh]"
+            >
+              <div className="p-8 border-b border-coffee-100 flex items-center justify-between bg-coffee-50/50">
+                <div className="flex items-center gap-4">
+                  <div className="bg-coffee-900 p-3 rounded-2xl text-white shadow-lg shadow-coffee-200">
+                    <ClipboardList size={24} />
+                  </div>
+                  <div>
+                    <h2 className="text-2xl font-serif font-bold text-coffee-950">Status Pesanan</h2>
+                    <p className="text-xs text-coffee-500 font-medium">Daftar pesanan aktif saat ini</p>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => setShowCustomerOrderStatus(false)}
+                  className="p-3 hover:bg-white rounded-2xl transition-all shadow-sm active:scale-90"
+                >
+                  <X size={24} className="text-coffee-400" />
+                </button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-8 space-y-6 custom-scrollbar">
+                {customerActiveOrders.length === 0 ? (
+                  <div className="text-center py-12 space-y-4">
+                    <div className="w-20 h-20 bg-coffee-50 rounded-full flex items-center justify-center mx-auto text-coffee-200">
+                      <ClipboardList size={40} />
+                    </div>
+                    <p className="text-coffee-500 font-medium">Belum ada pesanan aktif.</p>
+                  </div>
+                ) : (
+                  <div className="grid gap-4">
+                    {customerActiveOrders
+                      .map(order => (
+                        <div key={order.id} className="bg-coffee-50/50 border border-coffee-100 rounded-3xl p-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                          <div className="space-y-2">
+                            <div className="flex items-center gap-3">
+                              <span className="text-lg font-black text-coffee-900">#{order.id.toString().slice(-4)}</span>
+                              <span className={cn(
+                                "px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest",
+                                order.status === 'Menunggu' ? "bg-amber-100 text-amber-600" :
+                                order.status === 'Diproses' ? "bg-blue-100 text-blue-600" :
+                                "bg-emerald-100 text-emerald-600"
+                              )}>
+                                {order.status}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-4 text-xs text-coffee-500 font-medium">
+                              <span className="flex items-center gap-1.5"><User size={14} /> {order.customer_name}</span>
+                              <span className="flex items-center gap-1.5"><LayoutDashboard size={14} /> Meja {order.table_number}</span>
+                            </div>
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            {order.items.map((item: any, idx: number) => (
+                              <span key={idx} className="bg-white border border-coffee-100 px-3 py-1.5 rounded-xl text-[10px] font-bold text-coffee-700 shadow-sm">
+                                {item.quantity}x {item.menu_name.replace('Order: ', '').split(' (x')[0]}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="p-8 bg-coffee-50/50 border-t border-coffee-100">
+                <button 
+                  onClick={() => setShowCustomerOrderStatus(false)}
+                  className="w-full bg-coffee-900 text-white py-4 rounded-2xl font-black shadow-xl shadow-coffee-200 hover:bg-coffee-800 transition-all active:scale-95"
+                >
+                  TUTUP
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {/* Hidden Print-only Receipt (Optimized for Thermal Printer) */}
       <div className="hidden print-section font-mono text-[12px] leading-tight text-black">

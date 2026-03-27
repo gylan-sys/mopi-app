@@ -536,11 +536,20 @@ async function startServer() {
   // Public APIs for Guest Ordering
   app.get("/api/menus/public", (req, res) => {
     const menus = db.prepare("SELECT * FROM menus").all() as any[];
-    res.json(menus);
+    const menusWithIngredients = menus.map(menu => {
+      const ingredients = db.prepare(`
+        SELECT mi.*, i.name as inventory_name, i.unit, i.unit_price, i.quantity as current_stock
+        FROM menu_ingredients mi 
+        JOIN inventory i ON mi.inventory_id = i.id 
+        WHERE mi.menu_id = ?
+      `).all(menu.id);
+      return { ...menu, ingredients };
+    });
+    res.json(menusWithIngredients);
   });
 
   app.post("/api/orders/public", (req, res) => {
-    const { items, customerName, tableNumber, promoCode, discountAmount } = req.body;
+    const { items, customerName, tableNumber, promoCode, discountAmount, paymentMethod } = req.body;
     
     if (!items || !Array.isArray(items) || items.length === 0) {
       return res.status(400).json({ error: "Orderan kosong" });
@@ -562,8 +571,8 @@ async function startServer() {
 
           // Insert into transactions as pending
           db.prepare(`
-            INSERT INTO transactions (type, category, amount, description, customer_name, table_number, order_id, source, status, menu_id, quantity, date, promo_code)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?)
+            INSERT INTO transactions (type, category, amount, description, customer_name, table_number, order_id, source, status, menu_id, quantity, date, promo_code, payment_method)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?, ?)
           `).run(
             'income',
             menu.category,
@@ -576,15 +585,16 @@ async function startServer() {
             'pending',
             item.menuId,
             item.quantity,
-            promoCode || null
+            promoCode || null,
+            paymentMethod || 'Cash'
           );
         }
 
         // Insert discount row if any
         if (promoCode && discountAmount > 0) {
           db.prepare(`
-            INSERT INTO transactions (type, category, amount, description, customer_name, table_number, order_id, source, status, date, promo_code)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?)
+            INSERT INTO transactions (type, category, amount, description, customer_name, table_number, order_id, source, status, date, promo_code, payment_method)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?, ?)
           `).run(
             'income',
             'Discount',
@@ -595,7 +605,8 @@ async function startServer() {
             orderId,
             'Customer',
             'pending',
-            promoCode
+            promoCode,
+            paymentMethod || 'Cash'
           );
         }
 
@@ -609,8 +620,8 @@ async function startServer() {
         const tax = Math.round((subtotal - (discountAmount || 0)) * (taxRate / 100));
         if (tax > 0) {
           db.prepare(`
-            INSERT INTO transactions (type, category, amount, description, customer_name, table_number, order_id, source, status, date)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            INSERT INTO transactions (type, category, amount, description, customer_name, table_number, order_id, source, status, date, payment_method)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?)
           `).run(
             'income',
             'Tax',
@@ -620,7 +631,8 @@ async function startServer() {
             tableNumber || '',
             orderId,
             'Customer',
-            'pending'
+            'pending',
+            paymentMethod || 'Cash'
           );
         }
 
@@ -840,6 +852,29 @@ async function startServer() {
   app.delete("/api/customers/:id", authenticateToken, (req, res) => {
     db.prepare("DELETE FROM customers WHERE id = ?").run(req.params.id);
     res.json({ success: true });
+  });
+
+  // Public active orders for customers
+  app.get("/api/active-orders/public", (req, res) => {
+    try {
+      const orders = db.prepare(`
+        SELECT 
+          order_id as id,
+          customer_name,
+          table_number,
+          status,
+          date as created_at,
+          json_group_array(json_object('menu_name', description, 'quantity', quantity)) as items
+        FROM transactions
+        WHERE category = 'Sales' AND status != 'Selesai' AND status != 'Dibatalkan'
+        GROUP BY order_id
+        ORDER BY date DESC
+      `).all() as any[];
+      
+      res.json(orders.map(o => ({ ...o, items: JSON.parse(o.items) })));
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
   });
 
   app.get("/api/active-orders", authenticateToken, (req, res) => {
@@ -1453,7 +1488,7 @@ async function startServer() {
   // Backup & Restore API
   app.get("/api/backup/database", authenticateToken, isAdmin, (req, res) => {
     try {
-      const tables = ['users', 'settings', 'inventory', 'transactions', 'menus', 'menu_ingredients', 'customers'];
+      const tables = ['users', 'settings', 'inventory', 'transactions', 'menus', 'menu_ingredients', 'customers', 'advertisements', 'promos'];
       const backup: any = {};
       
       for (const table of tables) {
@@ -1484,27 +1519,36 @@ async function startServer() {
     
     try {
       const backupData = JSON.parse(fs.readFileSync(req.file.path, 'utf8'));
-      const tables = ['users', 'settings', 'inventory', 'transactions', 'menus', 'menu_ingredients', 'customers'];
+      const tables = ['users', 'settings', 'inventory', 'transactions', 'menus', 'menu_ingredients', 'customers', 'advertisements', 'promos'];
       
-      const transaction = db.transaction(() => {
-        for (const table of tables) {
-          if (backupData[table]) {
-            db.prepare(`DELETE FROM ${table}`).run();
-            if (backupData[table].length > 0) {
-              const columns = Object.keys(backupData[table][0]);
-              const placeholders = columns.map(() => '?').join(',');
-              const insert = db.prepare(`INSERT INTO ${table} (${columns.join(',')}) VALUES (${placeholders})`);
-              
-              for (const row of backupData[table]) {
-                const values = columns.map(col => row[col]);
-                insert.run(...values);
+      // Disable foreign keys during restore to avoid constraint issues
+      db.prepare("PRAGMA foreign_keys = OFF").run();
+      
+      try {
+        const transaction = db.transaction(() => {
+          for (const table of tables) {
+            if (backupData[table]) {
+              db.prepare(`DELETE FROM ${table}`).run();
+              if (backupData[table].length > 0) {
+                const columns = Object.keys(backupData[table][0]);
+                const placeholders = columns.map(() => '?').join(',');
+                const insert = db.prepare(`INSERT INTO ${table} (${columns.join(',')}) VALUES (${placeholders})`);
+                
+                for (const row of backupData[table]) {
+                  const values = columns.map(col => row[col]);
+                  insert.run(...values);
+                }
               }
             }
           }
-        }
-      });
+        });
+        
+        transaction();
+      } finally {
+        // Re-enable foreign keys
+        db.prepare("PRAGMA foreign_keys = ON").run();
+      }
       
-      transaction();
       fs.unlinkSync(req.file.path);
       res.json({ success: true, message: "Database berhasil direstore" });
     } catch (error: any) {

@@ -1518,16 +1518,24 @@ async function startServer() {
     if (!req.file) return res.status(400).json({ error: "File tidak ditemukan" });
     
     try {
-      const backupData = JSON.parse(fs.readFileSync(req.file.path, 'utf8'));
+      const fileContent = fs.readFileSync(req.file.path, 'utf8');
+      let backupData: any;
+      try {
+        backupData = JSON.parse(fileContent);
+      } catch (e) {
+        return res.status(400).json({ error: "Format file tidak valid (bukan JSON)" });
+      }
+
       const tables = ['users', 'settings', 'inventory', 'transactions', 'menus', 'menu_ingredients', 'customers', 'advertisements', 'promos'];
       
       // Disable foreign keys during restore to avoid constraint issues
-      db.prepare("PRAGMA foreign_keys = OFF").run();
+      db.pragma("foreign_keys = OFF");
       
       try {
         const transaction = db.transaction(() => {
           for (const table of tables) {
             if (backupData[table]) {
+              console.log(`Restoring table: ${table} (${backupData[table].length} rows)`);
               db.prepare(`DELETE FROM ${table}`).run();
               if (backupData[table].length > 0) {
                 const columns = Object.keys(backupData[table][0]);
@@ -1544,14 +1552,16 @@ async function startServer() {
         });
         
         transaction();
+        console.log("Database restore transaction completed successfully");
       } finally {
         // Re-enable foreign keys
-        db.prepare("PRAGMA foreign_keys = ON").run();
+        db.pragma("foreign_keys = ON");
       }
       
       fs.unlinkSync(req.file.path);
       res.json({ success: true, message: "Database berhasil direstore" });
     } catch (error: any) {
+      console.error("Restore error:", error);
       if (req.file && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
       res.status(500).json({ error: "Gagal merestore database: " + error.message });
     }
@@ -1561,7 +1571,13 @@ async function startServer() {
     if (!req.file) return res.status(400).json({ error: "File tidak ditemukan" });
     
     try {
-      const backupData = JSON.parse(fs.readFileSync(req.file.path, 'utf8'));
+      const fileContent = fs.readFileSync(req.file.path, 'utf8');
+      let backupData: any;
+      try {
+        backupData = JSON.parse(fileContent);
+      } catch (e) {
+        return res.status(400).json({ error: "Format file tidak valid (bukan JSON)" });
+      }
       
       const transaction = db.transaction(() => {
         db.prepare("DELETE FROM settings").run();
@@ -1575,6 +1591,7 @@ async function startServer() {
       fs.unlinkSync(req.file.path);
       res.json({ success: true, message: "Pengaturan berhasil direstore" });
     } catch (error: any) {
+      console.error("Restore settings error:", error);
       if (req.file && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
       res.status(500).json({ error: "Gagal merestore pengaturan: " + error.message });
     }

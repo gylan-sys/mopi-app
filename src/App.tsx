@@ -792,6 +792,9 @@ export default function App() {
     try {
       const res = await fetch(`/api/backup/restore-${type}`, {
         method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
         body: formData
       });
       const data = await res.json();

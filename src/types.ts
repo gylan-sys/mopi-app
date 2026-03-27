@@ -10,9 +10,10 @@ export interface InventoryItem {
   name: string;
   quantity: number;
   unit: string;
-  category: 'Bahan' | 'Alat';
+  category: string;
   unit_price: number;
   min_stock: number;
+  type: 'Bahan' | 'Barang';
   updated_at: string;
 }
 
@@ -58,6 +59,9 @@ export interface Menu {
   category: string;
   description: string;
   image_url?: string;
+  type: 'Internal' | 'Consignment';
+  supplier_name?: string;
+  supplier_price?: number;
   ingredients: MenuIngredient[];
 }
 

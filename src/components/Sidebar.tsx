@@ -232,6 +232,24 @@ const Sidebar: React.FC<SidebarProps> = ({
                     </button>
                     <button
                       onClick={() => {
+                        setActiveTab('reports');
+                        setReportSubTab('consignment');
+                      }}
+                      className={cn(
+                        "flex items-center gap-3 px-4 py-2 rounded-xl text-sm transition-all",
+                        activeTab === 'reports' && reportSubTab === 'consignment' 
+                          ? "bg-coffee-100 dark:bg-zinc-800 text-coffee-900 dark:text-zinc-100 font-bold" 
+                          : "text-coffee-500 dark:text-zinc-400 hover:bg-coffee-50 dark:hover:bg-zinc-800/50"
+                      )}
+                    >
+                      <div className={cn(
+                        "w-1.5 h-1.5 rounded-full",
+                        activeTab === 'reports' && reportSubTab === 'consignment' ? "bg-coffee-600" : "bg-coffee-200 dark:bg-zinc-700"
+                      )} />
+                      {t('consignment_report')}
+                    </button>
+                    <button
+                      onClick={() => {
                         setActiveTab('transactions');
                         setIsReportsOpen(true);
                       }}
@@ -327,7 +345,25 @@ const Sidebar: React.FC<SidebarProps> = ({
                       "w-1.5 h-1.5 rounded-full",
                       activeTab === 'inventory' && invCategoryFilter === 'Bahan' ? "bg-coffee-600" : "bg-coffee-200 dark:bg-zinc-700"
                     )} />
-                    {t('inventory_materials')}
+                    {t('raw_material')}
+                  </button>
+                  <button
+                    onClick={() => {
+                      setActiveTab('inventory');
+                      setInvCategoryFilter('Barang');
+                    }}
+                    className={cn(
+                      "flex items-center gap-3 px-4 py-2 rounded-xl text-sm transition-all",
+                      activeTab === 'inventory' && invCategoryFilter === 'Barang' 
+                        ? "bg-coffee-100 dark:bg-zinc-800 text-coffee-900 dark:text-zinc-100 font-bold" 
+                        : "text-coffee-500 dark:text-zinc-400 hover:bg-coffee-50 dark:hover:bg-zinc-800/50"
+                    )}
+                  >
+                    <div className={cn(
+                      "w-1.5 h-1.5 rounded-full",
+                      activeTab === 'inventory' && invCategoryFilter === 'Barang' ? "bg-coffee-600" : "bg-coffee-200 dark:bg-zinc-700"
+                    )} />
+                    {t('goods')}
                   </button>
                   <button
                     onClick={() => {

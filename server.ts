@@ -13,6 +13,7 @@ import jwt from "jsonwebtoken";
 import cookieParser from "cookie-parser";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
+import ExcelJS from "exceljs";
 
 import { z } from "zod";
 
@@ -111,11 +112,44 @@ function initDb() {
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
+    CREATE TABLE IF NOT EXISTS advertisements (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      type TEXT CHECK(type IN ('image', 'video')) NOT NULL,
+      url TEXT NOT NULL,
+      title TEXT,
+      subtitle TEXT,
+      active INTEGER DEFAULT 1,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS promos (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      code TEXT UNIQUE NOT NULL,
+      discount_type TEXT CHECK(discount_type IN ('percentage', 'fixed')) NOT NULL,
+      discount_value REAL NOT NULL,
+      target_type TEXT CHECK(target_type IN ('all', 'specific_menus')) DEFAULT 'all',
+      target_ids TEXT, -- JSON array of menu IDs
+      active INTEGER DEFAULT 1,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
     CREATE INDEX IF NOT EXISTS idx_transactions_order_id ON transactions(order_id);
     CREATE INDEX IF NOT EXISTS idx_transactions_status ON transactions(status);
     CREATE INDEX IF NOT EXISTS idx_transactions_date ON transactions(date);
     CREATE INDEX IF NOT EXISTS idx_inventory_category ON inventory(category);
+
+    -- Add new columns if they don't exist
+    PRAGMA table_info(inventory);
+    -- We'll use a safer way to add columns in SQLite
+    -- Check if 'type' column exists in inventory
+    -- Note: In SQLite, we can't easily check column existence in a single statement without a script or PRAGMA
   `);
+
+  // Safely add columns
+  try { db.prepare("ALTER TABLE inventory ADD COLUMN type TEXT DEFAULT 'Bahan'").run(); } catch(e) {}
+  try { db.prepare("ALTER TABLE menus ADD COLUMN type TEXT DEFAULT 'Internal'").run(); } catch(e) {}
+  try { db.prepare("ALTER TABLE menus ADD COLUMN supplier_name TEXT").run(); } catch(e) {}
+  try { db.prepare("ALTER TABLE menus ADD COLUMN supplier_price REAL DEFAULT 0").run(); } catch(e) {}
 
   // Migration: Add source column to transactions if it doesn't exist
   try {
@@ -157,6 +191,20 @@ function initDb() {
     db.prepare("SELECT quantity FROM transactions LIMIT 1").get();
   } catch (e) {
     db.exec("ALTER TABLE transactions ADD COLUMN quantity INTEGER DEFAULT 1");
+  }
+
+  // Migration: Add promo_code column to transactions if it doesn't exist
+  try {
+    db.prepare("SELECT promo_code FROM transactions LIMIT 1").get();
+  } catch (e) {
+    db.exec("ALTER TABLE transactions ADD COLUMN promo_code TEXT");
+  }
+
+  // Migration: Add discount_amount column to transactions if it doesn't exist
+  try {
+    db.prepare("SELECT discount_amount FROM transactions LIMIT 1").get();
+  } catch (e) {
+    db.exec("ALTER TABLE transactions ADD COLUMN discount_amount REAL DEFAULT 0");
   }
 
   // Migration: Add category column to inventory if it doesn't exist
@@ -485,6 +533,107 @@ async function startServer() {
     res.json(req.user);
   });
 
+  // Public APIs for Guest Ordering
+  app.get("/api/menus/public", (req, res) => {
+    const menus = db.prepare("SELECT * FROM menus").all() as any[];
+    res.json(menus);
+  });
+
+  app.post("/api/orders/public", (req, res) => {
+    const { items, customerName, tableNumber, promoCode, discountAmount } = req.body;
+    
+    if (!items || !Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ error: "Orderan kosong" });
+    }
+
+    try {
+      const transaction = db.transaction(() => {
+        // Get and increment order counter
+        const counterSetting = db.prepare("SELECT value FROM settings WHERE key = 'order_counter'").get() as any;
+        let counter = parseInt(counterSetting?.value || '1');
+        const orderId = String(counter).padStart(2, '0');
+        db.prepare("UPDATE settings SET value = ? WHERE key = 'order_counter'").run(String(counter + 1));
+
+        let subtotal = 0;
+        for (const item of items) {
+          const menu = db.prepare("SELECT * FROM menus WHERE id = ?").get(item.menuId) as any;
+          if (!menu) throw new Error(`Menu ID ${item.menuId} tidak ditemukan`);
+          subtotal += menu.price * item.quantity;
+
+          // Insert into transactions as pending
+          db.prepare(`
+            INSERT INTO transactions (type, category, amount, description, customer_name, table_number, order_id, source, status, menu_id, quantity, date, promo_code)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?)
+          `).run(
+            'income',
+            menu.category,
+            menu.price * item.quantity,
+            `Order via Customer: ${menu.name}`,
+            customerName || 'Guest',
+            tableNumber || '',
+            orderId,
+            'Customer',
+            'pending',
+            item.menuId,
+            item.quantity,
+            promoCode || null
+          );
+        }
+
+        // Insert discount row if any
+        if (promoCode && discountAmount > 0) {
+          db.prepare(`
+            INSERT INTO transactions (type, category, amount, description, customer_name, table_number, order_id, source, status, date, promo_code)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?)
+          `).run(
+            'income',
+            'Discount',
+            -discountAmount,
+            `Promo Code: ${promoCode}`,
+            customerName || 'Guest',
+            tableNumber || '',
+            orderId,
+            'Customer',
+            'pending',
+            promoCode
+          );
+        }
+
+        // Insert tax row
+        const settings = db.prepare("SELECT * FROM settings").all() as any[];
+        const settingsObj = settings.reduce((acc, curr) => {
+          acc[curr.key] = curr.value;
+          return acc;
+        }, {} as any);
+        const taxRate = parseFloat(settingsObj.tax_rate || '0');
+        const tax = Math.round((subtotal - (discountAmount || 0)) * (taxRate / 100));
+        if (tax > 0) {
+          db.prepare(`
+            INSERT INTO transactions (type, category, amount, description, customer_name, table_number, order_id, source, status, date)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+          `).run(
+            'income',
+            'Tax',
+            tax,
+            'Order Tax',
+            customerName || 'Guest',
+            tableNumber || '',
+            orderId,
+            'Customer',
+            'pending'
+          );
+        }
+
+        return orderId;
+      });
+
+      const orderId = transaction();
+      res.json({ success: true, orderId });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   // Menus API
   app.get("/api/menus", authenticateToken, (req, res) => {
     const menus = db.prepare("SELECT * FROM menus").all() as any[];
@@ -501,9 +650,11 @@ async function startServer() {
   });
 
   app.post("/api/menus", authenticateToken, isAdmin, (req, res) => {
-    const { name, price, size, category, image_url, description, ingredients } = req.body;
+    const { name, price, size, category, image_url, description, ingredients, type, supplier_name, supplier_price } = req.body;
     const transaction = db.transaction(() => {
-      const result = db.prepare("INSERT INTO menus (name, price, size, category, image_url, description) VALUES (?, ?, ?, ?, ?, ?)").run(name, price, size, category, image_url, description);
+      const result = db.prepare("INSERT INTO menus (name, price, size, category, image_url, description, type, supplier_name, supplier_price) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)").run(
+        name, price, size, category, image_url, description, type || 'Internal', supplier_name || null, supplier_price || 0
+      );
       const menuId = result.lastInsertRowid;
       const insertIngredient = db.prepare("INSERT INTO menu_ingredients (menu_id, inventory_id, quantity) VALUES (?, ?, ?)");
       for (const ing of ingredients) {
@@ -516,10 +667,12 @@ async function startServer() {
   });
 
   app.put("/api/menus/:id", authenticateToken, isAdmin, (req, res) => {
-    const { name, price, size, category, image_url, description, ingredients } = req.body;
+    const { name, price, size, category, image_url, description, ingredients, type, supplier_name, supplier_price } = req.body;
     const menuId = req.params.id;
     const transaction = db.transaction(() => {
-      db.prepare("UPDATE menus SET name = ?, price = ?, size = ?, category = ?, image_url = ?, description = ? WHERE id = ?").run(name, price, size, category, image_url, description, menuId);
+      db.prepare("UPDATE menus SET name = ?, price = ?, size = ?, category = ?, image_url = ?, description = ?, type = ?, supplier_name = ?, supplier_price = ? WHERE id = ?").run(
+        name, price, size, category, image_url, description, type || 'Internal', supplier_name || null, supplier_price || 0, menuId
+      );
       db.prepare("DELETE FROM menu_ingredients WHERE menu_id = ?").run(menuId);
       const insertIngredient = db.prepare("INSERT INTO menu_ingredients (menu_id, inventory_id, quantity) VALUES (?, ?, ?)");
       for (const ing of ingredients) {
@@ -694,7 +847,7 @@ async function startServer() {
       SELECT t.*, m.name as menu_name
       FROM transactions t
       LEFT JOIN menus m ON t.menu_id = m.id
-      WHERE t.status = 'processing'
+      WHERE t.status IN ('processing', 'pending')
       ORDER BY t.date ASC
     `).all() as any[];
 
@@ -706,6 +859,8 @@ async function startServer() {
           customerName: item.customer_name,
           date: item.date,
           source: item.source || 'POS',
+          status: item.status,
+          tableNumber: item.table_number,
           items: []
         };
       }
@@ -733,13 +888,15 @@ async function startServer() {
   });
 
   app.post("/api/inventory", authenticateToken, isAdmin, (req, res) => {
-    const { name, quantity, unit, min_stock, unit_price, category } = req.body;
-    const result = db.prepare("INSERT INTO inventory (name, quantity, unit, min_stock, unit_price, category) VALUES (?, ?, ?, ?, ?, ?)").run(name, quantity, unit, min_stock || 0, unit_price || 0, category || 'Bahan');
+    const { name, quantity, unit, min_stock, unit_price, category, type } = req.body;
+    const result = db.prepare("INSERT INTO inventory (name, quantity, unit, min_stock, unit_price, category, type) VALUES (?, ?, ?, ?, ?, ?, ?)").run(
+      name, quantity, unit, min_stock || 0, unit_price || 0, category || 'Bahan', type || 'Bahan'
+    );
     res.json({ id: result.lastInsertRowid });
   });
 
   app.put("/api/inventory/:id", authenticateToken, isAdmin, (req, res) => {
-    const { name, quantity, unit, min_stock, unit_price, category } = req.body;
+    const { name, quantity, unit, min_stock, unit_price, category, type } = req.body;
     const fields = [];
     const values = [];
 
@@ -749,6 +906,7 @@ async function startServer() {
     if (min_stock !== undefined) { fields.push("min_stock = ?"); values.push(min_stock); }
     if (unit_price !== undefined) { fields.push("unit_price = ?"); values.push(unit_price); }
     if (category !== undefined) { fields.push("category = ?"); values.push(category); }
+    if (type !== undefined) { fields.push("type = ?"); values.push(type); }
 
     if (fields.length === 0) return res.json({ success: true });
 
@@ -929,6 +1087,146 @@ async function startServer() {
     });
   });
 
+  app.get("/api/reports/consignment", authenticateToken, isAdmin, (req, res) => {
+    const { startDate, endDate } = req.query;
+    const end = endDate ? (endDate as string) : new Date().toISOString().split('T')[0];
+    const start = startDate ? (startDate as string) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+
+    try {
+      const reports = db.prepare(`
+        SELECT 
+          m.supplier_name,
+          m.name as menu_name,
+          m.supplier_price,
+          m.price as selling_price,
+          SUM(t.quantity) as total_quantity,
+          SUM(t.amount) as total_sales,
+          SUM(t.quantity * m.supplier_price) as total_settlement,
+          SUM(t.amount - (t.quantity * m.supplier_price)) as total_profit
+        FROM transactions t
+        JOIN menus m ON t.menu_id = m.id
+        WHERE m.type = 'Consignment' 
+          AND t.type = 'income' 
+          AND t.status = 'completed'
+          AND t.date >= ? AND t.date <= ?
+        GROUP BY m.supplier_name, m.id
+        ORDER BY m.supplier_name ASC
+      `).all(start, end);
+
+      res.json(reports);
+    } catch (error) {
+      console.error("Consignment report error:", error);
+      res.status(500).json({ error: "Gagal memuat laporan titipan" });
+    }
+  });
+
+  app.get("/api/reports/consignment", authenticateToken, isAdmin, (req, res) => {
+    const { startDate, endDate } = req.query;
+    const end = endDate ? (endDate as string) : new Date().toISOString().split('T')[0];
+    const start = startDate ? (startDate as string) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+
+    try {
+      const reports = db.prepare(`
+        SELECT 
+          m.supplier_name,
+          m.name as menu_name,
+          m.supplier_price,
+          m.price as selling_price,
+          SUM(t.quantity) as total_quantity,
+          SUM(t.amount) as total_sales,
+          SUM(t.quantity * m.supplier_price) as total_settlement,
+          SUM(t.amount - (t.quantity * m.supplier_price)) as total_profit
+        FROM transactions t
+        JOIN menus m ON t.menu_id = m.id
+        WHERE m.type = 'Consignment' 
+          AND t.type = 'income' 
+          AND t.status = 'completed'
+          AND t.date >= ? AND t.date <= ?
+        GROUP BY m.supplier_name, m.id
+        ORDER BY m.supplier_name ASC
+      `).all(start, end);
+
+      res.json(reports);
+    } catch (error) {
+      console.error("Consignment report error:", error);
+      res.status(500).json({ error: "Gagal memuat laporan titipan" });
+    }
+  });
+
+  app.get("/api/reports/export-all", authenticateToken, isAdmin, async (req, res) => {
+    try {
+      const workbook = new ExcelJS.Workbook();
+      
+      // 1. Transactions Sheet
+      const transactionsSheet = workbook.addWorksheet('Transaksi');
+      transactionsSheet.columns = [
+        { header: 'ID', key: 'id', width: 10 },
+        { header: 'Tanggal', key: 'date', width: 20 },
+        { header: 'Tipe', key: 'type', width: 15 },
+        { header: 'Kategori', key: 'category', width: 20 },
+        { header: 'Jumlah', key: 'amount', width: 15 },
+        { header: 'Deskripsi', key: 'description', width: 30 },
+        { header: 'Pelanggan', key: 'customer_name', width: 20 },
+        { header: 'Metode Pembayaran', key: 'payment_method', width: 20 },
+        { header: 'Order ID', key: 'order_id', width: 15 },
+        { header: 'Sumber', key: 'source', width: 10 }
+      ];
+      const transactions = db.prepare("SELECT * FROM transactions ORDER BY date DESC").all();
+      transactionsSheet.addRows(transactions);
+
+      // 2. Inventory Sheet
+      const inventorySheet = workbook.addWorksheet('Inventaris');
+      inventorySheet.columns = [
+        { header: 'ID', key: 'id', width: 10 },
+        { header: 'Nama', key: 'name', width: 25 },
+        { header: 'Stok', key: 'quantity', width: 15 },
+        { header: 'Satuan', key: 'unit', width: 10 },
+        { header: 'Kategori', key: 'category', width: 15 },
+        { header: 'Harga Satuan', key: 'unit_price', width: 15 },
+        { header: 'Min. Stok', key: 'min_stock', width: 15 }
+      ];
+      const inventory = db.prepare("SELECT * FROM inventory").all();
+      inventorySheet.addRows(inventory);
+
+      // 3. Menu Sheet
+      const menuSheet = workbook.addWorksheet('Menu');
+      menuSheet.columns = [
+        { header: 'ID', key: 'id', width: 10 },
+        { header: 'Nama', key: 'name', width: 25 },
+        { header: 'Harga', key: 'price', width: 15 },
+        { header: 'Ukuran', key: 'size', width: 10 },
+        { header: 'Kategori', key: 'category', width: 15 },
+        { header: 'Deskripsi', key: 'description', width: 30 }
+      ];
+      const menus = db.prepare("SELECT * FROM menus").all();
+      menuSheet.addRows(menus);
+
+      // 4. Customers Sheet
+      const customersSheet = workbook.addWorksheet('Pelanggan');
+      customersSheet.columns = [
+        { header: 'ID', key: 'id', width: 10 },
+        { header: 'Nama', key: 'name', width: 25 },
+        { header: 'Telepon', key: 'phone', width: 20 },
+        { header: 'Email', key: 'email', width: 25 },
+        { header: 'Poin', key: 'points', width: 10 },
+        { header: 'Level', key: 'level', width: 15 },
+        { header: 'Total Belanja', key: 'total_spent', width: 15 },
+        { header: 'Terakhir Berkunjung', key: 'last_visit', width: 20 }
+      ];
+      const customers = db.prepare("SELECT * FROM customers").all();
+      customersSheet.addRows(customers);
+
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      res.setHeader('Content-Disposition', 'attachment; filename=Laporan_Lengkap.xlsx');
+
+      await workbook.xlsx.write(res);
+      res.end();
+    } catch (error) {
+      console.error("Export error:", error);
+      res.status(500).json({ error: "Gagal mengexport laporan" });
+    }
+  });
+
   // User Management API
   app.get("/api/users", authenticateToken, isAdmin, (req, res) => {
     const users = db.prepare("SELECT id, username, email, role FROM users").all();
@@ -988,6 +1286,100 @@ async function startServer() {
   });
 
   // Settings APIs
+  app.get("/api/settings/public", (req, res) => {
+    const publicKeys = [
+      "app_name",
+      "app_icon",
+      "app_logo_url",
+      "login_bg",
+      "login_bg_image",
+      "login_title",
+      "login_subtitle",
+      "primary_color",
+      "language",
+      "main_bg",
+      "main_bg_image"
+    ];
+    const settings = db.prepare("SELECT * FROM settings WHERE key IN (" + publicKeys.map(() => "?").join(",") + ")").all(publicKeys) as any[];
+    const settingsObj = settings.reduce((acc: any, curr: any) => {
+      acc[curr.key] = curr.value;
+      return acc;
+    }, {});
+    res.json(settingsObj);
+  });
+
+  // Advertisements API
+  app.get("/api/public/ads", (req, res) => {
+    const ads = db.prepare("SELECT * FROM advertisements WHERE active = 1 ORDER BY created_at DESC").all();
+    res.json(ads);
+  });
+
+  app.get("/api/ads", authenticateToken, (req, res) => {
+    const ads = db.prepare("SELECT * FROM advertisements ORDER BY created_at DESC").all();
+    res.json(ads);
+  });
+
+  app.post("/api/ads", authenticateToken, (req, res) => {
+    const { type, url, title, subtitle, active } = req.body;
+    const result = db.prepare("INSERT INTO advertisements (type, url, title, subtitle, active) VALUES (?, ?, ?, ?, ?)")
+      .run(type, url, title, subtitle, active ? 1 : 0);
+    res.json({ id: result.lastInsertRowid });
+  });
+
+  app.put("/api/ads/:id", authenticateToken, (req, res) => {
+    const { type, url, title, subtitle, active } = req.body;
+    db.prepare("UPDATE advertisements SET type = ?, url = ?, title = ?, subtitle = ?, active = ? WHERE id = ?")
+      .run(type, url, title, subtitle, active ? 1 : 0, req.params.id);
+    res.json({ success: true });
+  });
+
+  app.delete("/api/ads/:id", authenticateToken, (req, res) => {
+    db.prepare("DELETE FROM advertisements WHERE id = ?").run(req.params.id);
+    res.json({ success: true });
+  });
+
+  // Promos API
+  app.get("/api/promos", authenticateToken, (req, res) => {
+    const promos = db.prepare("SELECT * FROM promos ORDER BY created_at DESC").all() as any[];
+    const parsedPromos = promos.map(p => ({
+      ...p,
+      target_ids: JSON.parse(p.target_ids || '[]')
+    }));
+    res.json(parsedPromos);
+  });
+
+  app.post("/api/promos", authenticateToken, (req, res) => {
+    const { code, discount_type, discount_value, target_type, target_ids, active } = req.body;
+    try {
+      const result = db.prepare("INSERT INTO promos (code, discount_type, discount_value, target_type, target_ids, active) VALUES (?, ?, ?, ?, ?, ?)")
+        .run(code, discount_type, discount_value, target_type, JSON.stringify(target_ids), active ? 1 : 0);
+      res.json({ id: result.lastInsertRowid });
+    } catch (e) {
+      res.status(400).json({ error: "Kode promo sudah ada" });
+    }
+  });
+
+  app.put("/api/promos/:id", authenticateToken, (req, res) => {
+    const { code, discount_type, discount_value, target_type, target_ids, active } = req.body;
+    db.prepare("UPDATE promos SET code = ?, discount_type = ?, discount_value = ?, target_type = ?, target_ids = ?, active = ? WHERE id = ?")
+      .run(code, discount_type, discount_value, target_type, JSON.stringify(target_ids), active ? 1 : 0, req.params.id);
+    res.json({ success: true });
+  });
+
+  app.delete("/api/promos/:id", authenticateToken, (req, res) => {
+    db.prepare("DELETE FROM promos WHERE id = ?").run(req.params.id);
+    res.json({ success: true });
+  });
+
+  app.get("/api/public/promos/:code", (req, res) => {
+    const promo = db.prepare("SELECT * FROM promos WHERE code = ? AND active = 1").get(req.params.code) as any;
+    if (!promo) {
+      return res.status(404).json({ error: "Kode promo tidak valid atau sudah tidak aktif" });
+    }
+    promo.target_ids = JSON.parse(promo.target_ids || '[]');
+    res.json(promo);
+  });
+
   app.get("/api/settings", authenticateToken, (req, res) => {
     const settings = db.prepare("SELECT * FROM settings").all() as any[];
     const settingsObj = settings.reduce((acc, curr) => {
@@ -1055,6 +1447,92 @@ async function startServer() {
       res.json({ success: true });
     } catch (error: any) {
       res.status(500).json({ error: "Gagal mengirim email: " + error.message });
+    }
+  });
+
+  // Backup & Restore API
+  app.get("/api/backup/database", authenticateToken, isAdmin, (req, res) => {
+    try {
+      const tables = ['users', 'settings', 'inventory', 'transactions', 'menus', 'menu_ingredients', 'customers'];
+      const backup: any = {};
+      
+      for (const table of tables) {
+        backup[table] = db.prepare(`SELECT * FROM ${table}`).all();
+      }
+      
+      res.setHeader('Content-Type', 'application/json');
+      res.setHeader('Content-Disposition', `attachment; filename=database_backup_${Date.now()}.json`);
+      res.json(backup);
+    } catch (error: any) {
+      res.status(500).json({ error: "Gagal membuat backup database: " + error.message });
+    }
+  });
+
+  app.get("/api/backup/settings", authenticateToken, isAdmin, (req, res) => {
+    try {
+      const settings = db.prepare("SELECT * FROM settings").all();
+      res.setHeader('Content-Type', 'application/json');
+      res.setHeader('Content-Disposition', `attachment; filename=settings_backup_${Date.now()}.json`);
+      res.json(settings);
+    } catch (error: any) {
+      res.status(500).json({ error: "Gagal membuat backup pengaturan: " + error.message });
+    }
+  });
+
+  app.post("/api/backup/restore-database", authenticateToken, isAdmin, upload.single('file'), (req: any, res) => {
+    if (!req.file) return res.status(400).json({ error: "File tidak ditemukan" });
+    
+    try {
+      const backupData = JSON.parse(fs.readFileSync(req.file.path, 'utf8'));
+      const tables = ['users', 'settings', 'inventory', 'transactions', 'menus', 'menu_ingredients', 'customers'];
+      
+      const transaction = db.transaction(() => {
+        for (const table of tables) {
+          if (backupData[table]) {
+            db.prepare(`DELETE FROM ${table}`).run();
+            if (backupData[table].length > 0) {
+              const columns = Object.keys(backupData[table][0]);
+              const placeholders = columns.map(() => '?').join(',');
+              const insert = db.prepare(`INSERT INTO ${table} (${columns.join(',')}) VALUES (${placeholders})`);
+              
+              for (const row of backupData[table]) {
+                const values = columns.map(col => row[col]);
+                insert.run(...values);
+              }
+            }
+          }
+        }
+      });
+      
+      transaction();
+      fs.unlinkSync(req.file.path);
+      res.json({ success: true, message: "Database berhasil direstore" });
+    } catch (error: any) {
+      if (req.file && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
+      res.status(500).json({ error: "Gagal merestore database: " + error.message });
+    }
+  });
+
+  app.post("/api/backup/restore-settings", authenticateToken, isAdmin, upload.single('file'), (req: any, res) => {
+    if (!req.file) return res.status(400).json({ error: "File tidak ditemukan" });
+    
+    try {
+      const backupData = JSON.parse(fs.readFileSync(req.file.path, 'utf8'));
+      
+      const transaction = db.transaction(() => {
+        db.prepare("DELETE FROM settings").run();
+        const insert = db.prepare("INSERT INTO settings (key, value) VALUES (?, ?)");
+        for (const row of backupData) {
+          insert.run(row.key, row.value);
+        }
+      });
+      
+      transaction();
+      fs.unlinkSync(req.file.path);
+      res.json({ success: true, message: "Pengaturan berhasil direstore" });
+    } catch (error: any) {
+      if (req.file && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
+      res.status(500).json({ error: "Gagal merestore pengaturan: " + error.message });
     }
   });
 

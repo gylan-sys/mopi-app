@@ -48,6 +48,15 @@ import {
   Maximize,
   Minimize,
   Keyboard,
+  Tag,
+  Play,
+  Pause,
+  Monitor,
+  Gift,
+  ArrowLeft,
+  Minus,
+  CheckCircle2,
+  FileText,
   Smartphone,
   ShoppingBag,
   Store,
@@ -107,6 +116,110 @@ interface Notification {
   time: string;
 }
 
+const AdCarousel = () => {
+  const [ads, setAds] = useState<any[]>([]);
+  const [currentIndex, setCurrentIndex] = useState(0);
+
+  useEffect(() => {
+    const fetchAds = async () => {
+      try {
+        const res = await fetch('/api/public/ads');
+        if (res.ok) {
+          const data = await res.json();
+          if (data.length > 0) {
+            setAds(data);
+          } else {
+            // Fallback if no ads in DB
+            setAds([
+              { id: 1, type: 'image', url: 'https://images.unsplash.com/photo-1509042239860-f550ce710b93?auto=format&fit=crop&q=80&w=1000', title: 'Kopi Pagi Nikmat', subtitle: 'Diskon 20% untuk pembelian sebelum jam 10 pagi' },
+              { id: 2, type: 'image', url: 'https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?auto=format&fit=crop&q=80&w=1000', title: 'Camilan Sore', subtitle: 'Beli 2 gratis 1 untuk semua jenis pastry' }
+            ]);
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching ads:', error);
+      }
+    };
+    fetchAds();
+  }, []);
+
+  useEffect(() => {
+    if (ads.length <= 1) return;
+    const timer = setInterval(() => {
+      setCurrentIndex((prev) => (prev + 1) % ads.length);
+    }, 5000);
+    return () => clearInterval(timer);
+  }, [ads.length]);
+
+  if (ads.length === 0) return null;
+
+  const currentAd = ads[currentIndex];
+
+  return (
+    <div className="relative w-full h-full overflow-hidden bg-coffee-950">
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={currentIndex}
+          initial={{ opacity: 0, scale: 1.1 }}
+          animate={{ opacity: 1, scale: 1 }}
+          exit={{ opacity: 0, scale: 0.9 }}
+          transition={{ duration: 1.5, ease: "easeInOut" }}
+          className="absolute inset-0"
+        >
+          {currentAd.type === 'video' ? (
+            <video 
+              src={currentAd.url} 
+              autoPlay 
+              muted 
+              loop 
+              playsInline
+              className="w-full h-full object-cover opacity-60"
+            />
+          ) : (
+            <img 
+              src={currentAd.url} 
+              alt={currentAd.title}
+              className="w-full h-full object-cover opacity-60"
+              referrerPolicy="no-referrer"
+            />
+          )}
+          <div className="absolute inset-0 bg-gradient-to-t from-coffee-950 via-transparent to-transparent" />
+          <div className="absolute bottom-12 left-12 right-12 text-white">
+            <motion.h2 
+              initial={{ y: 20, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              transition={{ duration: 0.8, delay: 0.5 }}
+              className="text-4xl font-serif font-bold mb-4"
+            >
+              {currentAd.title}
+            </motion.h2>
+            <motion.p 
+              initial={{ y: 20, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              transition={{ duration: 0.8, delay: 0.7 }}
+              className="text-xl text-coffee-200"
+            >
+              {currentAd.subtitle}
+            </motion.p>
+          </div>
+        </motion.div>
+      </AnimatePresence>
+      
+      <div className="absolute bottom-6 left-12 flex gap-2">
+        {ads.map((_, idx) => (
+          <div 
+            key={idx}
+            className={cn(
+              "h-1.5 rounded-full transition-all duration-500",
+              idx === currentIndex ? "w-8 bg-white" : "w-2 bg-white/30"
+            )}
+          />
+        ))}
+      </div>
+    </div>
+  );
+};
+
 export default function App() {
   const [user, setUser] = useState<{ id: number, username: string, role: 'admin' | 'cashier' } | null>(null);
   const [darkMode, setDarkMode] = useState(() => {
@@ -165,7 +278,7 @@ export default function App() {
   const [editingCustomerId, setEditingCustomerId] = useState<number | null>(null);
   const [newCustomer, setNewCustomer] = useState({ name: '', phone: '', email: '' });
   const [tableNumber, setTableNumber] = useState('');
-  const [reportSubTab, setReportSubTab] = useState<'transactions' | 'financial'>('transactions');
+  const [reportSubTab, setReportSubTab] = useState<'transactions' | 'financial' | 'consignment'>('transactions');
   const [isInventoryOpen, setIsInventoryOpen] = useState(false);
   const [isReportsOpen, setIsReportsOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -203,7 +316,7 @@ export default function App() {
     timezone: 'Asia/Jakarta',
     language: 'id'
   });
-  const [settingsSubTab, setSettingsSubTab] = useState<'general' | 'theme' | 'email' | 'payment' | 'delivery' | 'webhook' | 'receipt' | 'shortcuts'>('general');
+  const [settingsSubTab, setSettingsSubTab] = useState<'general' | 'theme' | 'email' | 'payment' | 'delivery' | 'webhook' | 'receipt' | 'shortcuts' | 'backup'>('general');
   const [testEmailTo, setTestEmailTo] = useState('');
   const [isTestingEmail, setIsTestingEmail] = useState(false);
   const [cart, setCart] = useState<{ menu: Menu, quantity: number, sugarLevel?: string, iceLevel?: string }[]>([]);
@@ -223,6 +336,8 @@ export default function App() {
     endDate: format(new Date(), 'yyyy-MM-dd')
   });
 
+  const [consignmentData, setConsignmentData] = useState<any[]>([]);
+
   const fetchFinancialData = async () => {
     if (!user || user.role !== 'admin') return;
     try {
@@ -236,11 +351,75 @@ export default function App() {
     }
   };
 
+  const fetchConsignmentData = async () => {
+    if (!user || user.role !== 'admin') return;
+    try {
+      const params = new URLSearchParams(financialRange);
+      const res = await fetch(`/api/reports/consignment?${params.toString()}`);
+      if (res.ok) {
+        setConsignmentData(await res.json());
+      }
+    } catch (error) {
+      console.error('Error fetching consignment data:', error);
+    }
+  };
+
+  const fetchAds = async () => {
+    try {
+      const response = await fetch('/api/ads', {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setAds(data);
+      }
+    } catch (error) {
+      console.error('Error fetching ads:', error);
+    }
+  };
+
+  const fetchPromos = async () => {
+    try {
+      const response = await fetch('/api/promos', {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setPromos(data);
+      }
+    } catch (error) {
+      console.error('Error fetching promos:', error);
+    }
+  };
+
   useEffect(() => {
-    if (activeTab === 'reports' && reportSubTab === 'financial') {
-      fetchFinancialData();
+    if (activeTab === 'settings') {
+      fetchAds();
+      fetchPromos();
+    }
+    if (activeTab === 'reports') {
+      if (reportSubTab === 'financial') {
+        fetchFinancialData();
+      } else if (reportSubTab === 'consignment') {
+        fetchConsignmentData();
+      }
     }
   }, [activeTab, reportSubTab, financialRange]);
+
+  const [isCustomerMode, setIsCustomerMode] = useState(true);
+  const [ads, setAds] = useState<any[]>([]);
+  const [promos, setPromos] = useState<any[]>([]);
+  const [activePromo, setActivePromo] = useState<any>(null);
+  const [promoCode, setPromoCode] = useState('');
+  const [showAdModal, setShowAdModal] = useState(false);
+  const [showPromoModal, setShowPromoModal] = useState(false);
+  const [editingAd, setEditingAd] = useState<any>(null);
+  const [editingPromo, setEditingPromo] = useState<any>(null);
+  const [newAd, setNewAd] = useState({ type: 'image', url: '', title: '', subtitle: '', active: true });
+  const [newPromo, setNewPromo] = useState({ code: '', discount_type: 'percentage', discount_value: 0, target_type: 'all', target_ids: [], active: true });
+  const [customerOrder, setCustomerOrder] = useState({ name: '', table: '' });
+  const [showCustomerOrderSuccess, setShowCustomerOrderSuccess] = useState(false);
+  const [customerOrderId, setCustomerOrderId] = useState('');
 
   // Forms
   const [showInvModal, setShowInvModal] = useState(false);
@@ -249,8 +428,8 @@ export default function App() {
   const [editingMenuId, setEditingMenuId] = useState<number | null>(null);
   const [editingInvId, setEditingInvId] = useState<number | null>(null);
   
-  const [newInv, setNewInv] = useState({ name: '', quantity: 0, unit: 'pcs', min_stock: 0, unit_price: 0, category: 'Bahan' as 'Bahan' | 'Alat' });
-  const [invCategoryFilter, setInvCategoryFilter] = useState<'Semua' | 'Bahan' | 'Alat'>('Semua');
+  const [newInv, setNewInv] = useState({ name: '', quantity: 0, unit: 'pcs', min_stock: 0, unit_price: 0, category: 'Bahan', type: 'Bahan' as 'Bahan' | 'Barang' });
+  const [invCategoryFilter, setInvCategoryFilter] = useState<string>('Semua');
   const [newTx, setNewTx] = useState({ type: 'income' as 'income' | 'expense', category: 'Sales', amount: 0, description: '' });
   const [newMenu, setNewMenu] = useState({ 
     name: '', 
@@ -259,6 +438,9 @@ export default function App() {
     category: 'Kopi',
     image_url: '',
     description: '', 
+    type: 'Internal' as 'Internal' | 'Consignment',
+    supplier_name: '',
+    supplier_price: 0,
     ingredients: [] as { inventory_id: number, quantity: number }[] 
   });
   const [confirmUpdate, setConfirmUpdate] = useState<{ id: number, name: string, currentQty: number, delta: number } | null>(null);
@@ -324,8 +506,21 @@ export default function App() {
   const [passwordData, setPasswordData] = useState({ oldPassword: '', newPassword: '', confirmPassword: '' });
   const [reportDate, setReportDate] = useState(formatDate(new Date(), 'yyyy-MM-dd'));
 
+  const fetchPublicSettings = async () => {
+    try {
+      const res = await fetch('/api/settings/public');
+      if (res.ok) {
+        const settingsData = await res.json();
+        if (settingsData) setAppSettings(prev => ({ ...prev, ...settingsData }));
+      }
+    } catch (error) {
+      console.error('Error fetching public settings:', error);
+    }
+  };
+
   useEffect(() => {
     const checkAuth = async () => {
+      await fetchPublicSettings(); // Fetch public settings regardless of auth
       try {
         const res = await fetch('/api/me');
         if (res.ok) {
@@ -546,6 +741,71 @@ export default function App() {
     }
   };
 
+  const handleBackup = async (type: 'database' | 'settings') => {
+    try {
+      const res = await fetch(`/api/backup/${type}`);
+      if (res.ok) {
+        const blob = await res.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${type}_backup_${new Date().toISOString().split('T')[0]}.json`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        toast.success(t('backup') + ' ' + (appSettings.language === 'id' ? 'berhasil' : 'successful'));
+      }
+    } catch (error) {
+      toast.error(t('backup') + ' ' + (appSettings.language === 'id' ? 'gagal' : 'failed'));
+    }
+  };
+
+  const handleRestore = async (type: 'database' | 'settings', file: File) => {
+    if (!confirm(t('confirm_restore') + file.name + '? ' + t('restore_warning'))) return;
+    
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    try {
+      const res = await fetch(`/api/backup/restore-${type}`, {
+        method: 'POST',
+        body: formData
+      });
+      const data = await res.json();
+      if (res.ok) {
+        toast.success(data.message);
+        if (type === 'settings') {
+          window.location.reload();
+        } else {
+          fetchData();
+        }
+      } else {
+        toast.error(data.error);
+      }
+    } catch (error) {
+      toast.error('Gagal merestore data');
+    }
+  };
+
+  const handleExportAllReports = async () => {
+    try {
+      const res = await fetch('/api/reports/export-all');
+      if (res.ok) {
+        const blob = await res.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `Laporan_Lengkap_${new Date().toISOString().split('T')[0]}.xlsx`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        toast.success(appSettings.language === 'id' ? 'Laporan berhasil diexport' : 'Reports exported successfully');
+      }
+    } catch (error) {
+      toast.error('Gagal mengexport laporan');
+    }
+  };
+
   const handleFileUpload = async (file: File) => {
     const formData = new FormData();
     formData.append('file', file);
@@ -654,10 +914,88 @@ export default function App() {
   }, [user]);
 
   useEffect(() => {
+    if (isCustomerMode && !user) {
+      const fetchPublicMenus = async () => {
+        try {
+          const res = await fetch('/api/menus/public');
+          if (res.ok) setMenus(await res.json());
+        } catch (err) {
+          console.error('Failed to fetch public menus');
+        }
+      };
+      fetchPublicMenus();
+    }
+  }, [isCustomerMode, user]);
+
+  useEffect(() => {
     if (user && activeTab === 'transactions') {
       fetchData();
     }
   }, [txFilter, user]);
+
+  const handleCustomerOrder = async () => {
+    if (cart.length === 0) {
+      toast.error('Keranjang masih kosong');
+      return;
+    }
+    if (!customerOrder.name) {
+      toast.error('Mohon isi nama Anda');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const subtotal = cart.reduce((sum, item) => sum + (item.menu.price * item.quantity), 0);
+      let discount = 0;
+      if (activePromo) {
+        if (activePromo.target_type === 'all') {
+          discount = activePromo.discount_type === 'percentage' 
+            ? subtotal * (activePromo.discount_value / 100)
+            : activePromo.discount_value;
+        } else {
+          const targetSubtotal = cart.reduce((sum, item) => {
+            const isTarget = activePromo.target_type === 'category' 
+              ? activePromo.target_ids.includes(item.menu.category)
+              : activePromo.target_ids.includes(item.menu.id.toString());
+            return isTarget ? sum + (item.menu.price * item.quantity) : sum;
+          }, 0);
+          discount = activePromo.discount_type === 'percentage'
+            ? targetSubtotal * (activePromo.discount_value / 100)
+            : activePromo.discount_value;
+        }
+      }
+
+      const res = await fetch('/api/orders/public', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          items: cart.map(item => ({ menuId: item.menu.id, quantity: item.quantity })),
+          customerName: customerOrder.name,
+          tableNumber: customerOrder.table,
+          promoCode: activePromo?.code,
+          discountAmount: discount
+        })
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setCustomerOrderId(data.orderId);
+        setShowCustomerOrderSuccess(true);
+        setCart([]);
+        setCustomerOrder({ name: '', table: '' });
+        setActivePromo(null);
+        setPromoCode('');
+        toast.success('Pesanan berhasil dikirim!');
+      } else {
+        const data = await res.json();
+        toast.error(data.error || 'Gagal mengirim pesanan');
+      }
+    } catch (err) {
+      toast.error('Terjadi kesalahan koneksi');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleCompleteOrder = async (orderId: string) => {
     try {
@@ -693,7 +1031,7 @@ export default function App() {
     });
     setShowInvModal(false);
     setEditingInvId(null);
-    setNewInv({ name: '', quantity: 0, unit: 'pcs', min_stock: 0, unit_price: 0, category: 'Bahan' });
+    setNewInv({ name: '', quantity: 0, unit: 'pcs', min_stock: 0, unit_price: 0, category: 'Bahan', type: 'Bahan' });
     setCalcPurchase({ qty: 1, content: 0, totalPrice: 0 });
     setShowCalculator(false);
     fetchData();
@@ -707,7 +1045,8 @@ export default function App() {
       unit: item.unit,
       min_stock: item.min_stock,
       unit_price: item.unit_price,
-      category: item.category || 'Bahan'
+      category: item.category || 'Bahan',
+      type: item.type || 'Bahan'
     });
     setCalcPurchase({ qty: 1, content: 0, totalPrice: 0 });
     setShowCalculator(false);
@@ -744,7 +1083,7 @@ export default function App() {
     
     setShowMenuModal(false);
     setEditingMenuId(null);
-    setNewMenu({ name: '', price: 0, size: '', category: 'Kopi', image_url: '', description: '', ingredients: [] });
+    setNewMenu({ name: '', price: 0, size: '', category: 'Kopi', image_url: '', description: '', ingredients: [], type: 'Internal', supplier_name: '', supplier_price: 0 });
     fetchData();
   };
 
@@ -757,6 +1096,9 @@ export default function App() {
       category: menu.category || 'Kopi',
       image_url: menu.image_url || '',
       description: menu.description || '',
+      type: menu.type || 'Internal',
+      supplier_name: menu.supplier_name || '',
+      supplier_price: menu.supplier_price || 0,
       ingredients: menu.ingredients.map(ing => ({
         inventory_id: ing.inventory_id,
         quantity: ing.quantity
@@ -1187,6 +1529,476 @@ export default function App() {
     </div>
   );
 
+  if (!user && isCustomerMode) {
+    const categories = ['Semua', ...new Set(menus.map(m => m.category))];
+    const filteredMenus = menus.filter(m => 
+      (selectedCategory === 'Semua' || m.category === selectedCategory) &&
+      (m.name.toLowerCase().includes(menuSearch.toLowerCase()))
+    );
+
+    return (
+      <div className="min-h-screen bg-coffee-50 flex flex-col md:flex-row overflow-hidden">
+        {/* Left Side: Ad Carousel (Desktop Only) */}
+        <div className="hidden lg:block lg:w-2/5 xl:w-1/2 h-screen sticky top-0">
+          <AdCarousel />
+        </div>
+
+        {/* Right Side: Ordering Interface */}
+        <div className="flex-1 flex flex-col h-screen overflow-hidden relative">
+          {/* Header */}
+          <header className="bg-white border-b border-coffee-100 sticky top-0 z-30 px-4 py-4 md:px-8 flex items-center justify-between shrink-0">
+            <div className="flex items-center gap-4">
+              <div className="bg-coffee-900 p-2.5 rounded-2xl text-white shadow-lg shadow-coffee-200">
+                <Coffee size={24} />
+              </div>
+              <div>
+                <h1 className="text-xl font-serif font-bold text-coffee-950">{appSettings.app_name}</h1>
+                <p className="text-xs text-coffee-500 font-medium">Menu Pelanggan</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              {/* Subtle Login Access (Hidden) */}
+              <button 
+                onClick={() => setIsCustomerMode(false)}
+                className="p-2 text-coffee-950/5 hover:text-coffee-950/20 transition-colors"
+                title="Staff Login"
+              >
+                <Lock size={16} />
+              </button>
+              
+              <button 
+                onClick={() => setShowMobileCart(true)}
+                className="relative p-3 bg-coffee-900 text-white rounded-2xl shadow-lg shadow-coffee-200"
+              >
+                <ShoppingCart size={20} />
+                {cart.length > 0 && (
+                  <span className="absolute -top-1 -right-1 bg-rose-500 text-white text-[10px] font-bold w-5 h-5 rounded-full flex items-center justify-center border-2 border-white">
+                    {cart.reduce((sum, item) => sum + item.quantity, 0)}
+                  </span>
+                )}
+              </button>
+            </div>
+          </header>
+
+          <main className="flex-1 overflow-y-auto custom-scrollbar p-4 md:p-8">
+            <div className="max-w-6xl mx-auto space-y-8">
+              {/* Mobile Ad (Visible on small screens) */}
+              <div className="lg:hidden h-64 rounded-[2rem] overflow-hidden shadow-lg">
+                <AdCarousel />
+              </div>
+            {/* Search & Categories */}
+            <div className="flex flex-col md:flex-row gap-4">
+              <div className="relative flex-1">
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-coffee-400" size={20} />
+                <input 
+                  type="text"
+                  placeholder="Cari menu favorit Anda..."
+                  value={menuSearch}
+                  onChange={e => setMenuSearch(e.target.value)}
+                  className="w-full bg-white border border-coffee-200 rounded-2xl pl-12 pr-4 py-4 focus:outline-none focus:ring-2 focus:ring-coffee-500 shadow-sm"
+                />
+              </div>
+              <div className="flex gap-2 overflow-x-auto no-scrollbar pb-2">
+                {categories.map(cat => (
+                  <button
+                    key={cat}
+                    onClick={() => setSelectedCategory(cat)}
+                    className={cn(
+                      "px-6 py-4 rounded-2xl font-bold whitespace-nowrap transition-all shadow-sm border",
+                      selectedCategory === cat 
+                        ? "bg-coffee-900 text-white border-coffee-900" 
+                        : "bg-white text-coffee-600 border-coffee-100 hover:border-coffee-300"
+                    )}
+                  >
+                    {cat}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Menu Grid */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+              {filteredMenus.map(menu => (
+                <motion.div 
+                  key={menu.id}
+                  layout
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="bg-white rounded-[1.5rem] overflow-hidden border border-coffee-100 shadow-sm hover:shadow-xl transition-all group flex flex-col"
+                >
+                  <div className="relative aspect-square overflow-hidden bg-coffee-50">
+                    {menu.image_url ? (
+                      <img 
+                        src={menu.image_url} 
+                        alt={menu.name} 
+                        className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" 
+                        referrerPolicy="no-referrer"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-coffee-200">
+                        <Coffee size={48} />
+                      </div>
+                    )}
+                    <div className="absolute top-2 right-2">
+                      <span className="bg-white/90 backdrop-blur-sm px-2 py-1 rounded-full text-[8px] font-bold uppercase tracking-widest text-coffee-900 shadow-sm">
+                        {menu.category}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="p-3 flex flex-col flex-1">
+                    <div className="mb-2">
+                      <h3 className="text-sm font-bold text-coffee-950 mb-0.5 group-hover:text-coffee-600 transition-colors line-clamp-1">{menu.name}</h3>
+                      {menu.size && <span className="text-[10px] font-medium text-coffee-400">{menu.size}</span>}
+                      <p className="text-[10px] text-coffee-500 line-clamp-2 mt-1 leading-tight">{menu.description || 'Tidak ada deskripsi'}</p>
+                    </div>
+                    <div className="mt-auto flex items-center justify-between pt-2 border-t border-coffee-50">
+                      <span className="text-sm font-bold text-coffee-900">{formatIDR(menu.price)}</span>
+                      <button 
+                        onClick={() => handleAddToCart(menu)}
+                        className="bg-coffee-900 text-white p-2 rounded-xl hover:bg-coffee-800 transition-all shadow-md shadow-coffee-100 active:scale-95"
+                      >
+                        <Plus size={16} />
+                      </button>
+                    </div>
+                  </div>
+                </motion.div>
+              ))}
+            </div>
+          </div>
+        </main>
+
+        {/* Cart Modal / Sidebar */}
+        {showMobileCart && (
+          <div className="fixed inset-0 z-50 flex justify-end">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowMobileCart(false)}
+              className="absolute inset-0 bg-coffee-950/40 backdrop-blur-sm"
+            />
+            <motion.div 
+              initial={{ x: '100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '100%' }}
+              className="relative w-full max-w-md bg-white h-full shadow-2xl flex flex-col"
+            >
+              <div className="p-6 border-b border-coffee-100 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="bg-coffee-900 p-2 rounded-xl text-white">
+                    <ShoppingCart size={20} />
+                  </div>
+                  <h2 className="text-xl font-serif font-bold">Keranjang Saya</h2>
+                </div>
+                <button 
+                  onClick={() => setShowMobileCart(false)}
+                  className="p-2 hover:bg-coffee-50 rounded-xl transition-colors"
+                >
+                  <X size={24} />
+                </button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-6 space-y-4 custom-scrollbar">
+                {cart.length === 0 ? (
+                  <div className="h-full flex flex-col items-center justify-center text-center p-8">
+                    <div className="w-24 h-24 bg-coffee-50 rounded-full flex items-center justify-center text-coffee-200 mb-6">
+                      <ShoppingCart size={48} />
+                    </div>
+                    <h3 className="text-lg font-bold text-coffee-950 mb-2">Keranjang Kosong</h3>
+                    <p className="text-coffee-500 text-sm">Pilih menu favorit Anda untuk mulai memesan.</p>
+                  </div>
+                ) : (
+                  cart.map(item => (
+                    <div key={item.menu.id} className="flex gap-4 p-4 bg-coffee-50 rounded-2xl border border-coffee-100">
+                      <div className="w-20 h-20 rounded-xl overflow-hidden bg-white shrink-0">
+                        {item.menu.image_url ? (
+                          <img src={item.menu.image_url} alt={item.menu.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center text-coffee-200">
+                            <Coffee size={24} />
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <h4 className="font-bold text-coffee-950 truncate">{item.menu.name}</h4>
+                        <p className="text-sm font-bold text-coffee-600 mt-1">{formatIDR(item.menu.price)}</p>
+                        <div className="flex items-center gap-3 mt-3">
+                          <button 
+                            onClick={() => handleUpdateCartQuantity(item.menu.id, -1)}
+                            className="w-8 h-8 flex items-center justify-center bg-white border border-coffee-200 rounded-lg text-coffee-600 hover:bg-coffee-100 transition-colors"
+                          >
+                            <Minus size={14} />
+                          </button>
+                          <span className="font-bold text-sm w-4 text-center">{item.quantity}</span>
+                          <button 
+                            onClick={() => handleUpdateCartQuantity(item.menu.id, 1)}
+                            className="w-8 h-8 flex items-center justify-center bg-white border border-coffee-200 rounded-lg text-coffee-600 hover:bg-coffee-100 transition-colors"
+                          >
+                            <Plus size={14} />
+                          </button>
+                        </div>
+                      </div>
+                      <button 
+                        onClick={() => handleRemoveFromCart(item.menu.id)}
+                        className="text-rose-400 hover:text-rose-600 p-1"
+                      >
+                        <Trash2 size={18} />
+                      </button>
+                    </div>
+                  ))
+                )}
+              </div>
+
+              {cart.length > 0 && (
+                <div className="p-6 bg-coffee-50 border-t border-coffee-100 space-y-6">
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-xs font-bold uppercase text-coffee-500 mb-2 tracking-widest">Nama Pemesan</label>
+                      <input 
+                        type="text"
+                        value={customerOrder.name}
+                        onChange={e => setCustomerOrder({...customerOrder, name: e.target.value})}
+                        className="w-full bg-white border border-coffee-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-coffee-500"
+                        placeholder="Masukkan nama Anda"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold uppercase text-coffee-500 mb-2 tracking-widest">Nomor Meja (Opsional)</label>
+                      <input 
+                        type="text"
+                        value={customerOrder.table}
+                        onChange={e => setCustomerOrder({...customerOrder, table: e.target.value})}
+                        className="w-full bg-white border border-coffee-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-coffee-500"
+                        placeholder="Contoh: Meja 05"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2 pt-4 border-t border-coffee-200">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-coffee-500">Subtotal</span>
+                      <span className="font-bold text-coffee-900">
+                        {formatIDR(cart.reduce((sum, item) => sum + (item.menu.price * item.quantity), 0))}
+                      </span>
+                    </div>
+
+                    {/* Promo Code Input - Moved below subtotal */}
+                    <div className="space-y-3 py-3 border-y border-coffee-100">
+                      <label className="block text-[10px] font-bold uppercase text-coffee-400 tracking-widest">Punya Kode Promo?</label>
+                      <div className="flex gap-2">
+                        <div className="relative flex-1">
+                          <Tag className="absolute left-3 top-1/2 -translate-y-1/2 text-coffee-400" size={14} />
+                          <input 
+                            type="text"
+                            value={promoCode}
+                            onChange={e => setPromoCode(e.target.value.toUpperCase())}
+                            placeholder="KODEPROMO"
+                            disabled={!!activePromo}
+                            className="w-full bg-white border border-coffee-200 rounded-xl pl-9 pr-4 py-2.5 text-xs font-black tracking-widest focus:outline-none focus:ring-2 focus:ring-coffee-500 disabled:bg-coffee-100 disabled:text-coffee-400"
+                          />
+                        </div>
+                        <div className="flex gap-2">
+                          <button 
+                            onClick={async () => {
+                              if (!promoCode) return;
+                              try {
+                                const res = await fetch(`/api/public/promos/${promoCode}`);
+                                if (res.ok) {
+                                  const data = await res.json();
+                                  setActivePromo(data);
+                                  toast.success(`Promo ${data.code} berhasil dipasang!`);
+                                } else {
+                                  toast.error('Kode promo tidak valid atau sudah berakhir');
+                                }
+                              } catch (error) {
+                                toast.error('Gagal mengecek promo');
+                              }
+                            }}
+                            disabled={!!activePromo}
+                            className="px-4 py-2.5 bg-coffee-900 text-white rounded-xl font-bold text-xs hover:bg-coffee-800 transition-colors disabled:opacity-50"
+                          >
+                            Pasang
+                          </button>
+                          {activePromo && (
+                            <button 
+                              onClick={() => {
+                                setActivePromo(null);
+                                setPromoCode('');
+                                toast.info('Promo dibatalkan');
+                              }}
+                              className="px-4 py-2.5 bg-rose-50 text-rose-600 rounded-xl font-bold text-xs hover:bg-rose-100 transition-colors"
+                            >
+                              Batal
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                      {activePromo && (
+                        <p className="text-[10px] font-bold text-emerald-600 flex items-center gap-1">
+                          <CheckCircle2 size={12} />
+                          Promo aktif: {activePromo.discount_type === 'percentage' ? `${activePromo.discount_value}%` : formatIDR(activePromo.discount_value)} OFF
+                        </p>
+                      )}
+                    </div>
+
+                    {activePromo && (
+                      <div className="flex justify-between text-sm text-emerald-600">
+                        <span>Diskon ({activePromo.code})</span>
+                        <span className="font-bold">
+                          -{formatIDR((() => {
+                            const subtotal = cart.reduce((sum, item) => sum + (item.menu.price * item.quantity), 0);
+                            if (activePromo.target_type === 'all') {
+                              return activePromo.discount_type === 'percentage' 
+                                ? subtotal * (activePromo.discount_value / 100)
+                                : activePromo.discount_value;
+                            }
+                            const targetSubtotal = cart.reduce((sum, item) => {
+                              const isTarget = activePromo.target_type === 'category' 
+                                ? activePromo.target_ids.includes(item.menu.category)
+                                : activePromo.target_ids.includes(item.menu.id.toString());
+                              return isTarget ? sum + (item.menu.price * item.quantity) : sum;
+                            }, 0);
+                            return activePromo.discount_type === 'percentage'
+                              ? targetSubtotal * (activePromo.discount_value / 100)
+                              : activePromo.discount_value;
+                          })())}
+                        </span>
+                      </div>
+                    )}
+                    <div className="flex justify-between text-sm">
+                      <span className="text-coffee-500">Pajak ({appSettings.tax_rate}%)</span>
+                      <span className="font-bold text-coffee-900">
+                        {formatIDR(Math.round((() => {
+                          const subtotal = cart.reduce((sum, item) => sum + (item.menu.price * item.quantity), 0);
+                          let discount = 0;
+                          if (activePromo) {
+                            if (activePromo.target_type === 'all') {
+                              discount = activePromo.discount_type === 'percentage' 
+                                ? subtotal * (activePromo.discount_value / 100)
+                                : activePromo.discount_value;
+                            } else {
+                              const targetSubtotal = cart.reduce((sum, item) => {
+                                const isTarget = activePromo.target_type === 'category' 
+                                  ? activePromo.target_ids.includes(item.menu.category)
+                                  : activePromo.target_ids.includes(item.menu.id.toString());
+                                return isTarget ? sum + (item.menu.price * item.quantity) : sum;
+                              }, 0);
+                              discount = activePromo.discount_type === 'percentage'
+                                ? targetSubtotal * (activePromo.discount_value / 100)
+                                : activePromo.discount_value;
+                            }
+                          }
+                          return (subtotal - discount) * (appSettings.tax_rate / 100);
+                        })()))}
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-xl font-serif font-bold text-coffee-950 pt-4 border-t border-coffee-100">
+                      <span>Total</span>
+                      <span>
+                        {formatIDR((() => {
+                          const subtotal = cart.reduce((sum, item) => sum + (item.menu.price * item.quantity), 0);
+                          let discount = 0;
+                          if (activePromo) {
+                            if (activePromo.target_type === 'all') {
+                              discount = activePromo.discount_type === 'percentage' 
+                                ? subtotal * (activePromo.discount_value / 100)
+                                : activePromo.discount_value;
+                            } else {
+                              const targetSubtotal = cart.reduce((sum, item) => {
+                                const isTarget = activePromo.target_type === 'category' 
+                                  ? activePromo.target_ids.includes(item.menu.category)
+                                  : activePromo.target_ids.includes(item.menu.id.toString());
+                                return isTarget ? sum + (item.menu.price * item.quantity) : sum;
+                              }, 0);
+                              discount = activePromo.discount_type === 'percentage'
+                                ? targetSubtotal * (activePromo.discount_value / 100)
+                                : activePromo.discount_value;
+                            }
+                          }
+                          const tax = Math.round((subtotal - discount) * (appSettings.tax_rate / 100));
+                          return subtotal - discount + tax;
+                        })())}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="pt-4 border-t border-coffee-200">
+                    <div className="flex justify-between items-center mb-4">
+                      <span className="text-coffee-600 font-medium">Total Pembayaran</span>
+                      <span className="text-2xl font-bold text-coffee-950">
+                        {formatIDR((() => {
+                          const subtotal = cart.reduce((sum, item) => sum + (item.menu.price * item.quantity), 0);
+                          let discount = 0;
+                          if (activePromo) {
+                            if (activePromo.target_type === 'all') {
+                              discount = activePromo.discount_type === 'percentage' 
+                                ? subtotal * (activePromo.discount_value / 100)
+                                : activePromo.discount_value;
+                            } else {
+                              const targetSubtotal = cart.reduce((sum, item) => {
+                                const isTarget = activePromo.target_type === 'category' 
+                                  ? activePromo.target_ids.includes(item.menu.category)
+                                  : activePromo.target_ids.includes(item.menu.id.toString());
+                                return isTarget ? sum + (item.menu.price * item.quantity) : sum;
+                              }, 0);
+                              discount = activePromo.discount_type === 'percentage'
+                                ? targetSubtotal * (activePromo.discount_value / 100)
+                                : activePromo.discount_value;
+                            }
+                          }
+                          const tax = Math.round((subtotal - discount) * (appSettings.tax_rate / 100));
+                          return subtotal - discount + tax;
+                        })())}
+                      </span>
+                    </div>
+                    <button 
+                      onClick={handleCustomerOrder}
+                      disabled={loading}
+                      className="w-full bg-coffee-900 text-white py-4 rounded-2xl font-bold text-lg hover:bg-coffee-800 transition-all shadow-lg shadow-coffee-200 flex items-center justify-center gap-2 disabled:opacity-50"
+                    >
+                      {loading ? 'Memproses...' : 'Kirim Pesanan Sekarang'}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </motion.div>
+          </div>
+        )}
+
+        {/* Success Modal */}
+        {showCustomerOrderSuccess && (
+          <div className="fixed inset-0 bg-coffee-950/60 backdrop-blur-md flex items-center justify-center z-[100] p-4">
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              className="bg-white rounded-[2.5rem] p-10 w-full max-w-md shadow-2xl text-center"
+            >
+              <div className="w-24 h-24 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-8">
+                <CheckCircle2 size={48} />
+              </div>
+              <h2 className="text-3xl font-serif font-bold text-coffee-950 mb-4">Pesanan Terkirim!</h2>
+              <p className="text-coffee-600 mb-8 leading-relaxed">
+                Terima kasih, <span className="font-bold text-coffee-900">{customerOrder.name || 'Pelanggan'}</span>! <br/>
+                Pesanan Anda dengan ID <span className="font-bold text-coffee-900">#{customerOrderId}</span> sedang kami siapkan. <br/>
+                Silakan lakukan pembayaran di kasir.
+              </p>
+              <button 
+                onClick={() => {
+                  setShowCustomerOrderSuccess(false);
+                  setIsCustomerMode(false);
+                }}
+                className="w-full bg-coffee-900 text-white py-4 rounded-2xl font-bold text-lg hover:bg-coffee-800 transition-all"
+              >
+                Kembali ke Beranda
+              </button>
+            </motion.div>
+          </div>
+        )}
+      </div>
+    </div>
+    );
+  }
+
   if (!user) {
     return (
       <div 
@@ -1268,6 +2080,15 @@ export default function App() {
               className="w-full bg-coffee-900 text-white py-4 rounded-2xl font-bold text-lg hover:bg-coffee-800 transition-all shadow-lg shadow-coffee-200"
             >
               {t('login')}
+            </button>
+
+            <button 
+              type="button"
+              onClick={() => setIsCustomerMode(true)}
+              className="w-full bg-white text-coffee-600 py-4 rounded-2xl font-bold text-lg border-2 border-coffee-100 hover:bg-coffee-50 transition-all flex items-center justify-center gap-2"
+            >
+              <ShoppingCart size={20} />
+              Kembali ke Menu Order
             </button>
           </form>
           
@@ -2025,15 +2846,26 @@ export default function App() {
                   Laporan Transaksi
                 </button>
                 {user.role === 'admin' && (
-                  <button 
-                    onClick={() => setReportSubTab('financial')}
-                    className={cn(
-                      "px-6 py-2 rounded-xl text-sm font-bold transition-all",
-                      reportSubTab === 'financial' ? "bg-coffee-900 text-white shadow-lg" : "text-coffee-500 hover:bg-coffee-50"
-                    )}
-                  >
-                    Laporan Keuangan
-                  </button>
+                  <>
+                    <button 
+                      onClick={() => setReportSubTab('financial')}
+                      className={cn(
+                        "px-6 py-2 rounded-xl text-sm font-bold transition-all",
+                        reportSubTab === 'financial' ? "bg-coffee-900 text-white shadow-lg" : "text-coffee-500 hover:bg-coffee-50"
+                      )}
+                    >
+                      Laporan Keuangan
+                    </button>
+                    <button 
+                      onClick={() => setReportSubTab('consignment')}
+                      className={cn(
+                        "px-6 py-2 rounded-xl text-sm font-bold transition-all",
+                        reportSubTab === 'consignment' ? "bg-coffee-900 text-white shadow-lg" : "text-coffee-500 hover:bg-coffee-50"
+                      )}
+                    >
+                      {t('consignment_report')}
+                    </button>
+                  </>
                 )}
               </div>
 
@@ -2045,6 +2877,15 @@ export default function App() {
                       <h2 className="text-4xl font-serif font-bold text-coffee-950">Laporan Transaksi</h2>
                     </div>
                     <div className="flex flex-wrap items-center gap-3">
+                      {user.role === 'admin' && (
+                        <button 
+                          onClick={handleExportAllReports}
+                          className="px-6 py-2 bg-emerald-600 text-white rounded-xl text-sm font-bold shadow-lg hover:bg-emerald-700 transition-all flex items-center gap-2"
+                        >
+                          <Download size={18} />
+                          {t('export_all_reports')}
+                        </button>
+                      )}
                       <div className="flex bg-white p-1 rounded-2xl border border-coffee-100 shadow-sm">
                         <button 
                           onClick={() => setReportFilter('daily')}
@@ -2185,7 +3026,7 @@ export default function App() {
                     </div>
                   </div>
                 </div>
-              ) : (
+              ) : reportSubTab === 'financial' ? (
                 <div className="space-y-6 pb-20 md:pb-0">
                   <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                     <div>
@@ -2412,6 +3253,118 @@ export default function App() {
                       </div>
                     </div>
                   )}
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                    <div>
+                      <p className="text-coffee-500 font-medium uppercase tracking-widest text-[10px] mb-1">Laporan Titipan Barang</p>
+                      <h2 className="text-3xl md:text-4xl font-serif font-bold text-coffee-950">{t('consignment_report')}</h2>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
+                      <div className="flex items-center gap-2 bg-white p-1.5 rounded-2xl border border-coffee-100 shadow-sm flex-1 md:flex-none justify-between">
+                        <input 
+                          type="date" 
+                          value={financialRange.startDate}
+                          onChange={(e) => setFinancialRange(prev => ({ ...prev, startDate: e.target.value }))}
+                          className="bg-transparent border-none text-xs font-bold text-coffee-900 focus:outline-none w-24"
+                        />
+                        <span className="text-coffee-300 text-[10px] font-bold">s/d</span>
+                        <input 
+                          type="date" 
+                          value={financialRange.endDate}
+                          onChange={(e) => setFinancialRange(prev => ({ ...prev, endDate: e.target.value }))}
+                          className="bg-transparent border-none text-xs font-bold text-coffee-900 focus:outline-none w-24"
+                        />
+                      </div>
+                      <button 
+                        onClick={fetchConsignmentData}
+                        className="p-3 bg-coffee-900 text-white rounded-2xl hover:bg-coffee-800 transition-all shadow-lg shadow-coffee-200 active:scale-95"
+                      >
+                        <RefreshCw size={18} />
+                      </button>
+                    </div>
+                  </header>
+
+                  <div className="glass-card p-8 bg-white border-coffee-100">
+                    <div className="overflow-x-auto">
+                      <table className="w-full">
+                        <thead>
+                          <tr className="text-left text-coffee-500 text-xs uppercase tracking-widest border-b border-coffee-100">
+                            <th className="pb-4 font-bold">{t('supplier_name')}</th>
+                            <th className="pb-4 font-bold">Menu</th>
+                            <th className="pb-4 font-bold text-center">Terjual</th>
+                            <th className="pb-4 font-bold text-right">Total Penjualan</th>
+                            <th className="pb-4 font-bold text-right">{t('settlement_amount')}</th>
+                            <th className="pb-4 font-bold text-right">{t('profit_share')}</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-coffee-50">
+                          {consignmentData.length > 0 ? consignmentData.map((item, idx) => (
+                            <tr key={idx} className="hover:bg-coffee-50/50 transition-colors">
+                              <td className="py-4">
+                                <p className="text-sm font-bold text-coffee-900">{item.supplier_name}</p>
+                              </td>
+                              <td className="py-4">
+                                <p className="text-sm text-coffee-600">{item.menu_name}</p>
+                                <p className="text-[10px] text-coffee-400">Harga Titip: {formatIDR(item.supplier_price)}</p>
+                              </td>
+                              <td className="py-4 text-center">
+                                <span className="px-3 py-1 bg-coffee-100 rounded-full text-xs font-bold text-coffee-700">
+                                  {item.total_quantity}
+                                </span>
+                              </td>
+                              <td className="py-4 text-sm font-bold text-right text-coffee-900">
+                                {formatIDR(item.total_sales)}
+                              </td>
+                              <td className="py-4 text-sm font-bold text-right text-amber-600">
+                                {formatIDR(item.total_settlement)}
+                              </td>
+                              <td className="py-4 text-sm font-bold text-right text-emerald-600">
+                                {formatIDR(item.total_profit)}
+                              </td>
+                            </tr>
+                          )) : (
+                            <tr>
+                              <td colSpan={6} className="py-12 text-center text-coffee-400 italic">
+                                Belum ada data penjualan barang titipan untuk periode ini.
+                              </td>
+                            </tr>
+                          )}
+                        </tbody>
+                        {consignmentData.length > 0 && (
+                          <tfoot>
+                            <tr className="border-t-2 border-coffee-100 bg-coffee-50/30">
+                              <td colSpan={3} className="py-4 px-4 font-serif font-bold text-coffee-900 text-lg">TOTAL</td>
+                              <td className="py-4 text-right font-bold text-coffee-900">
+                                {formatIDR(consignmentData.reduce((sum, item) => sum + item.total_sales, 0))}
+                              </td>
+                              <td className="py-4 text-right font-bold text-amber-600">
+                                {formatIDR(consignmentData.reduce((sum, item) => sum + item.total_settlement, 0))}
+                              </td>
+                              <td className="py-4 text-right font-bold text-emerald-600">
+                                {formatIDR(consignmentData.reduce((sum, item) => sum + item.total_profit, 0))}
+                              </td>
+                            </tr>
+                          </tfoot>
+                        )}
+                      </table>
+                    </div>
+                  </div>
+
+                  <div className="p-6 bg-amber-50 rounded-3xl border border-amber-100 flex items-start gap-4">
+                    <div className="p-3 bg-white rounded-2xl text-amber-600 shadow-sm">
+                      <Info size={24} />
+                    </div>
+                    <div>
+                      <h4 className="font-bold text-amber-900 mb-1">Informasi Pembayaran Konsinyasi</h4>
+                      <p className="text-sm text-amber-800 leading-relaxed">
+                        Laporan ini merangkum semua item menu dengan tipe <strong>Konsinyasi</strong> yang terjual dalam periode yang dipilih. 
+                        <strong> {t('settlement_amount')}</strong> adalah jumlah uang yang harus diserahkan kepada pemilik barang (supplier), 
+                        sedangkan <strong> {t('profit_share')}</strong> adalah keuntungan bersih yang didapatkan oleh usaha Anda.
+                      </p>
+                    </div>
+                  </div>
                 </div>
               )}
             </motion.div>
@@ -2979,33 +3932,54 @@ export default function App() {
                 <div>
                   <p className="text-coffee-500 font-medium uppercase tracking-widest text-xs mb-1">Manajemen Barang</p>
                   <h2 className="text-4xl font-serif font-bold text-coffee-950">
-                    Inventory {invCategoryFilter === 'Semua' ? 'Stok' : invCategoryFilter}
+                    Inventory {invCategoryFilter === 'Semua' ? 'Stok' : (invCategoryFilter === 'Bahan' ? t('raw_material') : (invCategoryFilter === 'Barang' ? t('goods') : invCategoryFilter))}
                   </h2>
                 </div>
-                <button 
-                  onClick={() => {
-                    setEditingInvId(null);
-                    setNewInv({ name: '', quantity: 0, unit: 'pcs', min_stock: 0, unit_price: 0, category: invCategoryFilter === 'Semua' ? 'Bahan' : invCategoryFilter });
-                    setCalcPurchase({ qty: 1, content: 0, totalPrice: 0 });
-                    setShowCalculator(false);
-                    setShowInvModal(true);
-                  }}
-                  className="bg-coffee-900 text-white px-6 py-3 rounded-2xl flex items-center gap-2 hover:bg-coffee-800 transition-all shadow-lg shadow-coffee-200"
-                >
-                  <Plus size={20} />
-                  <span className="font-bold">Tambah Item</span>
-                </button>
+                <div className="flex items-center gap-4">
+                  <div className="flex bg-white p-1 rounded-2xl border border-coffee-100 shadow-sm no-print">
+                    {(['Semua', 'Bahan', 'Barang'] as const).map((type) => (
+                      <button
+                        key={type}
+                        onClick={() => setInvCategoryFilter(type)}
+                        className={cn(
+                          "px-6 py-2 rounded-xl text-sm font-bold transition-all",
+                          invCategoryFilter === type ? "bg-coffee-900 text-white shadow-lg" : "text-coffee-500 hover:bg-coffee-50"
+                        )}
+                      >
+                        {type === 'Semua' ? 'Semua' : (type === 'Bahan' ? t('raw_material') : t('goods'))}
+                      </button>
+                    ))}
+                  </div>
+                  <button 
+                    onClick={() => {
+                      setEditingInvId(null);
+                      setNewInv({ name: '', quantity: 0, unit: 'pcs', min_stock: 0, unit_price: 0, category: 'Bahan', type: (invCategoryFilter === 'Bahan' || invCategoryFilter === 'Barang') ? invCategoryFilter : 'Bahan' });
+                      setCalcPurchase({ qty: 1, content: 0, totalPrice: 0 });
+                      setShowCalculator(false);
+                      setShowInvModal(true);
+                    }}
+                    className="bg-coffee-900 text-white px-6 py-3 rounded-2xl flex items-center gap-2 hover:bg-coffee-800 transition-all shadow-lg shadow-coffee-200"
+                  >
+                    <Plus size={20} />
+                    <span className="font-bold">Tambah Item</span>
+                  </button>
+                </div>
               </header>
 
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {inventory
-                  .filter(item => invCategoryFilter === 'Semua' || item.category === invCategoryFilter)
+                  .filter(item => invCategoryFilter === 'Semua' || item.type === invCategoryFilter || item.category === invCategoryFilter)
                   .map(item => (
                   <div key={item.id} className="glass-card p-6 group hover:border-coffee-400 transition-colors relative">
-                    <div className="absolute top-4 right-16">
+                    <div className="absolute top-4 right-16 flex gap-2">
                       <span className={cn(
                         "text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded-md",
-                        item.category === 'Alat' ? "bg-indigo-100 text-indigo-600" : "bg-emerald-100 text-emerald-600"
+                        item.type === 'Barang' ? "bg-blue-100 text-blue-600" : "bg-amber-100 text-amber-600"
+                      )}>
+                        {item.type === 'Bahan' ? t('raw_material') : t('goods')}
+                      </span>
+                      <span className={cn(
+                        "text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded-md bg-coffee-100 text-coffee-600"
                       )}>
                         {item.category || 'Bahan'}
                       </span>
@@ -3133,10 +4107,15 @@ export default function App() {
                             <h4 className="font-mono font-bold text-coffee-950">{order.orderId}</h4>
                           </div>
                         </div>
-                        <div className="text-right">
-                          <p className="text-[10px] font-bold uppercase tracking-widest text-coffee-400">Customer</p>
-                          <h4 className="font-bold text-coffee-950">{order.customerName}</h4>
-                        </div>
+                          <div className="text-right">
+                            <p className="text-[10px] font-bold uppercase tracking-widest text-coffee-400">Customer</p>
+                            <h4 className="font-bold text-coffee-950">{order.customerName} {order.tableNumber && `(Meja ${order.tableNumber})`}</h4>
+                            {order.status === 'pending' && (
+                              <span className="inline-block mt-1 bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider">
+                                Belum Bayar
+                              </span>
+                            )}
+                          </div>
                       </div>
                       <div className="p-6 space-y-4">
                         <div className="space-y-2">
@@ -3151,13 +4130,34 @@ export default function App() {
                           <Clock size={12} />
                           Dipesan pada {formatDate(new Date(order.date), 'HH:mm')}
                         </div>
-                        <button 
-                          onClick={() => handleCompleteOrder(order.orderId)}
-                          className="w-full bg-coffee-900 text-white py-3 rounded-xl font-bold hover:bg-coffee-800 transition-all flex items-center justify-center gap-2"
-                        >
-                          <Check size={18} />
-                          Selesai
-                        </button>
+                        {order.status === 'pending' ? (
+                          <button 
+                            onClick={() => {
+                              // Load order into cart and open payment
+                              fetch(`/api/orders/${order.orderId}`)
+                                .then(res => res.json())
+                                .then(data => {
+                                  setCart(data.items);
+                                  setCustomerName(data.customerName || '');
+                                  setTableNumber(data.tableNumber || '');
+                                  setCurrentOrderId(order.orderId);
+                                  setShowPaymentModal(true);
+                                });
+                            }}
+                            className="w-full bg-amber-500 text-white py-3 rounded-xl font-bold hover:bg-amber-600 transition-all flex items-center justify-center gap-2"
+                          >
+                            <CreditCard size={18} />
+                            Bayar Sekarang
+                          </button>
+                        ) : (
+                          <button 
+                            onClick={() => handleCompleteOrder(order.orderId)}
+                            className="w-full bg-coffee-900 text-white py-3 rounded-xl font-bold hover:bg-coffee-800 transition-all flex items-center justify-center gap-2"
+                          >
+                            <Check size={18} />
+                            Selesai
+                          </button>
+                        )}
                       </div>
                     </div>
                   ))
@@ -3182,7 +4182,7 @@ export default function App() {
                 <button 
                   onClick={() => {
                     setEditingMenuId(null);
-                    setNewMenu({ name: '', price: 0, size: '', description: '', category: 'Kopi', image_url: '', ingredients: [] });
+                    setNewMenu({ name: '', price: 0, size: '', description: '', category: 'Kopi', image_url: '', ingredients: [], type: 'Internal', supplier_name: '', supplier_price: 0 });
                     setShowMenuModal(true);
                   }}
                   className="bg-coffee-900 text-white px-6 py-3 rounded-2xl flex items-center gap-2 hover:bg-coffee-800 transition-all shadow-lg shadow-coffee-200"
@@ -3208,10 +4208,15 @@ export default function App() {
                           <Coffee size={48} />
                         </div>
                       )}
-                      <div className="absolute top-4 left-4">
-                        <span className="bg-white/90 backdrop-blur-sm text-coffee-900 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest shadow-sm border border-coffee-100">
+                      <div className="absolute top-4 left-4 flex flex-col gap-2">
+                        <span className="bg-white/90 backdrop-blur-sm text-coffee-900 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest shadow-sm border border-coffee-100 w-fit">
                           {menu.category || 'Menu'}
                         </span>
+                        {menu.type === 'Consignment' && (
+                          <span className="bg-amber-500/90 backdrop-blur-sm text-white px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest shadow-sm border border-amber-400 w-fit">
+                            {t('consignment')}
+                          </span>
+                        )}
                       </div>
                       <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                         <button 
@@ -3241,41 +4246,76 @@ export default function App() {
                       <div className="flex justify-between items-end mb-6">
                         <p className="text-2xl font-bold text-coffee-900">{formatIDR(menu.price)}</p>
                         <div className="text-right">
-                          <p className="text-[10px] font-bold text-coffee-400 uppercase tracking-widest">
-                            Modal: {formatIDR(menu.ingredients.reduce((sum, ing) => sum + (ing.unit_price || 0) * ing.quantity, 0))}
-                          </p>
-                          <p className={cn(
-                            "text-xs font-bold uppercase tracking-widest",
-                            (menu.price - menu.ingredients.reduce((sum, ing) => sum + (ing.unit_price || 0) * ing.quantity, 0)) > 0 ? "text-emerald-600" : "text-rose-600"
-                          )}>
-                            Margin: {formatIDR(menu.price - menu.ingredients.reduce((sum, ing) => sum + (ing.unit_price || 0) * ing.quantity, 0))}
-                            {menu.price > 0 && (
-                              <span className="text-[10px] ml-1 opacity-70">
-                                ({Math.round(((menu.price - menu.ingredients.reduce((sum, ing) => sum + (ing.unit_price || 0) * ing.quantity, 0)) / menu.price) * 100)}%)
-                              </span>
-                            )}
-                          </p>
+                          {menu.type === 'Consignment' ? (
+                            <>
+                              <p className="text-[10px] font-bold text-coffee-400 uppercase tracking-widest">
+                                {t('supplier_price')}: {formatIDR(menu.supplier_price || 0)}
+                              </p>
+                              <p className={cn(
+                                "text-xs font-bold uppercase tracking-widest",
+                                (menu.price - (menu.supplier_price || 0)) > 0 ? "text-emerald-600" : "text-rose-600"
+                              )}>
+                                {t('profit_share')}: {formatIDR(menu.price - (menu.supplier_price || 0))}
+                                {menu.price > 0 && (
+                                  <span className="text-[10px] ml-1 opacity-70">
+                                    ({Math.round(((menu.price - (menu.supplier_price || 0)) / menu.price) * 100)}%)
+                                  </span>
+                                )}
+                              </p>
+                            </>
+                          ) : (
+                            <>
+                              <p className="text-[10px] font-bold text-coffee-400 uppercase tracking-widest">
+                                Modal: {formatIDR(menu.ingredients.reduce((sum, ing) => sum + (ing.unit_price || 0) * ing.quantity, 0))}
+                              </p>
+                              <p className={cn(
+                                "text-xs font-bold uppercase tracking-widest",
+                                (menu.price - menu.ingredients.reduce((sum, ing) => sum + (ing.unit_price || 0) * ing.quantity, 0)) > 0 ? "text-emerald-600" : "text-rose-600"
+                              )}>
+                                Margin: {formatIDR(menu.price - menu.ingredients.reduce((sum, ing) => sum + (ing.unit_price || 0) * ing.quantity, 0))}
+                                {menu.price > 0 && (
+                                  <span className="text-[10px] ml-1 opacity-70">
+                                    ({Math.round(((menu.price - menu.ingredients.reduce((sum, ing) => sum + (ing.unit_price || 0) * ing.quantity, 0)) / menu.price) * 100)}%)
+                                  </span>
+                                )}
+                              </p>
+                            </>
+                          )}
                         </div>
                       </div>
                       
-                      <div className="space-y-3 mb-6">
-                        <p className="text-xs font-bold uppercase tracking-widest text-coffee-400 flex items-center gap-2">
-                          <Info size={14} /> Resep & Takaran
-                        </p>
-                        <div className="max-h-32 overflow-y-auto pr-2 custom-scrollbar">
-                          {menu.ingredients.map(ing => (
-                            <div key={ing.id} className="flex justify-between text-sm mb-2 last:mb-0">
-                              <div className="flex flex-col">
-                                <span className="text-coffee-600">{ing.inventory_name}</span>
-                                <span className="text-[10px] text-coffee-400 italic">
-                                  {ing.quantity} {ing.unit} x {formatIDR(ing.unit_price || 0)}
-                                </span>
+                      {menu.type === 'Internal' ? (
+                        <div className="space-y-3 mb-6">
+                          <p className="text-xs font-bold uppercase tracking-widest text-coffee-400 flex items-center gap-2">
+                            <Info size={14} /> Resep & Takaran
+                          </p>
+                          <div className="max-h-32 overflow-y-auto pr-2 custom-scrollbar">
+                            {menu.ingredients.map(ing => (
+                              <div key={ing.id} className="flex justify-between text-sm mb-2 last:mb-0">
+                                <div className="flex flex-col">
+                                  <span className="text-coffee-600">{ing.inventory_name}</span>
+                                  <span className="text-[10px] text-coffee-400 italic">
+                                    {ing.quantity} {ing.unit} x {formatIDR(ing.unit_price || 0)}
+                                  </span>
+                                </div>
+                                <span className="font-bold text-coffee-900">{formatIDR((ing.quantity || 0) * (ing.unit_price || 0))}</span>
                               </div>
-                              <span className="font-bold text-coffee-900">{formatIDR((ing.quantity || 0) * (ing.unit_price || 0))}</span>
-                            </div>
-                          ))}
+                            ))}
+                          </div>
                         </div>
-                      </div>
+                      ) : (
+                        <div className="space-y-3 mb-6 p-4 bg-amber-50 rounded-2xl border border-amber-100">
+                          <p className="text-xs font-bold uppercase tracking-widest text-amber-600 flex items-center gap-2">
+                            <Info size={14} /> Info Penitip
+                          </p>
+                          <div className="flex justify-between items-center">
+                            <span className="text-sm font-bold text-amber-900">{menu.supplier_name}</span>
+                            <span className="text-[10px] font-bold text-amber-600 bg-white px-2 py-1 rounded border border-amber-200">
+                              {t('consignment')}
+                            </span>
+                          </div>
+                        </div>
+                      )}
                     </div>
                     <button 
                       onClick={() => handleAddToCart(menu)}
@@ -3606,11 +4646,14 @@ export default function App() {
                   {[
                     { id: 'general', label: t('general'), icon: Settings },
                     { id: 'theme', label: t('theme'), icon: Palette },
+                    { id: 'ads', label: 'Iklan', icon: ImageIcon },
+                    { id: 'promos', label: 'Promo', icon: Tag },
                     { id: 'email', label: t('email'), icon: Bell },
                     { id: 'payment', label: t('payment'), icon: CreditCard },
                     { id: 'delivery', label: t('delivery'), icon: ShoppingBag },
                     { id: 'receipt', label: t('receipt'), icon: Printer },
                     { id: 'webhook', label: t('webhook'), icon: Settings },
+                    { id: 'backup', label: t('backup'), icon: Database },
                     { id: 'shortcuts', label: t('shortcuts'), icon: Keyboard },
                   ].map((tab) => (
                     <button
@@ -3631,6 +4674,187 @@ export default function App() {
               </header>
 
               <div className="space-y-8">
+                {settingsSubTab === 'ads' && (
+                  <div className="space-y-8">
+                    <div className="flex justify-between items-center">
+                      <div>
+                        <h3 className="text-2xl font-serif font-bold text-coffee-950">Manajemen Iklan</h3>
+                        <p className="text-coffee-500 text-sm">Kelola konten promosi di sisi kiri layar customer.</p>
+                      </div>
+                      <button
+                        onClick={() => {
+                          setEditingAd(null);
+                          setNewAd({ type: 'image', url: '', title: '', subtitle: '', active: true });
+                          setShowAdModal(true);
+                        }}
+                        className="flex items-center gap-2 bg-coffee-900 text-white px-6 py-3 rounded-2xl font-bold hover:bg-coffee-800 transition-all shadow-lg shadow-coffee-200"
+                      >
+                        <Plus size={20} />
+                        Tambah Iklan
+                      </button>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                      {ads.map((ad) => (
+                        <div key={ad.id} className="glass-card overflow-hidden group">
+                          <div className="aspect-video relative bg-coffee-50">
+                            {ad.type === 'video' ? (
+                              <div className="w-full h-full flex items-center justify-center">
+                                <Monitor size={48} className="text-coffee-300" />
+                                <div className="absolute inset-0 flex items-center justify-center bg-black/20">
+                                  <Play size={32} className="text-white" />
+                                </div>
+                              </div>
+                            ) : (
+                              <img src={ad.url} alt={ad.title} className="w-full h-full object-cover" />
+                            )}
+                            <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-all transform translate-y-2 group-hover:translate-y-0">
+                              <button
+                                onClick={() => {
+                                  setEditingAd(ad);
+                                  setNewAd({ ...ad });
+                                  setShowAdModal(true);
+                                }}
+                                className="p-2 bg-white/90 backdrop-blur rounded-xl text-coffee-600 hover:bg-white shadow-lg"
+                              >
+                                <Edit size={16} />
+                              </button>
+                              <button
+                                onClick={async () => {
+                                  if (confirm('Hapus iklan ini?')) {
+                                    await fetch(`/api/ads/${ad.id}`, {
+                                      method: 'DELETE',
+                                      headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+                                    });
+                                    fetchAds();
+                                  }
+                                }}
+                                className="p-2 bg-white/90 backdrop-blur rounded-xl text-rose-600 hover:bg-white shadow-lg"
+                              >
+                                <Trash2 size={16} />
+                              </button>
+                            </div>
+                            <div className="absolute bottom-4 left-4">
+                              <span className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest ${ad.active ? 'bg-emerald-500 text-white' : 'bg-coffee-200 text-coffee-700'}`}>
+                                {ad.active ? 'Aktif' : 'Nonaktif'}
+                              </span>
+                            </div>
+                          </div>
+                          <div className="p-6">
+                            <div className="flex justify-between items-start mb-2">
+                              <h4 className="font-bold text-coffee-950 truncate flex-1">{ad.title}</h4>
+                              <span className="text-[10px] font-black text-coffee-400 uppercase tracking-widest ml-2">{ad.type}</span>
+                            </div>
+                            <p className="text-sm text-coffee-500 truncate">{ad.subtitle || '-'}</p>
+                          </div>
+                        </div>
+                      ))}
+                      {ads.length === 0 && (
+                        <div className="col-span-full py-20 text-center glass-card">
+                          <ImageIcon size={48} className="mx-auto text-coffee-200 mb-4" />
+                          <p className="text-coffee-500 font-medium">Belum ada iklan yang ditambahkan.</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {settingsSubTab === 'promos' && (
+                  <div className="space-y-8">
+                    <div className="flex justify-between items-center">
+                      <div>
+                        <h3 className="text-2xl font-serif font-bold text-coffee-950">Manajemen Promo</h3>
+                        <p className="text-coffee-500 text-sm">Buat kode promo untuk diskon menu atau kategori.</p>
+                      </div>
+                      <button
+                        onClick={() => {
+                          setEditingPromo(null);
+                          setNewPromo({ code: '', discount_type: 'percentage', discount_value: 0, target_type: 'all', target_ids: [], active: true });
+                          setShowPromoModal(true);
+                        }}
+                        className="flex items-center gap-2 bg-coffee-900 text-white px-6 py-3 rounded-2xl font-bold hover:bg-coffee-800 transition-all shadow-lg shadow-coffee-200"
+                      >
+                        <Plus size={20} />
+                        Tambah Promo
+                      </button>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      {promos.map((promo) => (
+                        <div key={promo.id} className="glass-card p-8 group relative overflow-hidden">
+                          <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-50 rounded-full -mr-16 -mt-16 transition-transform group-hover:scale-110" />
+                          
+                          <div className="relative flex justify-between items-start">
+                            <div className="flex items-center gap-4">
+                              <div className="p-4 bg-indigo-100 text-indigo-600 rounded-2xl">
+                                <Tag size={32} />
+                              </div>
+                              <div>
+                                <h4 className="font-black text-3xl text-coffee-950 tracking-tighter">{promo.code}</h4>
+                                <div className="flex items-center gap-2 mt-1">
+                                  <span className="text-sm font-bold text-indigo-600">
+                                    {promo.discount_type === 'percentage' ? `${promo.discount_value}% OFF` : `${formatIDR(promo.discount_value)} OFF`}
+                                  </span>
+                                  <span className="text-coffee-300">•</span>
+                                  <span className="text-xs font-bold text-coffee-400 uppercase tracking-widest">{promo.target_type}</span>
+                                </div>
+                              </div>
+                            </div>
+                            
+                            <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-all">
+                              <button
+                                onClick={() => {
+                                  setEditingPromo(promo);
+                                  setNewPromo({ ...promo });
+                                  setShowPromoModal(true);
+                                }}
+                                className="p-2 text-coffee-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all"
+                              >
+                                <Edit size={20} />
+                              </button>
+                              <button
+                                onClick={async () => {
+                                  if (confirm('Hapus promo ini?')) {
+                                    await fetch(`/api/promos/${promo.id}`, {
+                                      method: 'DELETE',
+                                      headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+                                    });
+                                    fetchPromos();
+                                  }
+                                }}
+                                className="p-2 text-coffee-400 hover:text-rose-500 hover:bg-rose-50 rounded-xl transition-all"
+                              >
+                                <Trash2 size={20} />
+                              </button>
+                            </div>
+                          </div>
+
+                          <div className="mt-8 flex items-center justify-between pt-6 border-t border-coffee-50">
+                            <div className="flex items-center gap-2">
+                              <div className={`w-2 h-2 rounded-full ${promo.active ? 'bg-emerald-500 animate-pulse' : 'bg-coffee-300'}`} />
+                              <span className={`text-xs font-bold uppercase tracking-widest ${promo.active ? 'text-emerald-600' : 'text-coffee-400'}`}>
+                                {promo.active ? 'Aktif' : 'Nonaktif'}
+                              </span>
+                            </div>
+                            <div className="flex -space-x-2">
+                              {/* Visual representation of targets if any */}
+                              <div className="w-8 h-8 rounded-full bg-coffee-100 border-2 border-white flex items-center justify-center text-[10px] font-bold text-coffee-600">
+                                {promo.target_type === 'all' ? 'All' : promo.target_ids.length}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                      {promos.length === 0 && (
+                        <div className="col-span-full py-20 text-center glass-card">
+                          <Gift size={48} className="mx-auto text-coffee-200 mb-4" />
+                          <p className="text-coffee-500 font-medium">Belum ada promo yang ditambahkan.</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
                 {settingsSubTab === 'general' && (
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                     {/* App Identity */}
@@ -3732,6 +4956,82 @@ export default function App() {
                         <RefreshCw size={18} />
                         {t('reset_order_id')} ke 01
                       </button>
+                    </div>
+                  </div>
+                )}
+
+                {settingsSubTab === 'backup' && (
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                    {/* Database Backup */}
+                    <div className="glass-card p-8">
+                      <div className="flex items-center gap-3 mb-6">
+                        <div className="bg-coffee-100 p-3 rounded-2xl text-coffee-900">
+                          <Database size={24} />
+                        </div>
+                        <h3 className="text-xl font-serif font-bold">{t('backup_database')}</h3>
+                      </div>
+                      <p className="text-sm text-coffee-600 mb-8">
+                        {t('backup_desc')}
+                      </p>
+                      <div className="space-y-4">
+                        <button 
+                          onClick={() => handleBackup('database')}
+                          className="w-full bg-coffee-900 text-white py-3 rounded-xl font-bold hover:bg-coffee-800 transition-all flex items-center justify-center gap-2"
+                        >
+                          <Download size={18} />
+                          {t('backup_database')}
+                        </button>
+                        
+                        <div className="pt-6 border-t border-coffee-100">
+                          <h4 className="text-xs font-bold uppercase text-coffee-500 mb-4">{t('restore_database')}</h4>
+                          <p className="text-[10px] text-rose-500 font-bold mb-4 uppercase tracking-widest">{t('restore_warning')}</p>
+                          <input 
+                            type="file" 
+                            accept=".json"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (file) handleRestore('database', file);
+                            }}
+                            className="block w-full text-sm text-coffee-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-bold file:bg-coffee-100 file:text-coffee-700 hover:file:bg-coffee-200"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Settings Backup */}
+                    <div className="glass-card p-8">
+                      <div className="flex items-center gap-3 mb-6">
+                        <div className="bg-coffee-100 p-3 rounded-2xl text-coffee-900">
+                          <Settings size={24} />
+                        </div>
+                        <h3 className="text-xl font-serif font-bold">{t('backup_settings')}</h3>
+                      </div>
+                      <p className="text-sm text-coffee-600 mb-8">
+                        {t('settings_backup_desc')}
+                      </p>
+                      <div className="space-y-4">
+                        <button 
+                          onClick={() => handleBackup('settings')}
+                          className="w-full bg-coffee-900 text-white py-3 rounded-xl font-bold hover:bg-coffee-800 transition-all flex items-center justify-center gap-2"
+                        >
+                          <Download size={18} />
+                          {t('backup_settings')}
+                        </button>
+
+                        <div className="pt-6 border-t border-coffee-100">
+                          <h4 className="text-xs font-bold uppercase text-coffee-500 mb-4">{t('restore_settings')}</h4>
+                          <p className="text-[10px] text-rose-500 font-bold mb-4 uppercase tracking-widest">{t('restore_warning')}</p>
+                          <input 
+                            type="file" 
+                            accept=".json"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (file) handleRestore('settings', file);
+                            }}
+                            className="block w-full text-sm text-coffee-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-bold file:bg-coffee-100 file:text-coffee-700 hover:file:bg-coffee-200"
+                          />
+                        </div>
+                      </div>
                     </div>
                   </div>
                 )}
@@ -4873,22 +6173,38 @@ export default function App() {
               {editingInvId ? 'Edit Item Inventory' : 'Tambah Item Baru'}
             </h3>
             <form onSubmit={handleAddInventory} className="space-y-4">
-              <div>
-                <label className="block text-xs font-bold uppercase text-coffee-500 mb-1">Kategori</label>
-                <div className="flex bg-coffee-50 p-1 rounded-xl">
-                  {(['Bahan', 'Alat'] as const).map((cat) => (
-                    <button
-                      key={cat}
-                      type="button"
-                      onClick={() => setNewInv({...newInv, category: cat})}
-                      className={cn(
-                        "flex-1 py-2 rounded-lg text-sm font-bold transition-all",
-                        newInv.category === cat ? "bg-white text-coffee-900 shadow-sm" : "text-coffee-500"
-                      )}
-                    >
-                      {cat}
-                    </button>
-                  ))}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold uppercase text-coffee-500 mb-1">{t('inventory_type')}</label>
+                  <div className="flex bg-coffee-50 p-1 rounded-xl">
+                    {(['Bahan', 'Barang'] as const).map((type) => (
+                      <button
+                        key={type}
+                        type="button"
+                        onClick={() => setNewInv({...newInv, type})}
+                        className={cn(
+                          "flex-1 py-2 rounded-lg text-sm font-bold transition-all",
+                          newInv.type === type ? "bg-white text-coffee-900 shadow-sm" : "text-coffee-500"
+                        )}
+                      >
+                        {type === 'Bahan' ? t('raw_material') : t('goods')}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold uppercase text-coffee-500 mb-1">Kategori</label>
+                  <select 
+                    required
+                    value={newInv.category}
+                    onChange={e => setNewInv({...newInv, category: e.target.value})}
+                    className="w-full bg-coffee-50 border border-coffee-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-coffee-500"
+                  >
+                    <option value="Bahan">Bahan</option>
+                    <option value="Alat">Alat</option>
+                    <option value="Kemasan">Kemasan</option>
+                    <option value="Lainnya">Lainnya</option>
+                  </select>
                 </div>
               </div>
               <div>
@@ -5224,6 +6540,51 @@ export default function App() {
                     </div>
                   </div>
                   <div>
+                    <label className="block text-xs font-bold uppercase text-coffee-500 mb-1">{t('menu_type')}</label>
+                    <div className="flex bg-coffee-50 p-1 rounded-xl">
+                      {(['Internal', 'Consignment'] as const).map((type) => (
+                        <button
+                          key={type}
+                          type="button"
+                          onClick={() => setNewMenu({...newMenu, type})}
+                          className={cn(
+                            "flex-1 py-2 rounded-lg text-sm font-bold transition-all",
+                            newMenu.type === type ? "bg-white text-coffee-900 shadow-sm" : "text-coffee-500"
+                          )}
+                        >
+                          {type === 'Internal' ? t('internal') : t('consignment')}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {newMenu.type === 'Consignment' && (
+                    <div className="grid grid-cols-2 gap-4 p-4 bg-amber-50 rounded-2xl border border-amber-100">
+                      <div>
+                        <label className="block text-xs font-bold uppercase text-amber-600 mb-1">{t('supplier_name')}</label>
+                        <input 
+                          required
+                          type="text" 
+                          value={newMenu.supplier_name}
+                          onChange={e => setNewMenu({...newMenu, supplier_name: e.target.value})}
+                          className="w-full bg-white border border-amber-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                          placeholder="Nama Penitip"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-bold uppercase text-amber-600 mb-1">{t('supplier_price')}</label>
+                        <input 
+                          required
+                          type="number" 
+                          value={newMenu.supplier_price}
+                          onChange={e => setNewMenu({...newMenu, supplier_price: Number(e.target.value)})}
+                          className="w-full bg-white border border-amber-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  <div>
                     <label className="block text-xs font-bold uppercase text-coffee-500 mb-1">Nama Menu</label>
                     <input 
                       required
@@ -5443,6 +6804,363 @@ export default function App() {
           </motion.div>
         </div>
       )}
+      {showAdModal && (
+        <div className="fixed inset-0 bg-coffee-950/40 backdrop-blur-sm flex items-center justify-center z-[100] p-4">
+          <motion.div 
+            initial={{ scale: 0.9, opacity: 0, y: 20 }}
+            animate={{ scale: 1, opacity: 1, y: 0 }}
+            className="bg-white rounded-[40px] p-10 w-full max-w-lg shadow-2xl border border-coffee-100 overflow-hidden"
+          >
+            <div className="flex justify-between items-center mb-8">
+              <div>
+                <h3 className="text-3xl font-serif font-bold text-coffee-950">{editingAd ? 'Edit Iklan' : 'Tambah Iklan Baru'}</h3>
+                <p className="text-coffee-500 text-sm">Konten visual untuk promosi customer.</p>
+              </div>
+              <button 
+                onClick={() => setShowAdModal(false)}
+                className="p-3 hover:bg-coffee-50 rounded-2xl transition-colors text-coffee-400"
+              >
+                <X size={24} />
+              </button>
+            </div>
+
+            <form onSubmit={async (e) => {
+              e.preventDefault();
+              const method = editingAd ? 'PUT' : 'POST';
+              const url = editingAd ? `/api/ads/${editingAd.id}` : '/api/ads';
+              
+              await fetch(url, {
+                method,
+                headers: { 
+                  'Content-Type': 'application/json',
+                  'Authorization': `Bearer ${localStorage.getItem('token')}`
+                },
+                body: JSON.stringify(newAd)
+              });
+              
+              setShowAdModal(false);
+              fetchAds();
+            }} className="space-y-6">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase text-coffee-400 tracking-widest">Tipe Konten</label>
+                  <div className="flex bg-coffee-50 p-1 rounded-xl border border-coffee-100">
+                    <button
+                      type="button"
+                      onClick={() => setNewAd({ ...newAd, type: 'image' })}
+                      className={cn(
+                        "flex-1 py-2 rounded-lg text-xs font-bold transition-all",
+                        newAd.type === 'image' ? "bg-white text-coffee-900 shadow-sm" : "text-coffee-400"
+                      )}
+                    >
+                      Gambar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setNewAd({ ...newAd, type: 'video' })}
+                      className={cn(
+                        "flex-1 py-2 rounded-lg text-xs font-bold transition-all",
+                        newAd.type === 'video' ? "bg-white text-coffee-900 shadow-sm" : "text-coffee-400"
+                      )}
+                    >
+                      Video
+                    </button>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase text-coffee-400 tracking-widest">Status</label>
+                  <div className="flex bg-coffee-50 p-1 rounded-xl border border-coffee-100">
+                    <button
+                      type="button"
+                      onClick={() => setNewAd({ ...newAd, active: true })}
+                      className={cn(
+                        "flex-1 py-2 rounded-lg text-xs font-bold transition-all",
+                        newAd.active ? "bg-emerald-500 text-white shadow-sm" : "text-coffee-400"
+                      )}
+                    >
+                      Aktif
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setNewAd({ ...newAd, active: false })}
+                      className={cn(
+                        "flex-1 py-2 rounded-lg text-xs font-bold transition-all",
+                        !newAd.active ? "bg-coffee-200 text-coffee-700 shadow-sm" : "text-coffee-400"
+                      )}
+                    >
+                      Nonaktif
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-[10px] font-black uppercase text-coffee-400 tracking-widest">URL Konten</label>
+                <div className="relative group">
+                  <input 
+                    type="text" 
+                    required
+                    value={newAd.url}
+                    onChange={e => setNewAd({ ...newAd, url: e.target.value })}
+                    placeholder="https://example.com/image.jpg"
+                    className="w-full bg-coffee-50 border border-coffee-200 rounded-2xl px-5 py-4 text-coffee-950 focus:outline-none focus:ring-4 focus:ring-coffee-500/10 transition-all"
+                  />
+                  <div className="absolute right-4 top-1/2 -translate-y-1/2">
+                    <button 
+                      type="button"
+                      onClick={async () => {
+                        const input = document.createElement('input');
+                        input.type = 'file';
+                        input.accept = newAd.type === 'video' ? 'video/*' : 'image/*';
+                        input.onchange = async (e: any) => {
+                          const file = e.target.files[0];
+                          if (file) {
+                            const formData = new FormData();
+                            formData.append('file', file);
+                            const res = await fetch('/api/upload', {
+                              method: 'POST',
+                              body: formData
+                            });
+                            const data = await res.json();
+                            setNewAd({ ...newAd, url: data.url });
+                          }
+                        };
+                        input.click();
+                      }}
+                      className="p-2 text-coffee-400 hover:text-coffee-600 hover:bg-coffee-100 rounded-xl transition-all"
+                    >
+                      <Camera size={20} />
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-[10px] font-black uppercase text-coffee-400 tracking-widest">Judul Iklan</label>
+                <input 
+                  type="text" 
+                  required
+                  value={newAd.title}
+                  onChange={e => setNewAd({ ...newAd, title: e.target.value })}
+                  placeholder="Contoh: Promo Spesial Weekend"
+                  className="w-full bg-coffee-50 border border-coffee-200 rounded-2xl px-5 py-4 text-coffee-950 focus:outline-none focus:ring-4 focus:ring-coffee-500/10 transition-all"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-[10px] font-black uppercase text-coffee-400 tracking-widest">Sub-judul / Deskripsi</label>
+                <input 
+                  type="text" 
+                  value={newAd.subtitle}
+                  onChange={e => setNewAd({ ...newAd, subtitle: e.target.value })}
+                  placeholder="Contoh: Diskon 20% untuk semua menu kopi"
+                  className="w-full bg-coffee-50 border border-coffee-200 rounded-2xl px-5 py-4 text-coffee-950 focus:outline-none focus:ring-4 focus:ring-coffee-500/10 transition-all"
+                />
+              </div>
+
+              <div className="flex gap-4 pt-4">
+                <button 
+                  type="button"
+                  onClick={() => setShowAdModal(false)}
+                  className="flex-1 px-8 py-4 rounded-2xl font-bold text-coffee-600 hover:bg-coffee-50 transition-all"
+                >
+                  Batal
+                </button>
+                <button 
+                  type="submit"
+                  className="flex-1 bg-coffee-900 text-white px-8 py-4 rounded-2xl font-bold hover:bg-coffee-800 transition-all shadow-xl shadow-coffee-200"
+                >
+                  {editingAd ? 'Simpan Perubahan' : 'Tambah Iklan'}
+                </button>
+              </div>
+            </form>
+          </motion.div>
+        </div>
+      )}
+
+      {showPromoModal && (
+        <div className="fixed inset-0 bg-coffee-950/40 backdrop-blur-sm flex items-center justify-center z-[100] p-4">
+          <motion.div 
+            initial={{ scale: 0.9, opacity: 0, y: 20 }}
+            animate={{ scale: 1, opacity: 1, y: 0 }}
+            className="bg-white rounded-[40px] p-10 w-full max-w-lg shadow-2xl border border-coffee-100 overflow-hidden"
+          >
+            <div className="flex justify-between items-center mb-8">
+              <div>
+                <h3 className="text-3xl font-serif font-bold text-coffee-950">{editingPromo ? 'Edit Promo' : 'Tambah Promo Baru'}</h3>
+                <p className="text-coffee-500 text-sm">Atur diskon dan target promosi.</p>
+              </div>
+              <button 
+                onClick={() => setShowPromoModal(false)}
+                className="p-3 hover:bg-coffee-50 rounded-2xl transition-colors text-coffee-400"
+              >
+                <X size={24} />
+              </button>
+            </div>
+
+            <form onSubmit={async (e) => {
+              e.preventDefault();
+              const method = editingPromo ? 'PUT' : 'POST';
+              const url = editingPromo ? `/api/promos/${editingPromo.id}` : '/api/promos';
+              
+              await fetch(url, {
+                method,
+                headers: { 
+                  'Content-Type': 'application/json',
+                  'Authorization': `Bearer ${localStorage.getItem('token')}`
+                },
+                body: JSON.stringify(newPromo)
+              });
+              
+              setShowPromoModal(false);
+              fetchPromos();
+            }} className="space-y-6">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase text-coffee-400 tracking-widest">Kode Promo</label>
+                  <input 
+                    type="text" 
+                    required
+                    value={newPromo.code}
+                    onChange={e => setNewPromo({ ...newPromo, code: e.target.value.toUpperCase() })}
+                    placeholder="COFFEE20"
+                    className="w-full bg-coffee-50 border border-coffee-200 rounded-2xl px-5 py-4 text-coffee-950 font-black tracking-widest focus:outline-none focus:ring-4 focus:ring-coffee-500/10 transition-all"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase text-coffee-400 tracking-widest">Status</label>
+                  <div className="flex bg-coffee-50 p-1 rounded-xl border border-coffee-100">
+                    <button
+                      type="button"
+                      onClick={() => setNewPromo({ ...newPromo, active: true })}
+                      className={cn(
+                        "flex-1 py-2 rounded-lg text-xs font-bold transition-all",
+                        newPromo.active ? "bg-emerald-500 text-white shadow-sm" : "text-coffee-400"
+                      )}
+                    >
+                      Aktif
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setNewPromo({ ...newPromo, active: false })}
+                      className={cn(
+                        "flex-1 py-2 rounded-lg text-xs font-bold transition-all",
+                        !newPromo.active ? "bg-coffee-200 text-coffee-700 shadow-sm" : "text-coffee-400"
+                      )}
+                    >
+                      Nonaktif
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase text-coffee-400 tracking-widest">Tipe Diskon</label>
+                  <select 
+                    value={newPromo.discount_type}
+                    onChange={e => setNewPromo({ ...newPromo, discount_type: e.target.value })}
+                    className="w-full bg-coffee-50 border border-coffee-200 rounded-2xl px-5 py-4 text-coffee-950 focus:outline-none focus:ring-4 focus:ring-coffee-500/10 transition-all"
+                  >
+                    <option value="percentage">Persentase (%)</option>
+                    <option value="fixed">Nominal (IDR)</option>
+                  </select>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase text-coffee-400 tracking-widest">Nilai Diskon</label>
+                  <input 
+                    type="number" 
+                    required
+                    value={newPromo.discount_value}
+                    onChange={e => setNewPromo({ ...newPromo, discount_value: Number(e.target.value) })}
+                    className="w-full bg-coffee-50 border border-coffee-200 rounded-2xl px-5 py-4 text-coffee-950 focus:outline-none focus:ring-4 focus:ring-coffee-500/10 transition-all"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-[10px] font-black uppercase text-coffee-400 tracking-widest">Target Promo</label>
+                <div className="flex bg-coffee-50 p-1 rounded-xl border border-coffee-100 mb-4">
+                  {[
+                    { id: 'all', label: 'Semua' },
+                    { id: 'category', label: 'Kategori' },
+                    { id: 'menu', label: 'Menu' },
+                  ].map(target => (
+                    <button
+                      key={target.id}
+                      type="button"
+                      onClick={() => setNewPromo({ ...newPromo, target_type: target.id, target_ids: [] })}
+                      className={cn(
+                        "flex-1 py-2 rounded-lg text-xs font-bold transition-all",
+                        newPromo.target_type === target.id ? "bg-white text-coffee-900 shadow-sm" : "text-coffee-400"
+                      )}
+                    >
+                      {target.label}
+                    </button>
+                  ))}
+                </div>
+
+                {newPromo.target_type !== 'all' && (
+                  <div className="max-h-[150px] overflow-y-auto p-4 bg-coffee-50 rounded-2xl border border-coffee-100 grid grid-cols-2 gap-2 custom-scrollbar">
+                    {newPromo.target_type === 'category' ? (
+                      Array.from(new Set(menus.map(m => m.category))).map(cat => (
+                        <label key={cat} className="flex items-center gap-2 p-2 hover:bg-white rounded-lg cursor-pointer transition-colors">
+                          <input 
+                            type="checkbox"
+                            checked={newPromo.target_ids.includes(cat)}
+                            onChange={e => {
+                              const ids = e.target.checked 
+                                ? [...newPromo.target_ids, cat]
+                                : newPromo.target_ids.filter((id: string) => id !== cat);
+                              setNewPromo({ ...newPromo, target_ids: ids });
+                            }}
+                            className="rounded border-coffee-300 text-indigo-600 focus:ring-indigo-500"
+                          />
+                          <span className="text-xs font-bold text-coffee-700">{cat}</span>
+                        </label>
+                      ))
+                    ) : (
+                      menus.map(menu => (
+                        <label key={menu.id} className="flex items-center gap-2 p-2 hover:bg-white rounded-lg cursor-pointer transition-colors">
+                          <input 
+                            type="checkbox"
+                            checked={newPromo.target_ids.includes(menu.id.toString())}
+                            onChange={e => {
+                              const ids = e.target.checked 
+                                ? [...newPromo.target_ids, menu.id.toString()]
+                                : newPromo.target_ids.filter((id: string) => id !== menu.id.toString());
+                              setNewPromo({ ...newPromo, target_ids: ids });
+                            }}
+                            className="rounded border-coffee-300 text-indigo-600 focus:ring-indigo-500"
+                          />
+                          <span className="text-xs font-bold text-coffee-700 truncate">{menu.name}</span>
+                        </label>
+                      ))
+                    )}
+                  </div>
+                )}
+              </div>
+
+              <div className="flex gap-4 pt-4">
+                <button 
+                  type="button"
+                  onClick={() => setShowPromoModal(false)}
+                  className="flex-1 px-8 py-4 rounded-2xl font-bold text-coffee-600 hover:bg-coffee-50 transition-all"
+                >
+                  Batal
+                </button>
+                <button 
+                  type="submit"
+                  className="flex-1 bg-coffee-900 text-white px-8 py-4 rounded-2xl font-bold hover:bg-coffee-800 transition-all shadow-xl shadow-coffee-200"
+                >
+                  {editingPromo ? 'Simpan Perubahan' : 'Tambah Promo'}
+                </button>
+              </div>
+            </form>
+          </motion.div>
+        </div>
+      )}
+
       {showOrderReview && (
         <div className="fixed inset-0 bg-coffee-950/60 backdrop-blur-md flex items-center justify-center z-[100] p-4 no-print">
           <motion.div 

@@ -294,6 +294,8 @@ export default function App() {
     app_name: 'MOPI',
     app_icon: 'Coffee',
     app_logo_url: '',
+    customer_page_title: 'MOPI',
+    customer_page_subtitle: 'Menu Pelanggan',
     login_bg: '#f5f5f0',
     login_bg_image: '',
     login_title: 'Coffee POS',
@@ -333,7 +335,16 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   useEffect(() => {
     document.title = appSettings.app_name || 'Coffee POS';
-  }, [appSettings.app_name]);
+    
+    // Update favicon dynamically
+    let link = document.querySelector("link[rel~='icon']") as HTMLLinkElement;
+    if (!link) {
+      link = document.createElement('link');
+      link.rel = 'icon';
+      document.getElementsByTagName('head')[0].appendChild(link);
+    }
+    link.href = appSettings.app_logo_url || '/favicon.ico';
+  }, [appSettings.app_name, appSettings.app_logo_url]);
 
   const [financialData, setFinancialData] = useState<any>(null);
   const [financialRange, setFinancialRange] = useState({
@@ -425,6 +436,7 @@ export default function App() {
   const [customerOrder, setCustomerOrder] = useState({ name: '', table: '', paymentMethod: 'Cash', notes: '' });
   const [lastCustomerOrder, setLastCustomerOrder] = useState<any>(null);
   const [showCustomerOrderSuccess, setShowCustomerOrderSuccess] = useState(false);
+  const [showQRISModal, setShowQRISModal] = useState(false);
   const [customerOrderId, setCustomerOrderId] = useState('');
   const [showCustomerOrderStatus, setShowCustomerOrderStatus] = useState(false);
   const [customerOrderHistory, setCustomerOrderHistory] = useState<any[]>([]);
@@ -988,6 +1000,30 @@ export default function App() {
     }
   }, [txFilter, user]);
 
+  const calculateCartTotal = () => {
+    const subtotal = cart.reduce((sum, item) => sum + (item.menu.price * item.quantity), 0);
+    let discount = 0;
+    if (activePromo) {
+      if (activePromo.target_type === 'all') {
+        discount = activePromo.discount_type === 'percentage' 
+          ? subtotal * (activePromo.discount_value / 100)
+          : activePromo.discount_value;
+      } else {
+        const targetSubtotal = cart.reduce((sum, item) => {
+          const isTarget = activePromo.target_type === 'category' 
+            ? activePromo.target_ids.includes(item.menu.category)
+            : activePromo.target_ids.includes(item.menu.id.toString());
+          return isTarget ? sum + (item.menu.price * item.quantity) : sum;
+        }, 0);
+        discount = activePromo.discount_type === 'percentage'
+          ? targetSubtotal * (activePromo.discount_value / 100)
+          : activePromo.discount_value;
+      }
+    }
+    const tax = Math.round((subtotal - discount) * (appSettings.tax_rate / 100));
+    return { subtotal, discount, tax, total: subtotal - discount + tax };
+  };
+
   const handleCustomerOrder = async () => {
     if (cart.length === 0) {
       toast.error('Keranjang masih kosong');
@@ -1038,7 +1074,13 @@ export default function App() {
         const data = await res.json();
         setCustomerOrderId(data.orderId);
         setLastCustomerOrder({ ...customerOrder });
-        setShowCustomerOrderSuccess(true);
+        
+        if (customerOrder.paymentMethod === 'QRIS') {
+          setShowQRISModal(true);
+        } else {
+          setShowCustomerOrderSuccess(true);
+        }
+        
         setCart([]);
         setCustomerOrder({ name: '', table: '', paymentMethod: 'Cash', notes: '' });
         setActivePromo(null);
@@ -1055,19 +1097,19 @@ export default function App() {
     }
   };
 
-  const handleMarkAsPaid = async (orderId: string) => {
+  const handleConfirmPayment = async (orderId: string) => {
     try {
       const res = await fetch(`/api/orders/${orderId}/status`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: 'processing' })
+        body: JSON.stringify({ status: 'completed' })
       });
       if (res.ok) {
         fetchActiveOrders();
-        toast.success(`Orderan ${orderId} ditandai sudah bayar.`);
+        toast.success(`Orderan ${orderId} berhasil dikonfirmasi dan diselesaikan.`);
       }
     } catch (error) {
-      console.error('Error marking as paid:', error);
+      console.error('Error confirming payment:', error);
     }
   };
 
@@ -1640,8 +1682,8 @@ export default function App() {
                 <Coffee size={24} />
               </div>
               <div>
-                <h1 className="text-xl font-serif font-bold text-coffee-950">{appSettings.app_name}</h1>
-                <p className="text-xs text-coffee-500 font-medium">Menu Pelanggan</p>
+                <h1 className="text-xl font-serif font-bold text-coffee-950">{appSettings.customer_page_title || appSettings.app_name}</h1>
+                <p className="text-xs text-coffee-500 font-medium">{appSettings.customer_page_subtitle || 'Menu Pelanggan'}</p>
               </div>
             </div>
             <div className="flex items-center gap-3">
@@ -2077,29 +2119,7 @@ export default function App() {
                     <div className="flex flex-col">
                       <span className="text-[10px] font-black uppercase text-coffee-400 tracking-widest">Total Bayar</span>
                       <span className="text-2xl font-bold text-coffee-950">
-                        {formatIDR((() => {
-                          const subtotal = cart.reduce((sum, item) => sum + (item.menu.price * item.quantity), 0);
-                          let discount = 0;
-                          if (activePromo) {
-                            if (activePromo.target_type === 'all') {
-                              discount = activePromo.discount_type === 'percentage' 
-                                ? subtotal * (activePromo.discount_value / 100)
-                                : activePromo.discount_value;
-                            } else {
-                              const targetSubtotal = cart.reduce((sum, item) => {
-                                const isTarget = activePromo.target_type === 'category' 
-                                  ? activePromo.target_ids.includes(item.menu.category)
-                                  : activePromo.target_ids.includes(item.menu.id.toString());
-                                return isTarget ? sum + (item.menu.price * item.quantity) : sum;
-                              }, 0);
-                              discount = activePromo.discount_type === 'percentage'
-                                ? targetSubtotal * (activePromo.discount_value / 100)
-                                : activePromo.discount_value;
-                            }
-                          }
-                          const tax = Math.round((subtotal - discount) * (appSettings.tax_rate / 100));
-                          return subtotal - discount + tax;
-                        })())}
+                        {formatIDR(calculateCartTotal().total)}
                       </span>
                     </div>
                     <button 
@@ -2137,22 +2157,9 @@ export default function App() {
                 Pesanan Anda dengan ID <span className="font-bold text-coffee-900">#{customerOrderId}</span> sedang kami siapkan.
               </p>
               
-              {lastCustomerOrder?.paymentMethod === 'QRIS' && appSettings.payment_qris_url && (
-                <div className="bg-white p-6 rounded-[2rem] border-2 border-coffee-100 shadow-xl space-y-4 mb-8">
-                  <p className="text-xs font-black uppercase tracking-widest text-coffee-400">Scan QRIS Untuk Bayar</p>
-                  <img 
-                    src={appSettings.payment_qris_url} 
-                    alt="QRIS" 
-                    className="w-48 h-48 mx-auto object-contain rounded-2xl shadow-sm"
-                    referrerPolicy="no-referrer"
-                  />
-                  <p className="text-[10px] text-coffee-400 font-medium italic">Silakan tunjukkan bukti bayar ke kasir.</p>
-                </div>
-              )}
-
               <p className="text-coffee-600 mb-8 leading-relaxed">
                 {lastCustomerOrder?.paymentMethod === 'QRIS' 
-                  ? "Silakan lakukan pembayaran melalui QRIS di atas dan tunjukkan bukti pembayaran ke kasir untuk konfirmasi."
+                  ? "Pembayaran QRIS sedang diverifikasi oleh kasir. Silakan tunjukkan bukti pembayaran Anda."
                   : "Silakan lakukan pembayaran di kasir untuk mengonfirmasi pesanan Anda."}
               </p>
               <div className="space-y-3">
@@ -2173,6 +2180,50 @@ export default function App() {
                   KEMBALI KE BERANDA
                 </button>
               </div>
+            </motion.div>
+          </div>
+        )}
+
+        {/* QRIS Modal */}
+        {showQRISModal && (
+          <div className="fixed inset-0 bg-coffee-950/60 backdrop-blur-md flex items-center justify-center z-[100] p-4">
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              className="bg-white rounded-[2.5rem] p-10 w-full max-w-md shadow-2xl text-center"
+            >
+              <div className="w-20 h-20 bg-coffee-100 text-coffee-600 rounded-full flex items-center justify-center mx-auto mb-6">
+                <QrCode size={40} />
+              </div>
+              <h2 className="text-2xl font-serif font-bold text-coffee-950 mb-2">Pembayaran QRIS</h2>
+              <div className="bg-coffee-50 px-4 py-2 rounded-full inline-block mb-4">
+                <span className="text-coffee-900 font-bold text-lg">{formatIDR(calculateCartTotal().total)}</span>
+              </div>
+              <p className="text-coffee-500 text-sm mb-8">Scan kode di bawah untuk melakukan pembayaran</p>
+              
+              <div className="bg-white p-6 rounded-[2rem] border-2 border-coffee-100 shadow-xl space-y-4 mb-8">
+                <img 
+                  src={appSettings.payment_qris_url || 'https://picsum.photos/seed/qris/500/500'} 
+                  alt="QRIS" 
+                  className="w-64 h-64 mx-auto object-contain rounded-2xl shadow-sm"
+                  referrerPolicy="no-referrer"
+                />
+              </div>
+
+              <p className="text-xs text-coffee-500 mb-8 leading-relaxed italic">
+                {appSettings.payment_instructions || 'Silakan tunjukkan bukti bayar ke kasir setelah melakukan scan.'}
+              </p>
+
+              <button 
+                onClick={() => {
+                  setShowQRISModal(false);
+                  setShowCustomerOrderSuccess(true);
+                }}
+                className="w-full bg-coffee-900 text-white py-4 rounded-2xl font-bold hover:bg-coffee-800 transition-all shadow-lg shadow-coffee-200 flex items-center justify-center gap-2"
+              >
+                Saya Sudah Bayar
+                <ArrowRight size={18} />
+              </button>
             </motion.div>
           </div>
         )}
@@ -4292,11 +4343,16 @@ export default function App() {
                           <div className="text-right">
                             <p className="text-[10px] font-bold uppercase tracking-widest text-coffee-400">Customer</p>
                             <h4 className="font-bold text-coffee-950">{order.customerName} {order.tableNumber && `(Meja ${order.tableNumber})`}</h4>
-                            {order.status === 'pending' && (
-                              <span className="inline-block mt-1 bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider">
-                                Belum Bayar
+                            <div className="flex flex-col items-end gap-1 mt-1">
+                              {order.status === 'pending' && (
+                                <span className="inline-block bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider">
+                                  Belum Bayar
+                                </span>
+                              )}
+                              <span className="inline-block bg-coffee-50 text-coffee-600 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider">
+                                {order.paymentMethod || 'Tunai'}
                               </span>
-                            )}
+                            </div>
                           </div>
                       </div>
                       <div className="p-6 space-y-4">
@@ -4321,7 +4377,7 @@ export default function App() {
                           Dipesan pada {formatDate(new Date(order.date), 'HH:mm')}
                         </div>
                         {order.status === 'pending' ? (
-                          <div className="flex gap-2">
+                          <div className="flex flex-col gap-2">
                             <button 
                               onClick={() => {
                                 // Load order into cart and open payment
@@ -4332,29 +4388,30 @@ export default function App() {
                                     setCustomerName(data.customerName || '');
                                     setTableNumber(data.tableNumber || '');
                                     setCurrentOrderId(order.orderId);
+                                    setPaymentMethod(data.paymentMethod || 'Tunai');
                                     setShowPaymentModal(true);
                                   });
                               }}
-                              className="flex-1 bg-amber-500 text-white py-3 rounded-xl font-bold hover:bg-amber-600 transition-all flex items-center justify-center gap-2"
+                              className="w-full bg-coffee-100 text-coffee-700 py-3 rounded-xl font-bold hover:bg-coffee-200 transition-all flex items-center justify-center gap-2"
                             >
-                              <CreditCard size={18} />
-                              Bayar
+                              <Edit size={16} />
+                              Edit & Bayar
                             </button>
                             <button 
-                              onClick={() => handleMarkAsPaid(order.orderId)}
-                              className="px-4 bg-emerald-500 text-white py-3 rounded-xl font-bold hover:bg-emerald-600 transition-all flex items-center justify-center gap-2"
-                              title="Konfirmasi Bayar Manual"
+                              onClick={() => handleConfirmPayment(order.orderId)}
+                              className="w-full bg-amber-500 text-white py-3 rounded-xl font-bold hover:bg-amber-600 transition-all flex items-center justify-center gap-2 shadow-lg shadow-amber-100"
                             >
-                              <Check size={18} />
+                              <CheckCircle2 size={18} />
+                              Konfirmasi & Selesaikan
                             </button>
                           </div>
                         ) : (
                           <button 
                             onClick={() => handleCompleteOrder(order.orderId)}
-                            className="w-full bg-coffee-900 text-white py-3 rounded-xl font-bold hover:bg-coffee-800 transition-all flex items-center justify-center gap-2"
+                            className="w-full bg-emerald-600 text-white py-3 rounded-xl font-bold hover:bg-emerald-700 transition-all flex items-center justify-center gap-2 shadow-lg shadow-emerald-100"
                           >
-                            <Check size={18} />
-                            Selesai
+                            <CheckCircle2 size={18} />
+                            Selesaikan
                           </button>
                         )}
                       </div>
@@ -5076,6 +5133,26 @@ export default function App() {
                           />
                         </div>
                         <div>
+                          <label className="block text-xs font-bold uppercase text-coffee-500 mb-2">{t('customer_page_title')}</label>
+                          <input 
+                            type="text" 
+                            value={appSettings.customer_page_title}
+                            onChange={e => setAppSettings({...appSettings, customer_page_title: e.target.value})}
+                            className="w-full bg-coffee-50 border border-coffee-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-coffee-500"
+                            placeholder="Contoh: MOPI Coffee"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-bold uppercase text-coffee-500 mb-2">{t('customer_page_subtitle')}</label>
+                          <input 
+                            type="text" 
+                            value={appSettings.customer_page_subtitle}
+                            onChange={e => setAppSettings({...appSettings, customer_page_subtitle: e.target.value})}
+                            className="w-full bg-coffee-50 border border-coffee-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-coffee-500"
+                            placeholder="Contoh: Menu Pelanggan"
+                          />
+                        </div>
+                        <div>
                           <label className="block text-xs font-bold uppercase text-coffee-500 mb-2">{t('app_icon')}</label>
                           <select 
                             value={appSettings.app_icon}
@@ -5126,6 +5203,8 @@ export default function App() {
                         <button 
                           onClick={() => handleUpdateSettings({ 
                             app_name: appSettings.app_name, 
+                            customer_page_title: appSettings.customer_page_title,
+                            customer_page_subtitle: appSettings.customer_page_subtitle,
                             app_icon: appSettings.app_icon,
                             timezone: appSettings.timezone,
                             language: appSettings.language

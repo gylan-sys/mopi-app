@@ -11,6 +11,8 @@ export const translations = {
     settings: "Pengaturan",
     queue: "Antrian",
     logout: "Keluar",
+    confirm_delete_title: "Konfirmasi Hapus",
+    confirm_delete_message: "Apakah Anda yakin ingin menghapus item ini? Tindakan ini tidak dapat dibatalkan.",
     
     // Dashboard
     total_income: "Total Pemasukan",
@@ -132,6 +134,8 @@ export const translations = {
     shortcuts: "Shortcut",
     app_identity: "Identitas Aplikasi",
     app_name: "Nama Aplikasi",
+    customer_page_title: "Judul Halaman Pelanggan",
+    customer_page_subtitle: "Subjudul Halaman Pelanggan",
     app_icon: "Icon Aplikasi",
     timezone: "Zona Waktu",
     language: "Bahasa",
@@ -176,6 +180,8 @@ export const translations = {
     settings: "Settings",
     queue: "Queue",
     logout: "Logout",
+    confirm_delete_title: "Confirm Delete",
+    confirm_delete_message: "Are you sure you want to delete this item? This action cannot be undone.",
     
     // Dashboard
     total_income: "Total Income",
@@ -297,6 +303,8 @@ export const translations = {
     shortcuts: "Shortcuts",
     app_identity: "App Identity",
     app_name: "App Name",
+    customer_page_title: "Customer Page Title",
+    customer_page_subtitle: "Customer Page Subtitle",
     app_icon: "App Icon",
     timezone: "Timezone",
     language: "Language",

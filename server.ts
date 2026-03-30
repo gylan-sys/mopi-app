@@ -43,6 +43,7 @@ const db = new Database(path.join(dataDir, "database.db"));
 
 // Initialize Database
 function initDb() {
+  db.pragma("foreign_keys = ON");
   db.exec(`
     CREATE TABLE IF NOT EXISTS users (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -127,7 +128,7 @@ function initDb() {
       code TEXT UNIQUE NOT NULL,
       discount_type TEXT CHECK(discount_type IN ('percentage', 'fixed')) NOT NULL,
       discount_value REAL NOT NULL,
-      target_type TEXT CHECK(target_type IN ('all', 'specific_menus')) DEFAULT 'all',
+      target_type TEXT CHECK(target_type IN ('all', 'category', 'menu')) DEFAULT 'all',
       target_ids TEXT, -- JSON array of menu IDs
       active INTEGER DEFAULT 1,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
@@ -219,6 +220,30 @@ function initDb() {
     db.exec("ALTER TABLE inventory ADD COLUMN category TEXT DEFAULT 'Bahan'");
   }
 
+  // Default Promos
+  try {
+    const promoCheck = db.prepare("SELECT * FROM promos WHERE code = ?").get('BUY 1 GET 1');
+    if (!promoCheck) {
+      db.prepare("INSERT INTO promos (code, discount_type, discount_value, target_type, target_ids, active) VALUES (?, ?, ?, ?, ?, ?)")
+        .run('BUY 1 GET 1', 'fixed', 18000, 'menu', JSON.stringify(['1', '5']), 1);
+    }
+  } catch (e) {
+    console.error("Error inserting default promo:", e);
+  }
+
+  // Default Menus
+  try {
+    const menuCount = db.prepare("SELECT COUNT(*) as count FROM menus").get() as any;
+    if (menuCount.count === 0) {
+      db.prepare("INSERT INTO menus (id, name, price, category, description, type) VALUES (?, ?, ?, ?, ?, ?)")
+        .run(1, 'Espresso', 25000, 'Kopi', 'Espresso murni yang kuat', 'Internal');
+      db.prepare("INSERT INTO menus (id, name, price, category, description, type) VALUES (?, ?, ?, ?, ?, ?)")
+        .run(5, 'Cappuccino', 35000, 'Kopi', 'Kopi dengan susu dan busa tebal', 'Internal');
+    }
+  } catch (e) {
+    console.error("Error inserting default menus:", e);
+  }
+
   // Migration: Add unit_price column to inventory if it doesn't exist
   try {
     db.prepare("SELECT unit_price FROM inventory LIMIT 1").get();
@@ -249,11 +274,12 @@ function initDb() {
     ['smtp_user', ''],
     ['smtp_pass', ''],
     ['smtp_from', ''],
-    ['payment_qris_url', ''],
+    ['payment_qris_url', 'https://picsum.photos/seed/qris/500/500'],
     ['payment_dana_url', ''],
     ['payment_ovo_url', ''],
     ['payment_shopeepay_url', ''],
     ['payment_instructions', 'Silakan scan QRIS atau transfer ke nomor yang tertera.'],
+    ['tax_rate', '10'],
     ['payment_webhook_secret', ''],
     ['delivery_webhook_secret', 'mopi_delivery_secret_2026'],
     ['receipt_name', 'COFFEE SHOP'],
@@ -1064,24 +1090,24 @@ async function startServer() {
   });
 
   app.get("/api/stats", authenticateToken, isAdmin, (req, res) => {
-    const income = db.prepare("SELECT SUM(amount) as total FROM transactions WHERE type = 'income'").get() as any;
+    const income = db.prepare("SELECT SUM(amount) as total FROM transactions WHERE type = 'income' AND status != 'pending'").get() as any;
     const expense = db.prepare("SELECT SUM(amount) as total FROM transactions WHERE type = 'expense'").get() as any;
     const recentTransactions = db.prepare("SELECT * FROM transactions ORDER BY date DESC LIMIT 5").all();
     const lowStock = db.prepare("SELECT * FROM inventory WHERE quantity <= min_stock").all();
     
     const today = new Date().toISOString().split('T')[0];
-    const dailySales = db.prepare("SELECT SUM(quantity) as total, SUM(amount) as income FROM transactions WHERE type = 'income' AND category = 'Sales' AND date >= ?").get(today) as any;
+    const dailySales = db.prepare("SELECT SUM(quantity) as total, SUM(amount) as income FROM transactions WHERE type = 'income' AND category = 'Sales' AND status != 'pending' AND date >= ?").get(today) as any;
 
     const monthStart = new Date();
     monthStart.setDate(1);
     const monthStartStr = monthStart.toISOString().split('T')[0];
-    const monthlySales = db.prepare("SELECT SUM(quantity) as total FROM transactions WHERE type = 'income' AND category = 'Sales' AND date >= ?").get(monthStartStr) as any;
+    const monthlySales = db.prepare("SELECT SUM(quantity) as total FROM transactions WHERE type = 'income' AND category = 'Sales' AND status != 'pending' AND date >= ?").get(monthStartStr) as any;
 
     // Sales by Source (POS vs Delivery)
     const salesBySource = db.prepare(`
       SELECT source, SUM(amount) as total 
       FROM transactions 
-      WHERE type = 'income' AND category = 'Sales' AND date >= ?
+      WHERE type = 'income' AND category = 'Sales' AND status != 'pending' AND date >= ?
       GROUP BY source
     `).all(today);
 
@@ -1111,21 +1137,21 @@ async function startServer() {
           SUM(CASE WHEN type = 'income' THEN amount ELSE 0 END) as income,
           SUM(CASE WHEN type = 'expense' THEN amount ELSE 0 END) as expense
         FROM transactions 
-        WHERE date >= date('now', 'localtime', 'start of day')
+        WHERE date >= date('now', 'localtime', 'start of day') AND status != 'pending'
       `).get() as any,
       weekly: db.prepare(`
         SELECT 
           SUM(CASE WHEN type = 'income' THEN amount ELSE 0 END) as income,
           SUM(CASE WHEN type = 'expense' THEN amount ELSE 0 END) as expense
         FROM transactions 
-        WHERE date >= date('now', 'localtime', '-7 days')
+        WHERE date >= date('now', 'localtime', '-7 days') AND status != 'pending'
       `).get() as any,
       monthly: db.prepare(`
         SELECT 
           SUM(CASE WHEN type = 'income' THEN amount ELSE 0 END) as income,
           SUM(CASE WHEN type = 'expense' THEN amount ELSE 0 END) as expense
         FROM transactions 
-        WHERE date >= date('now', 'localtime', 'start of month')
+        WHERE date >= date('now', 'localtime', 'start of month') AND status != 'pending'
       `).get() as any
     };
 
@@ -1136,7 +1162,7 @@ async function startServer() {
         SUM(CASE WHEN type = 'income' THEN amount ELSE 0 END) as income,
         SUM(CASE WHEN type = 'expense' THEN amount ELSE 0 END) as expense
       FROM transactions 
-      WHERE date >= ? AND date <= ?
+      WHERE date >= ? AND date <= ? AND status != 'pending'
       GROUP BY strftime('%Y-%m-%d', date)
       ORDER BY date ASC
     `).all(start, end);
@@ -1158,7 +1184,7 @@ async function startServer() {
         category,
         SUM(amount) as amount
       FROM transactions 
-      WHERE type = 'income' AND date >= ? AND date <= ?
+      WHERE type = 'income' AND date >= ? AND date <= ? AND status != 'pending'
       GROUP BY category
       ORDER BY amount DESC
     `).all(start, end);
@@ -1169,39 +1195,6 @@ async function startServer() {
       expenseByCategory,
       incomeByCategory
     });
-  });
-
-  app.get("/api/reports/consignment", authenticateToken, isAdmin, (req, res) => {
-    const { startDate, endDate } = req.query;
-    const end = endDate ? (endDate as string) : new Date().toISOString().split('T')[0];
-    const start = startDate ? (startDate as string) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-
-    try {
-      const reports = db.prepare(`
-        SELECT 
-          m.supplier_name,
-          m.name as menu_name,
-          m.supplier_price,
-          m.price as selling_price,
-          SUM(t.quantity) as total_quantity,
-          SUM(t.amount) as total_sales,
-          SUM(t.quantity * m.supplier_price) as total_settlement,
-          SUM(t.amount - (t.quantity * m.supplier_price)) as total_profit
-        FROM transactions t
-        JOIN menus m ON t.menu_id = m.id
-        WHERE m.type = 'Consignment' 
-          AND t.type = 'income' 
-          AND t.status = 'completed'
-          AND t.date >= ? AND t.date <= ?
-        GROUP BY m.supplier_name, m.id
-        ORDER BY m.supplier_name ASC
-      `).all(start, end);
-
-      res.json(reports);
-    } catch (error) {
-      console.error("Consignment report error:", error);
-      res.status(500).json({ error: "Gagal memuat laporan titipan" });
-    }
   });
 
   app.get("/api/reports/consignment", authenticateToken, isAdmin, (req, res) => {
@@ -1253,9 +1246,10 @@ async function startServer() {
         { header: 'Pelanggan', key: 'customer_name', width: 20 },
         { header: 'Metode Pembayaran', key: 'payment_method', width: 20 },
         { header: 'Order ID', key: 'order_id', width: 15 },
-        { header: 'Sumber', key: 'source', width: 10 }
+        { header: 'Sumber', key: 'source', width: 10 },
+        { header: 'Status', key: 'status', width: 15 }
       ];
-      const transactions = db.prepare("SELECT * FROM transactions ORDER BY date DESC").all();
+      const transactions = db.prepare("SELECT * FROM transactions WHERE status != 'pending' ORDER BY date DESC").all();
       transactionsSheet.addRows(transactions);
 
       // 2. Inventory Sheet

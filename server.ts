@@ -154,6 +154,8 @@ function initDb() {
   try { db.prepare("ALTER TABLE transactions ADD COLUMN promo_code TEXT").run(); } catch(e) {}
   try { db.prepare("ALTER TABLE transactions ADD COLUMN discount_amount REAL DEFAULT 0").run(); } catch(e) {}
   try { db.prepare("ALTER TABLE transactions ADD COLUMN customer_id INTEGER").run(); } catch(e) {}
+  try { db.prepare("ALTER TABLE transactions ADD COLUMN proof_of_payment_url TEXT").run(); } catch(e) {}
+  try { db.prepare("ALTER TABLE transactions ADD COLUMN display_id TEXT").run(); } catch(e) {}
   try { db.prepare("ALTER TABLE menus ADD COLUMN supplier_name TEXT").run(); } catch(e) {}
   try { db.prepare("ALTER TABLE menus ADD COLUMN supplier_price REAL DEFAULT 0").run(); } catch(e) {}
 
@@ -278,6 +280,7 @@ function initDb() {
     ['payment_dana_url', ''],
     ['payment_ovo_url', ''],
     ['payment_shopeepay_url', ''],
+    ['payment_loading_gif_url', ''],
     ['payment_instructions', 'Silakan scan QRIS atau transfer ke nomor yang tertera.'],
     ['tax_rate', '10'],
     ['payment_webhook_secret', ''],
@@ -591,19 +594,22 @@ async function startServer() {
         // Get and increment order counter
         const counterSetting = db.prepare("SELECT value FROM settings WHERE key = 'order_counter'").get() as any;
         let counter = parseInt(counterSetting?.value || '1');
-        const orderId = String(counter).padStart(2, '0');
+        const displayId = String(counter).padStart(2, '0');
+        const dateStr = new Date().toISOString().split('T')[0].replace(/-/g, '');
+        const orderId = `ORD-${dateStr}-${displayId}`;
         db.prepare("UPDATE settings SET value = ? WHERE key = 'order_counter'").run(String(counter + 1));
 
         let subtotal = 0;
         for (const item of items) {
+          if (!item.menuId) continue; // Skip items with null/undefined menuId
           const menu = db.prepare("SELECT * FROM menus WHERE id = ?").get(item.menuId) as any;
           if (!menu) throw new Error(`Menu ID ${item.menuId} tidak ditemukan`);
           subtotal += menu.price * item.quantity;
 
           // Insert into transactions as pending
           db.prepare(`
-            INSERT INTO transactions (type, category, amount, description, customer_name, table_number, order_id, source, status, menu_id, quantity, date, promo_code, payment_method, notes)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?, ?, ?)
+            INSERT INTO transactions (type, category, amount, description, customer_name, table_number, order_id, display_id, source, status, menu_id, quantity, date, promo_code, payment_method, notes)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?, ?, ?)
           `).run(
             'income',
             menu.category,
@@ -612,6 +618,7 @@ async function startServer() {
             customerName || 'Guest',
             tableNumber || '',
             orderId,
+            displayId,
             'Customer',
             'pending',
             item.menuId,
@@ -625,8 +632,8 @@ async function startServer() {
         // Insert discount row if any
         if (promoCode && discountAmount > 0) {
           db.prepare(`
-            INSERT INTO transactions (type, category, amount, description, customer_name, table_number, order_id, source, status, date, promo_code, payment_method)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?, ?)
+            INSERT INTO transactions (type, category, amount, description, customer_name, table_number, order_id, display_id, source, status, date, promo_code, payment_method)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?, ?)
           `).run(
             'income',
             'Discount',
@@ -635,6 +642,7 @@ async function startServer() {
             customerName || 'Guest',
             tableNumber || '',
             orderId,
+            displayId,
             'Customer',
             'pending',
             promoCode,
@@ -652,8 +660,8 @@ async function startServer() {
         const tax = Math.round((subtotal - (discountAmount || 0)) * (taxRate / 100));
         if (tax > 0) {
           db.prepare(`
-            INSERT INTO transactions (type, category, amount, description, customer_name, table_number, order_id, source, status, date, payment_method)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?)
+            INSERT INTO transactions (type, category, amount, description, customer_name, table_number, order_id, display_id, source, status, date, payment_method)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?)
           `).run(
             'income',
             'Tax',
@@ -662,18 +670,19 @@ async function startServer() {
             customerName || 'Guest',
             tableNumber || '',
             orderId,
+            displayId,
             'Customer',
             'pending',
             paymentMethod || 'Cash'
           );
         }
 
-        return orderId;
+        return { orderId, displayId };
       });
 
-      const orderId = transaction();
+      const result = transaction();
       io.emit("ORDER_UPDATED");
-      res.json({ success: true, orderId });
+      res.json({ success: true, orderId: result.orderId, displayId: result.displayId });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
@@ -712,6 +721,24 @@ async function startServer() {
     });
 
     res.json(Object.values(orders));
+  });
+
+  app.put("/api/public/orders/:orderId/status", (req, res) => {
+    const { orderId } = req.params;
+    const { status } = req.body;
+    
+    // Only allow updating to 'awaiting_confirmation' from public side
+    if (status !== 'awaiting_confirmation') {
+      return res.status(400).json({ error: "Invalid status update" });
+    }
+
+    try {
+      db.prepare("UPDATE transactions SET status = ? WHERE order_id = ?").run(status, orderId);
+      io.emit("ORDER_UPDATED");
+      res.json({ success: true });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
   });
 
   // Menus API
@@ -795,6 +822,7 @@ async function startServer() {
       db.prepare("UPDATE settings SET value = ? WHERE key = 'order_counter'").run(String(counter + 1));
 
       for (const item of items) {
+        if (!item.menuId) continue; // Skip items with null/undefined menuId
         const menu = db.prepare("SELECT * FROM menus WHERE id = ?").get(item.menuId) as any;
         if (!menu) throw new Error(`Menu ID ${item.menuId} tidak ditemukan`);
 
@@ -933,14 +961,18 @@ async function startServer() {
       const orders = db.prepare(`
         SELECT 
           order_id as id,
+          display_id,
           customer_name,
           table_number,
           notes,
           status,
           date as created_at,
-          json_group_array(json_object('menu_name', description, 'quantity', quantity)) as items
+          json_group_array(
+            json_object('menu_name', REPLACE(description, 'Order via Customer: ', ''), 'quantity', quantity)
+          ) as items
         FROM transactions
-        WHERE category = 'Sales' AND status IN ('pending', 'processing')
+        WHERE status IN ('pending', 'processing')
+          AND category NOT IN ('Discount', 'Tax')
         GROUP BY order_id
         ORDER BY date DESC
       `).all() as any[];
@@ -956,7 +988,7 @@ async function startServer() {
       SELECT t.*, m.name as menu_name
       FROM transactions t
       LEFT JOIN menus m ON t.menu_id = m.id
-      WHERE t.status IN ('processing', 'pending')
+      WHERE t.status IN ('processing', 'pending', 'awaiting_confirmation')
       ORDER BY t.date ASC
     `).all() as any[];
 
@@ -965,12 +997,15 @@ async function startServer() {
       if (!orders[item.order_id]) {
         orders[item.order_id] = {
           orderId: item.order_id,
+          displayId: item.display_id,
           customerName: item.customer_name,
           date: item.date,
           source: item.source || 'POS',
           status: item.status,
+          paymentMethod: item.payment_method,
           tableNumber: item.table_number,
           notes: item.notes,
+          proofOfPaymentUrl: item.proof_of_payment_url,
           items: []
         };
       }
@@ -981,6 +1016,17 @@ async function startServer() {
     });
 
     res.json(Object.values(orders));
+  });
+
+  app.post("/api/orders/:orderId/proof", upload.single('proof'), (req: any, res) => {
+    const { orderId } = req.params;
+    if (!req.file) return res.status(400).json({ error: "File tidak ditemukan" });
+    
+    const url = `/uploads/${req.file.filename}`;
+    db.prepare("UPDATE transactions SET proof_of_payment_url = ? WHERE order_id = ?").run(url, orderId);
+    
+    io.emit("ORDER_UPDATED");
+    res.json({ success: true, url });
   });
 
   app.put("/api/orders/:orderId/status", authenticateToken, (req, res) => {
@@ -1376,7 +1422,11 @@ async function startServer() {
       "primary_color",
       "language",
       "main_bg",
-      "main_bg_image"
+      "main_bg_image",
+      "customer_bg_color",
+      "customer_bg_image",
+      "customer_page_title",
+      "customer_page_subtitle"
     ];
     const settings = db.prepare("SELECT * FROM settings WHERE key IN (" + publicKeys.map(() => "?").join(",") + ")").all(publicKeys) as any[];
     const settingsObj = settings.reduce((acc: any, curr: any) => {

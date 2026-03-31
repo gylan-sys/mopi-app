@@ -39,6 +39,7 @@ import {
   ChevronRight,
   Search,
   ClipboardList,
+  Send,
   Truck,
   Milk,
   Utensils,
@@ -296,6 +297,8 @@ export default function App() {
     app_logo_url: '',
     customer_page_title: 'MOPI',
     customer_page_subtitle: 'Menu Pelanggan',
+    customer_bg_color: '#fdfaf7',
+    customer_bg_image: '',
     login_bg: '#f5f5f0',
     login_bg_image: '',
     login_title: 'Coffee POS',
@@ -312,6 +315,7 @@ export default function App() {
     payment_dana_url: '',
     payment_ovo_url: '',
     payment_shopeepay_url: '',
+    payment_loading_gif_url: '',
     payment_instructions: 'Silakan scan QRIS atau transfer ke nomor yang tertera.',
     payment_webhook_secret: '',
     receipt_name: 'COFFEE SHOP',
@@ -437,11 +441,17 @@ export default function App() {
   const [lastCustomerOrder, setLastCustomerOrder] = useState<any>(null);
   const [showCustomerOrderSuccess, setShowCustomerOrderSuccess] = useState(false);
   const [showQRISModal, setShowQRISModal] = useState(false);
+  const [qrisAmount, setQrisAmount] = useState(0);
+  const [isQRISLoading, setIsQRISLoading] = useState(false);
   const [customerOrderId, setCustomerOrderId] = useState('');
+  const [customerDisplayId, setCustomerDisplayId] = useState('');
   const [showCustomerOrderStatus, setShowCustomerOrderStatus] = useState(false);
+  const [flyingItems, setFlyingItems] = useState<{ id: number; x: number; y: number; image?: string }[]>([]);
   const [customerOrderHistory, setCustomerOrderHistory] = useState<any[]>([]);
   const [customerHistoryTab, setCustomerHistoryTab] = useState<'active' | 'history'>('active');
   const [customerActiveOrders, setCustomerActiveOrders] = useState<any[]>([]);
+  const [proofFile, setProofFile] = useState<File | null>(null);
+  const [isUploadingProof, setIsUploadingProof] = useState(false);
 
   // Forms
   const [showInvModal, setShowInvModal] = useState(false);
@@ -495,13 +505,22 @@ export default function App() {
     socketRef.current = io();
     
     socketRef.current.on('PAYMENT_SUCCESS', (data: any) => {
+      console.log('Payment success received:', data);
       if (showOrderReview) {
         handleProcessOrder();
       }
-    });
-
-    socketRef.current.on('ORDER_UPDATED', () => {
-      fetchActiveOrders();
+      
+      // If in customer mode and waiting for QRIS
+      if (isCustomerMode && showQRISModal) {
+        setShowQRISModal(false);
+        setShowCustomerOrderSuccess(true);
+        toast.success("Pembayaran Berhasil! Pesanan Anda sedang diproses.");
+        
+        // Clear cart for customer
+        setCart([]);
+        setCustomerOrder({ name: '', table: '', notes: '', paymentMethod: 'Cash' });
+        setActivePromo(null);
+      }
     });
 
     return () => {
@@ -511,7 +530,7 @@ export default function App() {
 
   useEffect(() => {
     if (showOrderReview && !currentOrderId) {
-      const newId = `ORD-${Date.now()}`;
+      const newId = `ORD-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
       setCurrentOrderId(newId);
       if (socketRef.current) socketRef.current.emit('join_order', newId);
     } else if (!showOrderReview) {
@@ -631,6 +650,22 @@ export default function App() {
             position: "bottom-right",
             duration: 3000
           });
+        } else {
+          // Cashier notification
+          toast.info("Ada orderan baru atau pembaruan antrian!", {
+            position: "top-right",
+            icon: <Bell className="text-amber-500" />,
+            duration: 5000
+          });
+          
+          // Play a subtle sound if possible or just visual cue
+          const newNotification: Notification = {
+            id: Date.now() + Math.random(),
+            message: "Antrian pesanan telah diperbarui.",
+            type: 'info',
+            time: formatDate(new Date(), 'HH:mm')
+          };
+          setNotifications(prev => [newNotification, ...prev]);
         }
       };
       socketRef.current.on('ORDER_UPDATED', handleOrderUpdate);
@@ -659,6 +694,9 @@ export default function App() {
         fetch('/api/settings'),
         fetch('/api/customers')
       ]);
+
+      // Also fetch active orders to keep queue updated
+      fetchActiveOrders();
 
       // Only logout on 401 (Unauthorized)
       if (statsRes.status === 401 || invRes.status === 401 || menuRes.status === 401 || settingsRes.status === 401 || custRes.status === 401) {
@@ -1073,10 +1111,23 @@ export default function App() {
       if (res.ok) {
         const data = await res.json();
         setCustomerOrderId(data.orderId);
+        setCustomerDisplayId(data.displayId);
         setLastCustomerOrder({ ...customerOrder });
         
+        // Join the order room for real-time payment updates
+        if (socketRef.current) {
+          socketRef.current.emit('join_order', data.orderId);
+        }
+        
+        const totalAmount = calculateCartTotal().total;
+        setQrisAmount(totalAmount);
+
         if (customerOrder.paymentMethod === 'QRIS') {
+          setIsQRISLoading(true);
           setShowQRISModal(true);
+          setTimeout(() => {
+            setIsQRISLoading(false);
+          }, 3000); // 3 seconds loading
         } else {
           setShowCustomerOrderSuccess(true);
         }
@@ -1099,14 +1150,20 @@ export default function App() {
 
   const handleConfirmPayment = async (orderId: string) => {
     try {
+      const order = activeOrders.find(o => o.orderId === orderId);
+      const nextStatus = order?.status === 'awaiting_confirmation' ? 'processing' : 'completed';
+      
       const res = await fetch(`/api/orders/${orderId}/status`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: 'completed' })
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify({ status: nextStatus })
       });
       if (res.ok) {
         fetchActiveOrders();
-        toast.success(`Orderan ${orderId} berhasil dikonfirmasi dan diselesaikan.`);
+        toast.success(nextStatus === 'processing' ? `Pembayaran orderan ${orderId} berhasil dikonfirmasi.` : `Orderan ${orderId} telah selesai.`);
       }
     } catch (error) {
       console.error('Error confirming payment:', error);
@@ -1133,7 +1190,7 @@ export default function App() {
       if (res.ok) {
         fetchActiveOrders();
         const newNotification: Notification = {
-          id: Date.now(),
+          id: Date.now() + Math.random(),
           message: `Orderan ${orderId} telah selesai diproses.`,
           type: 'success',
           time: formatDate(new Date(), 'HH:mm')
@@ -1233,7 +1290,7 @@ export default function App() {
     setShowMenuModal(true);
   };
 
-  const handleAddToCart = (menu: Menu) => {
+  const handleAddToCart = (menu: Menu, e?: React.MouseEvent) => {
     setCart(prev => {
       const existing = prev.find(item => item.menu.id === menu.id);
       const newQty = existing ? existing.quantity + 1 : 1;
@@ -1245,6 +1302,22 @@ export default function App() {
       if (insufficient.length > 0) {
         toast.error(`Stok bahan tidak mencukupi untuk ${menu.name}:\n${insufficient.map(i => `- ${i.inventory_name} (Kurang ${((i.quantity * newQty) - (i.current_stock || 0)).toFixed(2)} ${i.unit})`).join('\n')}`);
         return prev;
+      }
+
+      // Add flying animation
+      if (e) {
+        const id = Date.now() + Math.random();
+        setFlyingItems(prevFlying => [...prevFlying, {
+          id,
+          x: e.clientX,
+          y: e.clientY,
+          image: menu.image_url
+        }]);
+        
+        // Remove item after animation completes
+        setTimeout(() => {
+          setFlyingItems(prevFlying => prevFlying.filter(item => item.id !== id));
+        }, 800);
       }
 
       if (existing) {
@@ -1379,7 +1452,7 @@ export default function App() {
         
         // Add notification
         const newNotification: Notification = {
-          id: Date.now(),
+          id: Date.now() + Math.random(),
           message: `Pembayaran ${paymentMethod} sebesar ${formatIDR(total)} berhasil diterima dari ${customerName || 'Umum'}.`,
           type: 'success',
           time: formatDate(new Date(), 'HH:mm')
@@ -1667,7 +1740,13 @@ export default function App() {
     );
 
     return (
-      <div className="min-h-screen bg-coffee-50 flex flex-col md:flex-row overflow-hidden">
+      <div 
+        className="min-h-screen flex flex-col md:flex-row overflow-hidden bg-cover bg-center bg-no-repeat bg-fixed"
+        style={{ 
+          backgroundColor: appSettings.customer_bg_color,
+          backgroundImage: appSettings.customer_bg_image ? `url(${appSettings.customer_bg_image})` : 'none'
+        }}
+      >
         {/* Left Side: Ad Carousel (Desktop Only) */}
         <div className="hidden lg:block lg:w-2/5 xl:w-1/2 h-screen sticky top-0">
           <AdCarousel />
@@ -1704,6 +1783,7 @@ export default function App() {
               </button>
 
               <button 
+                id="mobile-cart-icon"
                 onClick={() => setShowMobileCart(true)}
                 className="relative p-3 bg-coffee-900 text-white rounded-2xl shadow-lg shadow-coffee-200"
               >
@@ -1798,7 +1878,7 @@ export default function App() {
                     <div className="mt-auto flex items-center justify-between pt-2 border-t border-coffee-50">
                       <span className="text-sm font-bold text-coffee-900">{formatIDR(menu.price)}</span>
                       <button 
-                        onClick={() => handleAddToCart(menu)}
+                        onClick={(e) => handleAddToCart(menu, e)}
                         className="bg-coffee-900 text-white p-2 rounded-xl hover:bg-coffee-800 transition-all shadow-md shadow-coffee-100 active:scale-95"
                       >
                         <Plus size={16} />
@@ -1885,6 +1965,44 @@ export default function App() {
                           <div className="flex-1 min-w-0">
                             <h4 className="font-bold text-coffee-950 truncate text-sm">{item.menu.name}</h4>
                             <p className="text-xs font-bold text-coffee-600 mt-0.5">{formatIDR(item.menu.price)}</p>
+                            
+                            {/* Sugar and Ice Options */}
+                            {(item.menu.category?.toLowerCase().includes('kopi') || 
+                              item.menu.category?.toLowerCase().includes('teh') || 
+                              item.menu.category?.toLowerCase().includes('coffee') || 
+                              item.menu.category?.toLowerCase().includes('tea') || 
+                              item.menu.category?.toLowerCase().includes('drink') || 
+                              item.menu.category?.toLowerCase().includes('minuman')) && (
+                              <div className="mt-2 grid grid-cols-2 gap-2">
+                                <div className="space-y-1">
+                                  <label className="text-[8px] font-black uppercase text-coffee-400 tracking-tighter">Gula</label>
+                                  <select 
+                                    value={item.sugarLevel || 'Normal'}
+                                    onChange={(e) => handleUpdateCartOptions(item.menu.id, { sugarLevel: e.target.value })}
+                                    className="w-full bg-white border border-coffee-100 rounded-md text-[10px] py-1 px-1 focus:outline-none focus:ring-1 focus:ring-coffee-500"
+                                  >
+                                    <option value="No Sugar">No Sugar</option>
+                                    <option value="Less Sugar">Less Sugar</option>
+                                    <option value="Normal">Normal</option>
+                                    <option value="Extra Sugar">Extra</option>
+                                  </select>
+                                </div>
+                                <div className="space-y-1">
+                                  <label className="text-[8px] font-black uppercase text-coffee-400 tracking-tighter">Es</label>
+                                  <select 
+                                    value={item.iceLevel || 'Normal'}
+                                    onChange={(e) => handleUpdateCartOptions(item.menu.id, { iceLevel: e.target.value })}
+                                    className="w-full bg-white border border-coffee-100 rounded-md text-[10px] py-1 px-1 focus:outline-none focus:ring-1 focus:ring-coffee-500"
+                                  >
+                                    <option value="No Ice">No Ice</option>
+                                    <option value="Less Ice">Less Ice</option>
+                                    <option value="Normal">Normal</option>
+                                    <option value="Extra Ice">Extra</option>
+                                  </select>
+                                </div>
+                              </div>
+                            )}
+
                             <div className="flex items-center gap-3 mt-2">
                               <button 
                                 onClick={() => handleUpdateCartQuantity(item.menu.id, -1)}
@@ -2197,36 +2315,329 @@ export default function App() {
               </div>
               <h2 className="text-2xl font-serif font-bold text-coffee-950 mb-2">Pembayaran QRIS</h2>
               <div className="bg-coffee-50 px-4 py-2 rounded-full inline-block mb-4">
-                <span className="text-coffee-900 font-bold text-lg">{formatIDR(calculateCartTotal().total)}</span>
+                <span className="text-coffee-900 font-bold text-lg">{formatIDR(qrisAmount)}</span>
               </div>
               <p className="text-coffee-500 text-sm mb-8">Scan kode di bawah untuk melakukan pembayaran</p>
               
-              <div className="bg-white p-6 rounded-[2rem] border-2 border-coffee-100 shadow-xl space-y-4 mb-8">
-                <img 
-                  src={appSettings.payment_qris_url || 'https://picsum.photos/seed/qris/500/500'} 
-                  alt="QRIS" 
-                  className="w-64 h-64 mx-auto object-contain rounded-2xl shadow-sm"
-                  referrerPolicy="no-referrer"
-                />
+              <div className="bg-white p-6 rounded-[2rem] border-2 border-coffee-100 shadow-xl space-y-4 mb-8 min-h-[300px] flex items-center justify-center">
+                {isQRISLoading ? (
+                  <div className="flex flex-col items-center gap-4">
+                    <img 
+                      src={appSettings.payment_loading_gif_url || 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExNHJqZ3R6Z3R6Z3R6Z3R6Z3R6Z3R6Z3R6Z3R6Z3R6Z3R6JmVwPXYxX2ludGVybmFsX2dpZl9ieV9pZCZjdD1n/3o7bu3XilJ5BOiSGic/giphy.gif'} 
+                      alt="Loading..." 
+                      className="w-48 h-48 object-contain"
+                      referrerPolicy="no-referrer"
+                    />
+                    <p className="text-coffee-400 font-medium animate-pulse text-xs tracking-widest uppercase">Menyiapkan Barcode...</p>
+                  </div>
+                ) : (
+                  <motion.img 
+                    initial={{ opacity: 0, scale: 0.8 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    src={appSettings.payment_qris_url || 'https://picsum.photos/seed/qris/500/500'} 
+                    alt="QRIS" 
+                    className="w-64 h-64 mx-auto object-contain rounded-2xl shadow-sm"
+                    referrerPolicy="no-referrer"
+                  />
+                )}
               </div>
 
               <p className="text-xs text-coffee-500 mb-8 leading-relaxed italic">
                 {appSettings.payment_instructions || 'Silakan tunjukkan bukti bayar ke kasir setelah melakukan scan.'}
               </p>
 
-              <button 
-                onClick={() => {
-                  setShowQRISModal(false);
-                  setShowCustomerOrderSuccess(true);
-                }}
-                className="w-full bg-coffee-900 text-white py-4 rounded-2xl font-bold hover:bg-coffee-800 transition-all shadow-lg shadow-coffee-200 flex items-center justify-center gap-2"
-              >
-                Saya Sudah Bayar
-                <ArrowRight size={18} />
-              </button>
+              <div className="space-y-4">
+                <div className="relative">
+                  <input 
+                    type="file" 
+                    accept="image/*"
+                    id="proof-upload"
+                    className="hidden"
+                    onChange={(e) => setProofFile(e.target.files?.[0] || null)}
+                  />
+                  <label 
+                    htmlFor="proof-upload"
+                    className={cn(
+                      "w-full flex items-center justify-center gap-2 py-4 rounded-2xl border-2 border-dashed transition-all cursor-pointer",
+                      proofFile ? "bg-emerald-50 border-emerald-500 text-emerald-600" : "bg-coffee-50 border-coffee-200 text-coffee-400 hover:border-coffee-400"
+                    )}
+                  >
+                    {proofFile ? (
+                      <>
+                        <Check size={20} />
+                        Bukti Terpilih: {proofFile.name.slice(0, 15)}...
+                      </>
+                    ) : (
+                      <>
+                        <Upload size={20} />
+                        Upload Bukti Pembayaran
+                      </>
+                    )}
+                  </label>
+                </div>
+
+                <button 
+                  disabled={isUploadingProof}
+                  onClick={async () => {
+                    setIsUploadingProof(true);
+                    try {
+                      if (proofFile) {
+                        const formData = new FormData();
+                        formData.append('proof', proofFile);
+                        await fetch(`/api/orders/${customerOrderId}/proof`, {
+                          method: 'POST',
+                          body: formData
+                        });
+                      }
+
+                      await fetch(`/api/public/orders/${customerOrderId}/status`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ status: 'awaiting_confirmation' })
+                      });
+                      
+                      toast.success('Bukti pembayaran berhasil dikirim!');
+                      setShowQRISModal(false);
+                      setShowCustomerOrderSuccess(true);
+                      setProofFile(null);
+                    } catch (err) {
+                      console.error('Error updating order status:', err);
+                      toast.error('Gagal mengirim bukti pembayaran');
+                    } finally {
+                      setIsUploadingProof(false);
+                    }
+                  }}
+                  className="w-full bg-coffee-900 text-white py-4 rounded-2xl font-black shadow-xl shadow-coffee-200 hover:bg-coffee-800 transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  {isUploadingProof ? (
+                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <>
+                      <Send size={20} />
+                      KONFIRMASI PEMBAYARAN
+                    </>
+                  )}
+                </button>
+              </div>
             </motion.div>
           </div>
         )}
+
+        {/* Flying Items Animation */}
+        <AnimatePresence>
+          {flyingItems.map(item => {
+            // Determine target position
+            let targetX = window.innerWidth - 100;
+            let targetY = 100;
+
+            const mobileCartIcon = document.getElementById('mobile-cart-icon');
+            const mobileFloatingCart = document.getElementById('mobile-floating-cart');
+            const desktopCartIcon = document.getElementById('desktop-cart-icon');
+
+            if (window.innerWidth < 1024) {
+              if (mobileFloatingCart) {
+                const rect = mobileFloatingCart.getBoundingClientRect();
+                targetX = rect.left + rect.width / 2;
+                targetY = rect.top + rect.height / 2;
+              } else if (mobileCartIcon) {
+                const rect = mobileCartIcon.getBoundingClientRect();
+                targetX = rect.left + rect.width / 2;
+                targetY = rect.top + rect.height / 2;
+              }
+            } else if (desktopCartIcon) {
+              const rect = desktopCartIcon.getBoundingClientRect();
+              targetX = rect.left + rect.width / 2;
+              targetY = rect.top + rect.height / 2;
+            }
+
+            return (
+              <motion.div
+                key={item.id}
+                initial={{ 
+                  x: item.x - 20, 
+                  y: item.y - 20, 
+                  scale: 1, 
+                  opacity: 1,
+                  rotate: 0
+                }}
+                animate={{ 
+                  x: targetX - 20, 
+                  y: targetY - 20, 
+                  scale: 0.2, 
+                  opacity: 0.5,
+                  rotate: 360
+                }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.8, ease: "easeInOut" }}
+                className="fixed z-[9999] pointer-events-none"
+              >
+                <div className="w-10 h-10 rounded-full bg-coffee-500 border-2 border-white shadow-lg overflow-hidden flex items-center justify-center">
+                  {item.image ? (
+                    <img src={item.image} alt="" className="w-full h-full object-cover" />
+                  ) : (
+                    <Coffee size={20} className="text-white" />
+                  )}
+                </div>
+              </motion.div>
+            );
+          })}
+        </AnimatePresence>
+
+        {/* Customer Order Status Modal */}
+        <AnimatePresence>
+          {showCustomerOrderStatus && (
+            <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+              <motion.div 
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={() => setShowCustomerOrderStatus(false)}
+                className="absolute inset-0 bg-coffee-950/40 backdrop-blur-md"
+              />
+              <motion.div 
+                initial={{ opacity: 0, scale: 0.9, y: 20 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.9, y: 20 }}
+                className="relative w-full max-w-2xl bg-white rounded-[2.5rem] shadow-2xl overflow-hidden flex flex-col max-h-[80vh]"
+              >
+                <div className="p-8 border-b border-coffee-100 flex items-center justify-between bg-coffee-50/50">
+                  <div className="flex items-center gap-4">
+                    <div className="bg-coffee-900 p-3 rounded-2xl text-white shadow-lg shadow-coffee-200">
+                      <ClipboardList size={24} />
+                    </div>
+                    <div>
+                      <h2 className="text-2xl font-serif font-bold text-coffee-950">Status Pesanan</h2>
+                      <div className="flex gap-4 mt-1">
+                        <button 
+                          onClick={() => setCustomerHistoryTab('active')}
+                          className={cn(
+                            "text-xs font-bold uppercase tracking-wider transition-all",
+                            customerHistoryTab === 'active' ? "text-coffee-900 border-b-2 border-coffee-900 pb-0.5" : "text-coffee-400 hover:text-coffee-600"
+                          )}
+                        >
+                          Aktif
+                        </button>
+                        <button 
+                          onClick={() => {
+                            setCustomerHistoryTab('history');
+                            if (customerOrder.name) fetchCustomerHistory(customerOrder.name);
+                          }}
+                          className={cn(
+                            "text-xs font-bold uppercase tracking-wider transition-all",
+                            customerHistoryTab === 'history' ? "text-coffee-900 border-b-2 border-coffee-900 pb-0.5" : "text-coffee-400 hover:text-coffee-600"
+                          )}
+                        >
+                          Riwayat
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                  <button 
+                    onClick={() => setShowCustomerOrderStatus(false)}
+                    className="p-3 hover:bg-white rounded-2xl transition-all shadow-sm active:scale-90"
+                  >
+                    <X size={24} className="text-coffee-400" />
+                  </button>
+                </div>
+
+                <div className="flex-1 overflow-y-auto p-8 space-y-6 custom-scrollbar">
+                  {customerHistoryTab === 'active' ? (
+                    customerActiveOrders.length === 0 ? (
+                      <div className="text-center py-12 space-y-4">
+                        <div className="w-20 h-20 bg-coffee-50 rounded-full flex items-center justify-center mx-auto text-coffee-200">
+                          <ClipboardList size={40} />
+                        </div>
+                        <p className="text-coffee-500 font-medium">Belum ada pesanan aktif.</p>
+                      </div>
+                    ) : (
+                      <div className="grid gap-4">
+                        {customerActiveOrders.map(order => (
+                          <div key={order.id} className="bg-coffee-50/50 border border-coffee-100 rounded-3xl p-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                            <div className="space-y-2">
+                              <div className="flex items-center gap-3">
+                                <span className="text-lg font-black text-coffee-900">#{order.display_id || order.id.toString().slice(-4)}</span>
+                                <span className={cn(
+                                  "px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest",
+                                  order.status === 'pending' ? "bg-amber-100 text-amber-600" :
+                                  order.status === 'processing' ? "bg-blue-100 text-blue-600" :
+                                  "bg-emerald-100 text-emerald-600"
+                                )}>
+                                  {order.status === 'pending' ? 'Menunggu' : order.status === 'processing' ? 'Diproses' : 'Selesai'}
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-4 text-xs text-coffee-500 font-medium">
+                                <span className="flex items-center gap-1.5"><User size={14} /> {order.customer_name}</span>
+                                <span className="flex items-center gap-1.5"><LayoutDashboard size={14} /> Meja {order.table_number}</span>
+                              </div>
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                              {order.items.map((item: any, idx: number) => (
+                                <span key={idx} className="bg-white border border-coffee-100 px-3 py-1.5 rounded-xl text-[10px] font-bold text-coffee-700 shadow-sm">
+                                  {item.quantity}x {item.menu_name}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )
+                  ) : (
+                    customerOrderHistory.length === 0 ? (
+                      <div className="text-center py-12 space-y-4">
+                        <div className="w-20 h-20 bg-coffee-50 rounded-full flex items-center justify-center mx-auto text-coffee-200">
+                          <History size={40} />
+                        </div>
+                        <p className="text-coffee-500 font-medium">Belum ada riwayat pesanan.</p>
+                      </div>
+                    ) : (
+                      <div className="grid gap-4">
+                        {customerOrderHistory.map(order => (
+                          <div key={order.orderId} className="bg-white border border-coffee-100 rounded-3xl p-6 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-sm">
+                            <div className="space-y-2">
+                              <div className="flex items-center gap-3">
+                                <span className="text-lg font-black text-coffee-900">#{order.display_id || order.orderId.toString().slice(-4)}</span>
+                                <span className={cn(
+                                  "px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest",
+                                  order.status === 'completed' ? "bg-emerald-100 text-emerald-600" : 
+                                  order.status === 'awaiting_confirmation' ? "bg-amber-100 text-amber-600" :
+                                  "bg-coffee-100 text-coffee-600"
+                                )}>
+                                  {order.status === 'completed' ? 'Selesai' : 
+                                   order.status === 'awaiting_confirmation' ? 'Menunggu Konfirmasi' : 
+                                   order.status === 'pending' ? 'Belum Bayar' : 
+                                   order.status}
+                                </span>
+                              </div>
+                              <div className="text-[10px] text-coffee-400 font-bold uppercase tracking-wider">
+                                {formatDate(new Date(order.date), 'dd MMM yyyy, HH:mm')}
+                              </div>
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                              {order.items.map((item: any, idx: number) => (
+                                <span key={idx} className="bg-coffee-50 px-3 py-1.5 rounded-xl text-[10px] font-bold text-coffee-700">
+                                  {item.quantity}x {item.name}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )
+                  )}
+                </div>
+
+                <div className="p-8 bg-coffee-50/50 border-t border-coffee-100">
+                  <button 
+                    onClick={() => setShowCustomerOrderStatus(false)}
+                    className="w-full bg-coffee-900 text-white py-4 rounded-2xl font-black shadow-xl shadow-coffee-200 hover:bg-coffee-800 transition-all active:scale-95"
+                  >
+                    TUTUP
+                  </button>
+                </div>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
       </div>
     </div>
     );
@@ -3701,7 +4112,7 @@ export default function App() {
                               <button
                                 key={menu.id}
                                 disabled={!available}
-                                onClick={() => handleAddToCart(menu)}
+                                onClick={(e) => handleAddToCart(menu, e)}
                                 className={cn(
                                   "glass-card p-0 text-left transition-all group relative overflow-hidden flex flex-col h-full border-2",
                                   available 
@@ -3776,7 +4187,7 @@ export default function App() {
                   {/* Desktop Sidebar Summary - Hidden on Mobile */}
                   <div className="hidden lg:block space-y-6">
                     {/* Desktop Cart Section - Moved to Right Column */}
-                    <div className="space-y-4">
+                    <div id="desktop-cart-icon" className="space-y-4">
                       <h3 className="text-xl font-serif font-bold text-coffee-950">Daftar Orderan</h3>
                       {cart.length === 0 ? (
                         <div className="glass-card p-8 flex flex-col items-center justify-center text-center bg-white/50 border-dashed border-2">
@@ -3804,6 +4215,39 @@ export default function App() {
                                       <div>
                                         <p className="font-bold text-coffee-950 text-xs">{item.menu.name}</p>
                                         <p className="text-[10px] text-coffee-500">{formatIDR(item.menu.price)}</p>
+                                        
+                                        {/* Sugar and Ice Options */}
+                                        {(item.menu.category?.toLowerCase().includes('kopi') || 
+                                          item.menu.category?.toLowerCase().includes('teh') || 
+                                          item.menu.category?.toLowerCase().includes('coffee') || 
+                                          item.menu.category?.toLowerCase().includes('tea') || 
+                                          item.menu.category?.toLowerCase().includes('drink') || 
+                                          item.menu.category?.toLowerCase().includes('minuman')) && (
+                                          <div className="mt-2 flex gap-2">
+                                            <select 
+                                              value={item.sugarLevel || 'Normal'}
+                                              onChange={(e) => handleUpdateCartOptions(item.menu.id, { sugarLevel: e.target.value })}
+                                              className="bg-coffee-50 border border-coffee-100 rounded text-[9px] py-0.5 px-1 focus:outline-none"
+                                              title="Sugar Level"
+                                            >
+                                              <option value="No Sugar">No Sugar</option>
+                                              <option value="Less Sugar">Less Sugar</option>
+                                              <option value="Normal">Normal</option>
+                                              <option value="Extra Sugar">Extra</option>
+                                            </select>
+                                            <select 
+                                              value={item.iceLevel || 'Normal'}
+                                              onChange={(e) => handleUpdateCartOptions(item.menu.id, { iceLevel: e.target.value })}
+                                              className="bg-coffee-50 border border-coffee-100 rounded text-[9px] py-0.5 px-1 focus:outline-none"
+                                              title="Ice Level"
+                                            >
+                                              <option value="No Ice">No Ice</option>
+                                              <option value="Less Ice">Less Ice</option>
+                                              <option value="Normal">Normal</option>
+                                              <option value="Extra Ice">Extra</option>
+                                            </select>
+                                          </div>
+                                        )}
                                       </div>
                                     </td>
                                     <td className="px-4 py-3">
@@ -3945,6 +4389,7 @@ export default function App() {
                   {/* Mobile Floating Cart Button */}
                   {cart.length > 0 && (
                     <motion.button
+                      id="mobile-floating-cart"
                       initial={{ scale: 0, y: 20 }}
                       animate={{ scale: 1, y: 0 }}
                       onClick={() => setShowMobileCart(true)}
@@ -4005,6 +4450,37 @@ export default function App() {
                                   <div className="flex-1">
                                     <h4 className="font-bold text-coffee-950 text-sm">{item.menu.name}</h4>
                                     <p className="text-xs text-coffee-500">{formatIDR(item.menu.price)}</p>
+                                    
+                                    {/* Sugar and Ice Options */}
+                                    {(item.menu.category?.toLowerCase().includes('kopi') || 
+                                      item.menu.category?.toLowerCase().includes('teh') || 
+                                      item.menu.category?.toLowerCase().includes('coffee') || 
+                                      item.menu.category?.toLowerCase().includes('tea') || 
+                                      item.menu.category?.toLowerCase().includes('drink') || 
+                                      item.menu.category?.toLowerCase().includes('minuman')) && (
+                                      <div className="mt-2 flex gap-2">
+                                        <select 
+                                          value={item.sugarLevel || 'Normal'}
+                                          onChange={(e) => handleUpdateCartOptions(item.menu.id, { sugarLevel: e.target.value })}
+                                          className="bg-white border border-slate-200 rounded-lg text-[10px] py-1 px-2 focus:outline-none focus:ring-1 focus:ring-coffee-500"
+                                        >
+                                          <option value="No Sugar">No Sugar</option>
+                                          <option value="Less Sugar">Less Sugar</option>
+                                          <option value="Normal">Normal</option>
+                                          <option value="Extra Sugar">Extra</option>
+                                        </select>
+                                        <select 
+                                          value={item.iceLevel || 'Normal'}
+                                          onChange={(e) => handleUpdateCartOptions(item.menu.id, { iceLevel: e.target.value })}
+                                          className="bg-white border border-slate-200 rounded-lg text-[10px] py-1 px-2 focus:outline-none focus:ring-1 focus:ring-coffee-500"
+                                        >
+                                          <option value="No Ice">No Ice</option>
+                                          <option value="Less Ice">Less Ice</option>
+                                          <option value="Normal">Normal</option>
+                                          <option value="Extra Ice">Extra</option>
+                                        </select>
+                                      </div>
+                                    )}
                                   </div>
                                   <div className="flex items-center gap-3 bg-white p-1 rounded-xl border border-slate-200">
                                     <button 
@@ -4337,7 +4813,7 @@ export default function App() {
                           </div>
                           <div>
                             <p className="text-[10px] font-bold uppercase tracking-widest text-coffee-400">Order ID</p>
-                            <h4 className="font-mono font-bold text-coffee-950">{order.orderId}</h4>
+                            <h4 className="font-mono font-bold text-coffee-950">{order.displayId || order.orderId}</h4>
                           </div>
                         </div>
                           <div className="text-right">
@@ -4347,6 +4823,11 @@ export default function App() {
                               {order.status === 'pending' && (
                                 <span className="inline-block bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider">
                                   Belum Bayar
+                                </span>
+                              )}
+                              {order.status === 'awaiting_confirmation' && (
+                                <span className="inline-block bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider animate-pulse">
+                                  Menunggu Konfirmasi
                                 </span>
                               )}
                               <span className="inline-block bg-coffee-50 text-coffee-600 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider">
@@ -4372,37 +4853,55 @@ export default function App() {
                             <p className="text-xs text-amber-900 italic">"{order.notes}"</p>
                           </div>
                         )}
+                        {order.proofOfPaymentUrl && (
+                          <a 
+                            href={order.proofOfPaymentUrl} 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="flex items-center justify-center gap-2 w-full py-3 bg-emerald-50 text-emerald-700 rounded-2xl border border-emerald-100 text-xs font-black hover:bg-emerald-100 transition-all"
+                          >
+                            <ImageIcon size={16} />
+                            LIHAT BUKTI BAYAR
+                          </a>
+                        )}
                         <div className="flex items-center gap-2 text-[10px] text-coffee-400 font-bold uppercase tracking-wider mb-4">
                           <Clock size={12} />
                           Dipesan pada {formatDate(new Date(order.date), 'HH:mm')}
                         </div>
-                        {order.status === 'pending' ? (
+                        {(order.status === 'pending' || order.status === 'awaiting_confirmation') ? (
                           <div className="flex flex-col gap-2">
-                            <button 
-                              onClick={() => {
-                                // Load order into cart and open payment
-                                fetch(`/api/orders/${order.orderId}`)
-                                  .then(res => res.json())
-                                  .then(data => {
-                                    setCart(data.items);
-                                    setCustomerName(data.customerName || '');
-                                    setTableNumber(data.tableNumber || '');
-                                    setCurrentOrderId(order.orderId);
-                                    setPaymentMethod(data.paymentMethod || 'Tunai');
-                                    setShowPaymentModal(true);
-                                  });
-                              }}
-                              className="w-full bg-coffee-100 text-coffee-700 py-3 rounded-xl font-bold hover:bg-coffee-200 transition-all flex items-center justify-center gap-2"
-                            >
-                              <Edit size={16} />
-                              Edit & Bayar
-                            </button>
+                            {order.status === 'pending' && (
+                              <button 
+                                onClick={() => {
+                                  // Load order into cart and open payment
+                                  fetch(`/api/orders/${order.orderId}`)
+                                    .then(res => res.json())
+                                    .then(data => {
+                                      setCart(data.items);
+                                      setCustomerName(data.customerName || '');
+                                      setTableNumber(data.tableNumber || '');
+                                      setCurrentOrderId(order.orderId);
+                                      setPaymentMethod(data.paymentMethod || 'Tunai');
+                                      setShowPaymentModal(true);
+                                    });
+                                }}
+                                className="w-full bg-coffee-100 text-coffee-700 py-3 rounded-xl font-bold hover:bg-coffee-200 transition-all flex items-center justify-center gap-2"
+                              >
+                                <Edit size={16} />
+                                Edit & Bayar
+                              </button>
+                            )}
                             <button 
                               onClick={() => handleConfirmPayment(order.orderId)}
-                              className="w-full bg-amber-500 text-white py-3 rounded-xl font-bold hover:bg-amber-600 transition-all flex items-center justify-center gap-2 shadow-lg shadow-amber-100"
+                              className={cn(
+                                "w-full py-3 rounded-xl font-bold transition-all flex items-center justify-center gap-2 shadow-lg",
+                                order.status === 'awaiting_confirmation' 
+                                  ? "bg-blue-600 text-white hover:bg-blue-700 shadow-blue-100" 
+                                  : "bg-amber-500 text-white hover:bg-amber-600 shadow-amber-100"
+                              )}
                             >
                               <CheckCircle2 size={18} />
-                              Konfirmasi & Selesaikan
+                              {order.status === 'awaiting_confirmation' ? 'Konfirmasi Pembayaran' : 'Konfirmasi & Selesaikan'}
                             </button>
                           </div>
                         ) : (
@@ -4574,7 +5073,7 @@ export default function App() {
                       )}
                     </div>
                     <button 
-                      onClick={() => handleAddToCart(menu)}
+                      onClick={(e) => handleAddToCart(menu, e)}
                       className="w-full bg-coffee-100 text-coffee-900 py-4 font-bold flex items-center justify-center gap-2 hover:bg-coffee-900 hover:text-white transition-all border-t border-coffee-200"
                     >
                       <Plus size={18} />
@@ -5534,6 +6033,75 @@ export default function App() {
                       </div>
                     </div>
 
+                    {/* Customer Menu Theme */}
+                    <div className="glass-card p-8">
+                      <div className="flex items-center gap-3 mb-8">
+                        <div className="bg-coffee-100 p-3 rounded-2xl text-coffee-900">
+                          <Coffee size={24} />
+                        </div>
+                        <h3 className="text-xl font-serif font-bold">Tema Menu Pelanggan</h3>
+                      </div>
+                      
+                      <div className="space-y-6">
+                        <div>
+                          <label className="block text-xs font-bold uppercase text-coffee-500 mb-2">Background Menu Pelanggan (Gambar)</label>
+                          <div className="flex flex-col gap-4">
+                            {appSettings.customer_bg_image && (
+                              <div className="relative w-full h-32 bg-coffee-50 rounded-2xl border border-coffee-100 flex items-center justify-center overflow-hidden group">
+                                <img src={appSettings.customer_bg_image} alt="Customer BG Preview" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                                <button 
+                                  onClick={() => handleUpdateSettings({ customer_bg_image: '' })}
+                                  className="absolute inset-0 bg-rose-500/80 text-white opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
+                                >
+                                  <Trash2 size={24} />
+                                </button>
+                              </div>
+                            )}
+                            <input 
+                              type="file" 
+                              accept="image/*"
+                              onChange={async (e) => {
+                                const file = e.target.files?.[0];
+                                if (file) {
+                                  const url = await handleFileUpload(file);
+                                  if (url) handleUpdateSettings({ customer_bg_image: url });
+                                }
+                              }}
+                              className="block w-full text-sm text-coffee-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-bold file:bg-coffee-100 file:text-coffee-700 hover:file:bg-coffee-200"
+                            />
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-bold uppercase text-coffee-500 mb-2">Warna Background Menu (Fallback)</label>
+                          <div className="flex gap-3">
+                            <input 
+                              type="color" 
+                              value={appSettings.customer_bg_color}
+                              onChange={e => setAppSettings({...appSettings, customer_bg_color: e.target.value})}
+                              className="w-12 h-12 rounded-lg cursor-pointer border-none"
+                            />
+                            <input 
+                              type="text" 
+                              value={appSettings.customer_bg_color}
+                              onChange={e => setAppSettings({...appSettings, customer_bg_color: e.target.value})}
+                              className="flex-1 bg-coffee-50 border border-coffee-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-coffee-500"
+                            />
+                          </div>
+                        </div>
+
+                        <button 
+                          onClick={() => handleUpdateSettings({ 
+                            customer_bg_color: appSettings.customer_bg_color,
+                            customer_bg_image: appSettings.customer_bg_image
+                          })}
+                          className="w-full bg-coffee-900 text-white py-3 rounded-xl font-bold hover:bg-coffee-800 transition-all"
+                        >
+                          Simpan Tema Menu Pelanggan
+                        </button>
+                      </div>
+                    </div>
+
                     {/* Main App Theme */}
                     <div className="glass-card p-8">
                       <div className="flex items-center gap-3 mb-8">
@@ -5755,6 +6323,27 @@ export default function App() {
                                 }}
                                 className="block w-full text-sm text-coffee-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-bold file:bg-coffee-100 file:text-coffee-700 hover:file:bg-coffee-200"
                               />
+                            </div>
+                          </div>
+                          <div>
+                            <label className="block text-xs font-bold uppercase text-coffee-500 mb-2">{t('loading_animation')}</label>
+                            <div className="flex flex-col gap-4">
+                              {appSettings.payment_loading_gif_url && (
+                                <img src={appSettings.payment_loading_gif_url} alt="Loading GIF Preview" className="h-48 object-contain border border-coffee-100 rounded-lg" referrerPolicy="no-referrer" />
+                              )}
+                              <input 
+                                type="file" 
+                                accept="image/gif"
+                                onChange={async (e) => {
+                                  const file = e.target.files?.[0];
+                                  if (file) {
+                                    const url = await handleFileUpload(file);
+                                    if (url) handleUpdateSettings({ payment_loading_gif_url: url }, true);
+                                  }
+                                }}
+                                className="block w-full text-sm text-coffee-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-bold file:bg-coffee-100 file:text-coffee-700 hover:file:bg-coffee-200"
+                              />
+                              <p className="text-[10px] text-coffee-400 italic">{t('loading_animation_desc')}</p>
                             </div>
                           </div>
                           <div>
@@ -7889,157 +8478,6 @@ export default function App() {
           </motion.div>
         </div>
       )}
-
-      {/* Customer Order Status Modal */}
-      <AnimatePresence>
-        {showCustomerOrderStatus && (
-          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
-            <motion.div 
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setShowCustomerOrderStatus(false)}
-              className="absolute inset-0 bg-coffee-950/40 backdrop-blur-md"
-            />
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.9, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.9, y: 20 }}
-              className="relative w-full max-w-2xl bg-white rounded-[2.5rem] shadow-2xl overflow-hidden flex flex-col max-h-[80vh]"
-            >
-              <div className="p-8 border-b border-coffee-100 flex items-center justify-between bg-coffee-50/50">
-                <div className="flex items-center gap-4">
-                  <div className="bg-coffee-900 p-3 rounded-2xl text-white shadow-lg shadow-coffee-200">
-                    <ClipboardList size={24} />
-                  </div>
-                  <div>
-                    <h2 className="text-2xl font-serif font-bold text-coffee-950">Status Pesanan</h2>
-                    <div className="flex gap-4 mt-1">
-                      <button 
-                        onClick={() => setCustomerHistoryTab('active')}
-                        className={cn(
-                          "text-xs font-bold uppercase tracking-wider transition-all",
-                          customerHistoryTab === 'active' ? "text-coffee-900 border-b-2 border-coffee-900 pb-0.5" : "text-coffee-400 hover:text-coffee-600"
-                        )}
-                      >
-                        Aktif
-                      </button>
-                      <button 
-                        onClick={() => {
-                          setCustomerHistoryTab('history');
-                          if (customerOrder.name) fetchCustomerHistory(customerOrder.name);
-                        }}
-                        className={cn(
-                          "text-xs font-bold uppercase tracking-wider transition-all",
-                          customerHistoryTab === 'history' ? "text-coffee-900 border-b-2 border-coffee-900 pb-0.5" : "text-coffee-400 hover:text-coffee-600"
-                        )}
-                      >
-                        Riwayat
-                      </button>
-                    </div>
-                  </div>
-                </div>
-                <button 
-                  onClick={() => setShowCustomerOrderStatus(false)}
-                  className="p-3 hover:bg-white rounded-2xl transition-all shadow-sm active:scale-90"
-                >
-                  <X size={24} className="text-coffee-400" />
-                </button>
-              </div>
-
-              <div className="flex-1 overflow-y-auto p-8 space-y-6 custom-scrollbar">
-                {customerHistoryTab === 'active' ? (
-                  customerActiveOrders.length === 0 ? (
-                    <div className="text-center py-12 space-y-4">
-                      <div className="w-20 h-20 bg-coffee-50 rounded-full flex items-center justify-center mx-auto text-coffee-200">
-                        <ClipboardList size={40} />
-                      </div>
-                      <p className="text-coffee-500 font-medium">Belum ada pesanan aktif.</p>
-                    </div>
-                  ) : (
-                    <div className="grid gap-4">
-                      {customerActiveOrders.map(order => (
-                        <div key={order.id} className="bg-coffee-50/50 border border-coffee-100 rounded-3xl p-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
-                          <div className="space-y-2">
-                            <div className="flex items-center gap-3">
-                              <span className="text-lg font-black text-coffee-900">#{order.id.toString().slice(-4)}</span>
-                              <span className={cn(
-                                "px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest",
-                                order.status === 'pending' ? "bg-amber-100 text-amber-600" :
-                                order.status === 'processing' ? "bg-blue-100 text-blue-600" :
-                                "bg-emerald-100 text-emerald-600"
-                              )}>
-                                {order.status === 'pending' ? 'Menunggu' : order.status === 'processing' ? 'Diproses' : 'Selesai'}
-                              </span>
-                            </div>
-                            <div className="flex items-center gap-4 text-xs text-coffee-500 font-medium">
-                              <span className="flex items-center gap-1.5"><User size={14} /> {order.customer_name}</span>
-                              <span className="flex items-center gap-1.5"><LayoutDashboard size={14} /> Meja {order.table_number}</span>
-                            </div>
-                          </div>
-                          <div className="flex flex-wrap gap-2">
-                            {order.items.map((item: any, idx: number) => (
-                              <span key={idx} className="bg-white border border-coffee-100 px-3 py-1.5 rounded-xl text-[10px] font-bold text-coffee-700 shadow-sm">
-                                {item.quantity}x {item.menu_name}
-                              </span>
-                            ))}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )
-                ) : (
-                  customerOrderHistory.length === 0 ? (
-                    <div className="text-center py-12 space-y-4">
-                      <div className="w-20 h-20 bg-coffee-50 rounded-full flex items-center justify-center mx-auto text-coffee-200">
-                        <History size={40} />
-                      </div>
-                      <p className="text-coffee-500 font-medium">Belum ada riwayat pesanan.</p>
-                    </div>
-                  ) : (
-                    <div className="grid gap-4">
-                      {customerOrderHistory.map(order => (
-                        <div key={order.orderId} className="bg-white border border-coffee-100 rounded-3xl p-6 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-sm">
-                          <div className="space-y-2">
-                            <div className="flex items-center gap-3">
-                              <span className="text-lg font-black text-coffee-900">#{order.orderId.toString().slice(-4)}</span>
-                              <span className={cn(
-                                "px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest",
-                                order.status === 'completed' ? "bg-emerald-100 text-emerald-600" : "bg-coffee-100 text-coffee-600"
-                              )}>
-                                {order.status === 'completed' ? 'Selesai' : order.status}
-                              </span>
-                            </div>
-                            <div className="text-[10px] text-coffee-400 font-bold uppercase tracking-wider">
-                              {formatDate(new Date(order.date), 'dd MMM yyyy, HH:mm')}
-                            </div>
-                          </div>
-                          <div className="flex flex-wrap gap-2">
-                            {order.items.map((item: any, idx: number) => (
-                              <span key={idx} className="bg-coffee-50 px-3 py-1.5 rounded-xl text-[10px] font-bold text-coffee-700">
-                                {item.quantity}x {item.name}
-                              </span>
-                            ))}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )
-                )}
-              </div>
-
-              <div className="p-8 bg-coffee-50/50 border-t border-coffee-100">
-                <button 
-                  onClick={() => setShowCustomerOrderStatus(false)}
-                  className="w-full bg-coffee-900 text-white py-4 rounded-2xl font-black shadow-xl shadow-coffee-200 hover:bg-coffee-800 transition-all active:scale-95"
-                >
-                  TUTUP
-                </button>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
 
       {/* Hidden Print-only Receipt (Optimized for Thermal Printer) */}
       <div className="hidden print-section font-mono text-[12px] leading-tight text-black">

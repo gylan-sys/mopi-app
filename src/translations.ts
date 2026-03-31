@@ -142,6 +142,8 @@ export const translations = {
     save_settings: "Simpan Pengaturan",
     reset_order_id: "Reset ID Order",
     reset_order_id_desc: "Fitur ini akan mereset nomor antrian/ID Order kembali ke 01.",
+    loading_animation: "Animasi Loading (GIF)",
+    loading_animation_desc: "Animasi ini akan muncul sebelum barcode QRIS ditampilkan.",
     
     // Shortcuts
     keyboard_shortcuts: "Shortcut Keyboard",
@@ -311,6 +313,8 @@ export const translations = {
     save_settings: "Save Settings",
     reset_order_id: "Reset Order ID",
     reset_order_id_desc: "This feature will reset the queue number/Order ID back to 01.",
+    loading_animation: "Loading Animation (GIF)",
+    loading_animation_desc: "This animation will appear before the QRIS barcode is displayed.",
     
     // Shortcuts
     keyboard_shortcuts: "Keyboard Shortcuts",

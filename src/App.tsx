@@ -21,6 +21,7 @@ import {
   User,
   Lock,
   Check,
+  Copy,
   ArrowRight,
   Printer,
   CreditCard,
@@ -1866,55 +1867,91 @@ export default function App() {
             </div>
 
             {/* Menu Grid */}
-            <div className="grid grid-cols-1 min-[400px]:grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 md:gap-6">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 sm:gap-6">
               {filteredMenus.map(menu => (
                 <motion.div 
                   key={menu.id}
                   layout
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className="bg-white rounded-[1.5rem] overflow-hidden border border-coffee-100 shadow-sm hover:shadow-xl transition-all group flex flex-row min-[400px]:flex-col"
+                  whileHover={{ y: -4 }}
+                  className="bg-white rounded-[2rem] overflow-hidden border border-coffee-100/50 shadow-sm hover:shadow-2xl hover:shadow-coffee-200/50 transition-all group flex flex-col"
                 >
-                  <div className="relative w-24 min-[400px]:w-full aspect-square overflow-hidden bg-coffee-50 shrink-0">
+                  <div className="relative aspect-[4/5] overflow-hidden bg-coffee-50">
                     {menu.image_url ? (
                       <img 
                         src={menu.image_url} 
                         alt={menu.name} 
-                        className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" 
+                        className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" 
                         referrerPolicy="no-referrer"
                       />
                     ) : (
-                      <div className="w-full h-full flex items-center justify-center text-coffee-200">
-                        <Coffee size={32} className="min-[400px]:hidden" />
-                        <Coffee size={48} className="hidden min-[400px]:block" />
+                      <div className="w-full h-full flex items-center justify-center text-coffee-200 bg-gradient-to-br from-coffee-50 to-white">
+                        <Coffee size={48} className="opacity-20" />
                       </div>
                     )}
-                    <div className="absolute top-1.5 right-1.5 min-[400px]:top-2 min-[400px]:right-2">
-                      <span className="bg-white/90 backdrop-blur-sm px-1.5 py-0.5 min-[400px]:px-2 min-[400px]:py-1 rounded-full text-[7px] min-[400px]:text-[8px] font-bold uppercase tracking-widest text-coffee-900 shadow-sm">
+                    
+                    {/* Category Badge */}
+                    <div className="absolute top-3 left-3">
+                      <span className="bg-white/80 backdrop-blur-md px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-[0.15em] text-coffee-900 shadow-sm border border-white/50">
                         {menu.category}
                       </span>
                     </div>
+
+                    {/* Quick Add Overlay */}
+                    <div className="absolute inset-0 bg-coffee-950/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                      <button 
+                        onClick={(e) => handleAddToCart(menu, e)}
+                        className="bg-white text-coffee-900 p-4 rounded-full shadow-2xl transform translate-y-4 group-hover:translate-y-0 transition-all duration-300 hover:bg-coffee-900 hover:text-white"
+                      >
+                        <Plus size={24} />
+                      </button>
+                    </div>
                   </div>
-                  <div className="p-3 min-[400px]:p-4 flex flex-col flex-1 min-w-0">
-                    <div className="mb-2">
-                      <h3 className="text-sm min-[400px]:text-base font-bold text-coffee-950 mb-0.5 group-hover:text-coffee-600 transition-colors line-clamp-1">{menu.name}</h3>
-                      <div className="flex items-center gap-2">
-                        {menu.size && <span className="text-[9px] min-[400px]:text-[10px] font-bold text-coffee-600 bg-coffee-100 px-1.5 py-0.5 rounded uppercase tracking-wider">{menu.size}</span>}
+
+                  <div className="p-5 sm:p-6 flex flex-col flex-1">
+                    <div className="mb-4">
+                      <div className="flex items-start justify-between gap-2 mb-2">
+                        <h3 className="text-base sm:text-xl font-serif font-bold text-coffee-950 leading-tight group-hover:text-coffee-700 transition-colors line-clamp-2">
+                          {menu.name}
+                        </h3>
+                      </div>
+                      
+                      <div className="flex flex-wrap items-center gap-2 mb-3">
+                        {menu.size && (
+                          <span className="text-[9px] font-black text-coffee-600 bg-coffee-50 px-2.5 py-1 rounded-full uppercase tracking-widest border border-coffee-100">
+                            {menu.size}
+                          </span>
+                        )}
                         {menu.ingredients && menu.ingredients.length > 0 && (
-                          <span className="text-[9px] min-[400px]:text-[10px] font-medium text-coffee-400 italic">
+                          <span className="text-[10px] font-bold text-coffee-400 flex items-center gap-1.5">
+                            <div className="w-1 h-1 rounded-full bg-coffee-200" />
                             {menu.ingredients.length} Bahan
                           </span>
                         )}
                       </div>
-                      <p className="text-[10px] min-[400px]:text-xs text-coffee-500 line-clamp-2 mt-1 leading-tight">{menu.description || 'Tidak ada deskripsi'}</p>
+                      
+                      <p className="text-xs text-coffee-500 line-clamp-3 leading-relaxed italic opacity-80">
+                        {menu.description || 'Dibuat dengan cinta dan biji kopi pilihan terbaik untuk Anda.'}
+                      </p>
                     </div>
-                    <div className="mt-auto flex items-center justify-between pt-2 border-t border-coffee-50">
-                      <span className="text-sm min-[400px]:text-base font-bold text-coffee-900">{formatIDR(menu.price)}</span>
+
+                    <div className="mt-auto pt-5 border-t border-coffee-100/50 flex items-end justify-between gap-2">
+                      <div className="flex flex-col">
+                        <span className="text-[9px] uppercase tracking-[0.2em] text-coffee-400 font-black mb-1">Harga Menu</span>
+                        <div className="flex items-baseline gap-0.5">
+                          <span className="text-xs font-bold text-coffee-900">Rp</span>
+                          <span className="text-xl sm:text-2xl font-black text-coffee-900 tracking-tighter leading-none">
+                            {menu.price.toLocaleString('id-ID')}
+                          </span>
+                        </div>
+                      </div>
+                      
                       <button 
                         onClick={(e) => handleAddToCart(menu, e)}
-                        className="bg-coffee-900 text-white p-2 min-[400px]:p-2.5 rounded-xl hover:bg-coffee-800 transition-all shadow-md shadow-coffee-100 active:scale-95"
+                        className="sm:hidden bg-coffee-900 text-white w-12 h-12 rounded-2xl hover:bg-coffee-800 transition-all shadow-xl shadow-coffee-200 active:scale-90 flex items-center justify-center shrink-0"
                       >
-                        <Plus size={16} />
+                        <Plus size={24} />
                       </button>
                     </div>
                   </div>
@@ -2337,49 +2374,90 @@ export default function App() {
 
         {/* QRIS Modal */}
         {showQRISModal && (
-          <div className="fixed inset-0 bg-coffee-950/60 backdrop-blur-md flex items-center justify-center z-[100] p-4">
+          <div className="fixed inset-0 bg-coffee-950/80 backdrop-blur-xl flex items-center justify-center z-[100] p-0 sm:p-4 overflow-y-auto">
             <motion.div 
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              className="bg-white rounded-[2.5rem] p-10 w-full max-w-md shadow-2xl text-center"
+              initial={{ y: 100, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              className="bg-white rounded-t-[2.5rem] sm:rounded-[2.5rem] p-6 sm:p-10 w-full max-w-md shadow-2xl text-center relative min-h-screen sm:min-h-0 flex flex-col justify-center"
             >
-              <div className="w-20 h-20 bg-coffee-100 text-coffee-600 rounded-full flex items-center justify-center mx-auto mb-6">
-                <QrCode size={40} />
+              <button 
+                onClick={() => setShowQRISModal(false)}
+                className="absolute top-6 right-6 p-2 bg-coffee-50 text-coffee-400 rounded-full hover:bg-coffee-100 transition-all"
+              >
+                <X size={24} />
+              </button>
+
+              <div className="w-16 h-16 bg-coffee-50 text-coffee-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                <QrCode size={32} />
               </div>
-              <h2 className="text-2xl font-serif font-bold text-coffee-950 mb-2">Pembayaran QRIS</h2>
-              <div className="bg-coffee-50 px-4 py-2 rounded-full inline-block mb-4">
-                <span className="text-coffee-900 font-bold text-lg">{formatIDR(qrisAmount)}</span>
-              </div>
-              <p className="text-coffee-500 text-sm mb-8">Scan kode di bawah untuk melakukan pembayaran</p>
               
-              <div className="bg-white p-6 rounded-[2rem] border-2 border-coffee-100 shadow-xl space-y-4 mb-8 min-h-[300px] flex items-center justify-center">
+              <div className="mb-2">
+                <span className="bg-emerald-100 text-emerald-700 text-[10px] font-bold uppercase tracking-widest px-3 py-1 rounded-full">
+                  Scan & Pay
+                </span>
+              </div>
+              
+              <h2 className="text-2xl font-serif font-bold text-coffee-950 mb-1">Pembayaran QRIS</h2>
+              
+              <div className="flex items-center justify-center gap-2 mb-4">
+                <div className="bg-coffee-50 px-6 py-3 rounded-2xl flex items-center gap-3 border border-coffee-100">
+                  <span className="text-coffee-950 font-black text-2xl tracking-tight">{formatIDR(qrisAmount)}</span>
+                  <button 
+                    onClick={() => {
+                      navigator.clipboard.writeText(qrisAmount.toString());
+                      toast.success('Nominal disalin!');
+                    }}
+                    className="p-2 bg-white text-coffee-400 rounded-lg hover:text-coffee-600 transition-all shadow-sm"
+                  >
+                    <Copy size={16} />
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-center gap-2 text-coffee-400 text-xs mb-6">
+                <Clock size={14} />
+                <span>Selesaikan dalam <span className="font-bold text-coffee-600">15:00</span></span>
+              </div>
+              
+              <div className="bg-white p-4 sm:p-6 rounded-[2.5rem] border-2 border-coffee-50 shadow-2xl shadow-coffee-100/50 space-y-4 mb-6 relative group">
                 {isQRISLoading ? (
-                  <div className="flex flex-col items-center gap-4">
-                    <img 
-                      src={appSettings.payment_loading_gif_url || 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExNHJqZ3R6Z3R6Z3R6Z3R6Z3R6Z3R6Z3R6Z3R6Z3R6Z3R6JmVwPXYxX2ludGVybmFsX2dpZl9ieV9pZCZjdD1n/3o7bu3XilJ5BOiSGic/giphy.gif'} 
-                      alt="Loading..." 
-                      className="w-48 h-48 object-contain"
-                      referrerPolicy="no-referrer"
-                    />
-                    <p className="text-coffee-400 font-medium animate-pulse text-xs tracking-widest uppercase">Menyiapkan Barcode...</p>
+                  <div className="flex flex-col items-center justify-center py-12 gap-4">
+                    <div className="w-12 h-12 border-4 border-coffee-100 border-t-coffee-600 rounded-full animate-spin" />
+                    <p className="text-coffee-400 font-medium animate-pulse text-[10px] tracking-widest uppercase">Menyiapkan Barcode...</p>
                   </div>
                 ) : (
-                  <motion.img 
-                    initial={{ opacity: 0, scale: 0.8 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    src={appSettings.payment_qris_url || 'https://picsum.photos/seed/qris/500/500'} 
-                    alt="QRIS" 
-                    className="w-64 h-64 mx-auto object-contain rounded-2xl shadow-sm"
-                    referrerPolicy="no-referrer"
-                  />
+                  <>
+                    <div className="relative">
+                      <motion.img 
+                        initial={{ opacity: 0, scale: 0.9 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        src={appSettings.payment_qris_url || 'https://picsum.photos/seed/qris/500/500'} 
+                        alt="QRIS" 
+                        className="w-full aspect-square mx-auto object-contain rounded-3xl"
+                        referrerPolicy="no-referrer"
+                      />
+                      <div className="absolute inset-0 border-[12px] border-white rounded-3xl pointer-events-none" />
+                    </div>
+                    
+                    <button 
+                      onClick={() => window.open(appSettings.payment_qris_url || 'https://picsum.photos/seed/qris/500/500', '_blank')}
+                      className="flex items-center justify-center gap-2 w-full py-3 bg-coffee-50 text-coffee-600 rounded-2xl text-xs font-bold hover:bg-coffee-100 transition-all"
+                    >
+                      <Download size={16} />
+                      Simpan QR ke Galeri
+                    </button>
+                  </>
                 )}
               </div>
 
-              <p className="text-xs text-coffee-500 mb-8 leading-relaxed italic">
-                {appSettings.payment_instructions || 'Silakan tunjukkan bukti bayar ke kasir setelah melakukan scan.'}
-              </p>
+              <div className="bg-amber-50 p-4 rounded-2xl border border-amber-100 mb-6">
+                <p className="text-[10px] text-amber-800 leading-relaxed font-medium flex items-start gap-2 text-left">
+                  <Info size={14} className="shrink-0 mt-0.5" />
+                  {appSettings.payment_instructions || 'Silakan scan QRIS di atas menggunakan aplikasi m-banking atau e-wallet Anda. Setelah berhasil, upload bukti bayar di bawah.'}
+                </p>
+              </div>
 
-              <div className="space-y-4">
+              <div className="space-y-3">
                 <div className="relative">
                   <input 
                     type="file" 
@@ -2391,18 +2469,18 @@ export default function App() {
                   <label 
                     htmlFor="proof-upload"
                     className={cn(
-                      "w-full flex items-center justify-center gap-2 py-4 rounded-2xl border-2 border-dashed transition-all cursor-pointer",
-                      proofFile ? "bg-emerald-50 border-emerald-500 text-emerald-600" : "bg-coffee-50 border-coffee-200 text-coffee-400 hover:border-coffee-400"
+                      "w-full flex items-center justify-center gap-3 py-4 rounded-2xl border-2 border-dashed transition-all cursor-pointer font-bold text-sm",
+                      proofFile ? "bg-emerald-50 border-emerald-500 text-emerald-700" : "bg-coffee-50 border-coffee-200 text-coffee-500 hover:border-coffee-400"
                     )}
                   >
                     {proofFile ? (
                       <>
-                        <Check size={20} />
-                        Bukti Terpilih: {proofFile.name.slice(0, 15)}...
+                        <Check size={18} className="text-emerald-600" />
+                        Bukti: {proofFile.name.slice(0, 15)}...
                       </>
                     ) : (
                       <>
-                        <Upload size={20} />
+                        <Upload size={18} />
                         Upload Bukti Pembayaran
                       </>
                     )}
@@ -2440,14 +2518,14 @@ export default function App() {
                       setIsUploadingProof(false);
                     }
                   }}
-                  className="w-full bg-coffee-900 text-white py-4 rounded-2xl font-black shadow-xl shadow-coffee-200 hover:bg-coffee-800 transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2"
+                  className="w-full bg-coffee-900 text-white py-4 rounded-2xl font-black shadow-xl shadow-coffee-200 hover:bg-coffee-800 transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2 text-sm uppercase tracking-widest"
                 >
                   {isUploadingProof ? (
                     <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
                   ) : (
                     <>
-                      <Send size={20} />
-                      KONFIRMASI PEMBAYARAN
+                      <Send size={18} />
+                      Konfirmasi Pembayaran
                     </>
                   )}
                 </button>

@@ -2025,7 +2025,7 @@ export default function App() {
                         <span className="text-[7px] sm:text-[9px] uppercase tracking-[0.15em] text-coffee-400 font-black mb-0.5">Harga</span>
                         <div className="flex items-baseline gap-0.5 text-coffee-900">
                           <span className="text-[10px] sm:text-sm font-bold">Rp</span>
-                          <span className="text-base sm:text-xl font-black tracking-tighter leading-none truncate">
+                          <span className="text-base sm:text-xl font-black tracking-tighter leading-none">
                             {menu.price.toLocaleString('id-ID')}
                           </span>
                         </div>

@@ -921,6 +921,50 @@ export default function App() {
     }
   };
 
+  const handleResetDatabase = async () => {
+    if (!confirm(appSettings.language === 'id' ? 'PERINGATAN: Ini akan menghapus SEMUA data (transaksi, menu, inventory, dll). Lanjutkan?' : 'WARNING: This will delete ALL data (transactions, menu, inventory, etc). Continue?')) return;
+    
+    try {
+      const res = await fetch('/api/admin/reset-database', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+      const data = await res.json();
+      if (res.ok) {
+        toast.success(data.message);
+        fetchData();
+      } else {
+        toast.error(data.error);
+      }
+    } catch (error) {
+      toast.error('Gagal mereset database');
+    }
+  };
+
+  const handleLoadDemoData = async () => {
+    if (!confirm(appSettings.language === 'id' ? 'Ini akan menghapus data saat ini dan memuat data demo. Lanjutkan?' : 'This will clear current data and load demo data. Continue?')) return;
+    
+    try {
+      const res = await fetch('/api/admin/load-demo-data', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+      const data = await res.json();
+      if (res.ok) {
+        toast.success(data.message);
+        fetchData();
+      } else {
+        toast.error(data.error);
+      }
+    } catch (error) {
+      toast.error('Gagal memuat data demo');
+    }
+  };
+
   const handleExportAllReports = async () => {
     try {
       const res = await fetch('/api/reports/export-all');
@@ -1867,22 +1911,22 @@ export default function App() {
             </div>
 
             {/* Menu Grid */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 sm:gap-6">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2.5 sm:gap-6">
               {filteredMenus.map(menu => (
                 <motion.div 
                   key={menu.id}
                   layout
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
-                  whileHover={{ y: -4 }}
-                  className="bg-white rounded-[2rem] overflow-hidden border border-coffee-100/50 shadow-sm hover:shadow-2xl hover:shadow-coffee-200/50 transition-all group flex flex-col"
+                  whileHover={{ y: -6 }}
+                  className="bg-white rounded-[2rem] overflow-hidden border border-coffee-100/50 shadow-sm hover:shadow-2xl hover:shadow-coffee-200/40 transition-all group flex flex-col"
                 >
                   <div className="relative aspect-[4/5] overflow-hidden bg-coffee-50">
                     {menu.image_url ? (
                       <img 
                         src={menu.image_url} 
                         alt={menu.name} 
-                        className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" 
+                        className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-110" 
                         referrerPolicy="no-referrer"
                       />
                     ) : (
@@ -1893,13 +1937,13 @@ export default function App() {
                     
                     {/* Category Badge */}
                     <div className="absolute top-3 left-3">
-                      <span className="bg-white/80 backdrop-blur-md px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-[0.15em] text-coffee-900 shadow-sm border border-white/50">
+                      <span className="bg-white/90 backdrop-blur-md px-2.5 py-1 rounded-full text-[8px] sm:text-[9px] font-black uppercase tracking-[0.1em] text-coffee-900 shadow-sm border border-white/50">
                         {menu.category}
                       </span>
                     </div>
 
-                    {/* Quick Add Overlay */}
-                    <div className="absolute inset-0 bg-coffee-950/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                    {/* Quick Add Overlay (Desktop) */}
+                    <div className="absolute inset-0 bg-coffee-950/20 opacity-0 group-hover:opacity-100 transition-opacity hidden sm:flex items-center justify-center">
                       <button 
                         onClick={(e) => handleAddToCart(menu, e)}
                         className="bg-white text-coffee-900 p-4 rounded-full shadow-2xl transform translate-y-4 group-hover:translate-y-0 transition-all duration-300 hover:bg-coffee-900 hover:text-white"
@@ -1909,39 +1953,37 @@ export default function App() {
                     </div>
                   </div>
 
-                  <div className="p-5 sm:p-6 flex flex-col flex-1">
-                    <div className="mb-4">
-                      <div className="flex items-start justify-between gap-2 mb-2">
-                        <h3 className="text-base sm:text-xl font-serif font-bold text-coffee-950 leading-tight group-hover:text-coffee-700 transition-colors line-clamp-2">
-                          {menu.name}
-                        </h3>
-                      </div>
+                  <div className="p-4 sm:p-6 flex flex-col flex-1">
+                    <div className="mb-3 sm:mb-4">
+                      <h3 className="text-sm sm:text-xl font-serif font-bold text-coffee-950 leading-tight group-hover:text-coffee-700 transition-colors line-clamp-1 sm:line-clamp-2 mb-1.5">
+                        {menu.name}
+                      </h3>
                       
-                      <div className="flex flex-wrap items-center gap-2 mb-3">
+                      <div className="flex flex-wrap items-center gap-1.5 mb-2.5">
                         {menu.size && (
-                          <span className="text-[9px] font-black text-coffee-600 bg-coffee-50 px-2.5 py-1 rounded-full uppercase tracking-widest border border-coffee-100">
+                          <span className="text-[7px] sm:text-[9px] font-black text-coffee-600 bg-coffee-50 px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full uppercase tracking-widest border border-coffee-100">
                             {menu.size}
                           </span>
                         )}
                         {menu.ingredients && menu.ingredients.length > 0 && (
-                          <span className="text-[10px] font-bold text-coffee-400 flex items-center gap-1.5">
+                          <span className="text-[8px] sm:text-[10px] font-bold text-coffee-400 flex items-center gap-1">
                             <div className="w-1 h-1 rounded-full bg-coffee-200" />
                             {menu.ingredients.length} Bahan
                           </span>
                         )}
                       </div>
                       
-                      <p className="text-xs text-coffee-500 line-clamp-3 leading-relaxed italic opacity-80">
-                        {menu.description || 'Dibuat dengan cinta dan biji kopi pilihan terbaik untuk Anda.'}
+                      <p className="text-[9px] sm:text-xs text-coffee-500 line-clamp-2 leading-relaxed italic opacity-70">
+                        {menu.description || 'Dibuat dengan cinta dan biji kopi pilihan terbaik.'}
                       </p>
                     </div>
 
-                    <div className="mt-auto pt-5 border-t border-coffee-100/50 flex items-end justify-between gap-2">
-                      <div className="flex flex-col">
-                        <span className="text-[9px] uppercase tracking-[0.2em] text-coffee-400 font-black mb-1">Harga Menu</span>
-                        <div className="flex items-baseline gap-0.5">
-                          <span className="text-xs font-bold text-coffee-900">Rp</span>
-                          <span className="text-xl sm:text-2xl font-black text-coffee-900 tracking-tighter leading-none">
+                    <div className="mt-auto pt-3 sm:pt-5 border-t border-coffee-50 flex items-center justify-between gap-1.5">
+                      <div className="flex flex-col min-w-0">
+                        <span className="text-[7px] sm:text-[9px] uppercase tracking-[0.15em] text-coffee-400 font-black mb-0.5">Harga</span>
+                        <div className="flex items-baseline gap-0.5 text-coffee-900">
+                          <span className="text-[9px] sm:text-xs font-bold">Rp</span>
+                          <span className="text-sm sm:text-2xl font-black tracking-tighter leading-none truncate">
                             {menu.price.toLocaleString('id-ID')}
                           </span>
                         </div>
@@ -1949,9 +1991,9 @@ export default function App() {
                       
                       <button 
                         onClick={(e) => handleAddToCart(menu, e)}
-                        className="sm:hidden bg-coffee-900 text-white w-12 h-12 rounded-2xl hover:bg-coffee-800 transition-all shadow-xl shadow-coffee-200 active:scale-90 flex items-center justify-center shrink-0"
+                        className="sm:hidden bg-coffee-900 text-white w-9 h-9 rounded-xl hover:bg-coffee-800 transition-all shadow-lg shadow-coffee-100 active:scale-90 flex items-center justify-center shrink-0"
                       >
-                        <Plus size={24} />
+                        <Plus size={18} />
                       </button>
                     </div>
                   </div>
@@ -6043,6 +6085,39 @@ export default function App() {
                             )}
                           </div>
                         </div>
+                      </div>
+                    </div>
+
+                    {/* Database Management */}
+                    <div className="glass-card p-8 border-rose-100 bg-rose-50/30 lg:col-span-2">
+                      <div className="flex items-center gap-3 mb-6">
+                        <div className="bg-rose-100 p-3 rounded-2xl text-rose-600">
+                          <Trash2 size={24} />
+                        </div>
+                        <h3 className="text-xl font-serif font-bold text-rose-950">
+                          {appSettings.language === 'id' ? 'Manajemen Database' : 'Database Management'}
+                        </h3>
+                      </div>
+                      <p className="text-sm text-rose-600 mb-8 font-medium">
+                        {appSettings.language === 'id' 
+                          ? 'Gunakan fitur ini untuk mereset database atau memuat data demo untuk uji coba.' 
+                          : 'Use these features to reset the database or load demo data for testing.'}
+                      </p>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <button 
+                          onClick={handleResetDatabase}
+                          className="bg-rose-600 text-white py-4 rounded-2xl font-bold hover:bg-rose-700 transition-all flex items-center justify-center gap-3 shadow-lg shadow-rose-200"
+                        >
+                          <Trash2 size={20} />
+                          {appSettings.language === 'id' ? 'Reset Database (Hapus Semua)' : 'Reset Database (Clear All)'}
+                        </button>
+                        <button 
+                          onClick={handleLoadDemoData}
+                          className="bg-coffee-900 text-white py-4 rounded-2xl font-bold hover:bg-coffee-800 transition-all flex items-center justify-center gap-3 shadow-lg shadow-coffee-200"
+                        >
+                          <Database size={20} />
+                          {appSettings.language === 'id' ? 'Muat Data Demo' : 'Load Demo Data'}
+                        </button>
                       </div>
                     </div>
                   </div>

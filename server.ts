@@ -729,6 +729,136 @@ async function startServer() {
     res.json({ success: true });
   });
 
+  // --- Database Management APIs ---
+
+  app.post("/api/admin/reset-database", authenticateToken, isAdmin, (req, res) => {
+    try {
+      const transaction = db.transaction(() => {
+        db.prepare("DELETE FROM transactions").run();
+        db.prepare("DELETE FROM menu_ingredients").run();
+        db.prepare("DELETE FROM menus").run();
+        db.prepare("DELETE FROM inventory").run();
+        db.prepare("DELETE FROM customers").run();
+        db.prepare("DELETE FROM advertisements").run();
+        db.prepare("DELETE FROM promos").run();
+        db.prepare("UPDATE settings SET value = '1' WHERE key = 'order_counter'").run();
+      });
+      transaction();
+      io.emit("ORDER_UPDATED");
+      res.json({ success: true, message: "Database berhasil direset ke kondisi awal." });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/admin/load-demo-data", authenticateToken, isAdmin, (req, res) => {
+    try {
+      const transaction = db.transaction(() => {
+        // 1. Clear existing data first to avoid conflicts
+        db.prepare("DELETE FROM transactions").run();
+        db.prepare("DELETE FROM menu_ingredients").run();
+        db.prepare("DELETE FROM menus").run();
+        db.prepare("DELETE FROM inventory").run();
+        db.prepare("DELETE FROM customers").run();
+        db.prepare("DELETE FROM promos").run();
+
+        // 2. Add Inventory
+        const insertInv = db.prepare("INSERT INTO inventory (name, quantity, unit, category, unit_price, min_stock) VALUES (?, ?, ?, ?, ?, ?)");
+        const invItems = [
+          ['Biji Kopi Arabika', 5000, 'gram', 'Bahan', 250, 500],
+          ['Susu Fresh Milk', 10000, 'ml', 'Bahan', 20, 1000],
+          ['Gula Cair', 2000, 'ml', 'Bahan', 15, 200],
+          ['Cup 12oz', 100, 'pcs', 'Kemasan', 500, 20],
+          ['Sedotan Bambu', 200, 'pcs', 'Kemasan', 200, 50]
+        ];
+        const invIds: any = {};
+        for (const item of invItems) {
+          const result = insertInv.run(...item);
+          invIds[item[0] as string] = result.lastInsertRowid;
+        }
+
+        // 3. Add Menus
+        const insertMenu = db.prepare("INSERT INTO menus (name, price, size, category, image_url, description) VALUES (?, ?, ?, ?, ?, ?)");
+        const insertIng = db.prepare("INSERT INTO menu_ingredients (menu_id, inventory_id, quantity) VALUES (?, ?, ?)");
+        
+        const demoMenus = [
+          {
+            name: 'Espresso Single',
+            price: 15000,
+            size: 'S',
+            category: 'Kopi',
+            image_url: 'https://images.unsplash.com/photo-1510707577719-ae7c14805e3a?w=400',
+            description: 'Ekstraksi kopi murni dengan crema tebal.',
+            ingredients: [
+              { name: 'Biji Kopi Arabika', qty: 18 },
+              { name: 'Cup 12oz', qty: 1 }
+            ]
+          },
+          {
+            name: 'Caffe Latte',
+            price: 25000,
+            size: 'M',
+            category: 'Kopi',
+            image_url: 'https://images.unsplash.com/photo-1570968915860-54d5c301fa9f?w=400',
+            description: 'Perpaduan espresso dengan susu steam yang lembut.',
+            ingredients: [
+              { name: 'Biji Kopi Arabika', qty: 18 },
+              { name: 'Susu Fresh Milk', qty: 200 },
+              { name: 'Cup 12oz', qty: 1 }
+            ]
+          },
+          {
+            name: 'Cappuccino',
+            price: 25000,
+            size: 'M',
+            category: 'Kopi',
+            image_url: 'https://images.unsplash.com/photo-1534778101976-62847782c213?w=400',
+            description: 'Espresso dengan foam susu yang tebal dan creamy.',
+            ingredients: [
+              { name: 'Biji Kopi Arabika', qty: 18 },
+              { name: 'Susu Fresh Milk', qty: 150 },
+              { name: 'Cup 12oz', qty: 1 }
+            ]
+          },
+          {
+            name: 'Americano Ice',
+            price: 20000,
+            size: 'L',
+            category: 'Kopi',
+            image_url: 'https://images.unsplash.com/photo-1551033406-611cf9a28f67?w=400',
+            description: 'Espresso dengan tambahan air dan es batu segar.',
+            ingredients: [
+              { name: 'Biji Kopi Arabika', qty: 18 },
+              { name: 'Cup 12oz', qty: 1 },
+              { name: 'Sedotan Bambu', qty: 1 }
+            ]
+          }
+        ];
+
+        for (const m of demoMenus) {
+          const result = insertMenu.run(m.name, m.price, m.size, m.category, m.image_url, m.description);
+          const menuId = result.lastInsertRowid;
+          for (const ing of m.ingredients) {
+            insertIng.run(menuId, invIds[ing.name], ing.qty);
+          }
+        }
+
+        // 4. Add a Promo
+        db.prepare("INSERT INTO promos (code, discount_type, discount_value, target_type) VALUES (?, ?, ?, ?)").run('DEMO2026', 'percentage', 10, 'all');
+
+        // 5. Add a Customer
+        db.prepare("INSERT INTO customers (name, phone, email, points) VALUES (?, ?, ?, ?)").run('Budi Demo', '08123456789', 'budi@example.com', 100);
+
+        db.prepare("UPDATE settings SET value = '1' WHERE key = 'order_counter'").run();
+      });
+      transaction();
+      io.emit("ORDER_UPDATED");
+      res.json({ success: true, message: "Data demo berhasil dimuat." });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   // Helper to check low stock and notify
   function checkLowStockAndNotify(inventoryId: number) {
     const item = db.prepare("SELECT * FROM inventory WHERE id = ?").get(inventoryId) as any;

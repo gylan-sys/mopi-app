@@ -72,7 +72,8 @@ import {
   Sun,
   Moon,
   FileDown,
-  QrCode
+  QrCode,
+  History
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -456,6 +457,7 @@ export default function App() {
   const [customerOrder, setCustomerOrder] = useState({ name: '', table: '', paymentMethod: 'Cash', notes: '' });
   const [lastCustomerOrder, setLastCustomerOrder] = useState<any>(null);
   const [showCustomerOrderSuccess, setShowCustomerOrderSuccess] = useState(false);
+  const [showSuccessAnimation, setShowSuccessAnimation] = useState(false);
   const [showQRISModal, setShowQRISModal] = useState(false);
   const [qrisAmount, setQrisAmount] = useState(0);
   const [isQRISLoading, setIsQRISLoading] = useState(false);
@@ -1202,7 +1204,11 @@ export default function App() {
             setIsQRISLoading(false);
           }, 3000); // 3 seconds loading
         } else {
-          setShowCustomerOrderSuccess(true);
+          setShowSuccessAnimation(true);
+          setTimeout(() => {
+            setShowSuccessAnimation(false);
+            setShowCustomerOrderSuccess(true);
+          }, 2000);
         }
         
         setCart([]);
@@ -2370,15 +2376,66 @@ export default function App() {
           </div>
         )}
 
+        {/* Success Animation Overlay */}
+        <AnimatePresence>
+          {showSuccessAnimation && (
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-coffee-950 flex flex-col items-center justify-center z-[200] text-white"
+            >
+              <motion.div
+                initial={{ scale: 0, rotate: -45 }}
+                animate={{ 
+                  scale: [0, 1.2, 1],
+                  rotate: [ -45, 0 ],
+                }}
+                transition={{ duration: 0.8, ease: "backOut" }}
+                className="w-48 h-48 bg-white text-coffee-950 rounded-full flex items-center justify-center mb-8 shadow-[0_0_80px_rgba(255,255,255,0.3)]"
+              >
+                <Check size={96} strokeWidth={4} />
+              </motion.div>
+              
+              <motion.div
+                initial={{ y: 20, opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                transition={{ delay: 0.4 }}
+                className="text-center"
+              >
+                <h2 className="text-5xl font-serif font-black mb-2 tracking-tight">BERHASIL!</h2>
+                <p className="text-coffee-200 font-bold uppercase tracking-[0.3em] text-sm">Pesanan Anda Sedang Diproses</p>
+              </motion.div>
+
+              {/* Decorative particles */}
+              {[...Array(12)].map((_, i) => (
+                <motion.div
+                  key={i}
+                  initial={{ scale: 0, x: 0, y: 0 }}
+                  animate={{ 
+                    scale: [0, 1, 0],
+                    x: (Math.random() - 0.5) * 400,
+                    y: (Math.random() - 0.5) * 400,
+                  }}
+                  transition={{ duration: 1.5, delay: 0.2, repeat: Infinity, repeatDelay: 0.5 }}
+                  className="absolute w-3 h-3 bg-white/40 rounded-full"
+                />
+              ))}
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         {/* Success Modal */}
         {showCustomerOrderSuccess && (
           <div className="fixed inset-0 bg-coffee-950/60 backdrop-blur-md flex items-center justify-center z-[100] p-4">
             <motion.div 
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              className="bg-white rounded-[2.5rem] p-10 w-full max-w-md shadow-2xl text-center"
+              initial={{ scale: 0.8, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              transition={{ type: "spring", damping: 25, stiffness: 300 }}
+              className="bg-white rounded-[2.5rem] p-10 w-full max-w-md shadow-2xl text-center relative overflow-hidden"
             >
-              <div className="w-24 h-24 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-8">
+              <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-emerald-400 to-teal-500" />
+              <div className="w-24 h-24 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-8 shadow-inner">
                 <CheckCircle2 size={48} />
               </div>
               <h2 className="text-3xl font-serif font-bold text-coffee-950 mb-4">Pesanan Terkirim!</h2>
@@ -2673,7 +2730,8 @@ export default function App() {
                         <button 
                           onClick={() => {
                             setCustomerHistoryTab('history');
-                            if (customerOrder.name) fetchCustomerHistory(customerOrder.name);
+                            const nameToFetch = customerOrder.name || lastCustomerOrder?.name;
+                            if (nameToFetch) fetchCustomerHistory(nameToFetch);
                           }}
                           className={cn(
                             "text-xs font-bold uppercase tracking-wider transition-all",
@@ -2724,7 +2782,7 @@ export default function App() {
                               </div>
                             </div>
                             <div className="flex flex-wrap gap-2">
-                              {order.items.map((item: any, idx: number) => (
+                              {order.items && order.items.map((item: any, idx: number) => (
                                 <span key={idx} className="bg-white border border-coffee-100 px-3 py-1.5 rounded-xl text-[10px] font-bold text-coffee-700 shadow-sm">
                                   {item.quantity}x {item.menu_name}
                                 </span>
@@ -2748,7 +2806,7 @@ export default function App() {
                           <div key={order.orderId} className="bg-white border border-coffee-100 rounded-3xl p-6 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-sm">
                             <div className="space-y-2">
                               <div className="flex items-center gap-3">
-                                <span className="text-lg font-black text-coffee-900">#{order.display_id || order.orderId.toString().slice(-4)}</span>
+                                <span className="text-lg font-black text-coffee-900">#{order.display_id || (order.orderId ? order.orderId.toString().slice(-4) : '????')}</span>
                                 <span className={cn(
                                   "px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest",
                                   order.status === 'completed' ? "bg-emerald-100 text-emerald-600" : 
@@ -2762,11 +2820,11 @@ export default function App() {
                                 </span>
                               </div>
                               <div className="text-[10px] text-coffee-400 font-bold uppercase tracking-wider">
-                                {formatDate(new Date(order.date), 'dd MMM yyyy, HH:mm')}
+                                {order.date ? formatDate(new Date(order.date), 'dd MMM yyyy, HH:mm') : '-'}
                               </div>
                             </div>
                             <div className="flex flex-wrap gap-2">
-                              {order.items.map((item: any, idx: number) => (
+                              {order.items && order.items.map((item: any, idx: number) => (
                                 <span key={idx} className="bg-coffee-50 px-3 py-1.5 rounded-xl text-[10px] font-bold text-coffee-700">
                                   {item.quantity}x {item.name}
                                 </span>

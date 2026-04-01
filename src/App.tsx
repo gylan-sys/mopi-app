@@ -2013,12 +2013,6 @@ export default function App() {
                             {menu.size}
                           </span>
                         )}
-                        {menu.ingredients && menu.ingredients.length > 0 && (
-                          <span className="text-[8px] sm:text-[10px] font-bold text-coffee-400 flex items-center gap-1">
-                            <div className="w-1 h-1 rounded-full bg-coffee-200" />
-                            {menu.ingredients.length} Bahan
-                          </span>
-                        )}
                       </div>
                       
                       <p className="text-[9px] sm:text-xs text-coffee-500 line-clamp-2 leading-relaxed italic opacity-70">
@@ -2030,8 +2024,8 @@ export default function App() {
                       <div className="flex flex-col min-w-0">
                         <span className="text-[7px] sm:text-[9px] uppercase tracking-[0.15em] text-coffee-400 font-black mb-0.5">Harga</span>
                         <div className="flex items-baseline gap-0.5 text-coffee-900">
-                          <span className="text-[9px] sm:text-xs font-bold">Rp</span>
-                          <span className="text-sm sm:text-2xl font-black tracking-tighter leading-none truncate">
+                          <span className="text-[10px] sm:text-sm font-bold">Rp</span>
+                          <span className="text-base sm:text-xl font-black tracking-tighter leading-none truncate">
                             {menu.price.toLocaleString('id-ID')}
                           </span>
                         </div>

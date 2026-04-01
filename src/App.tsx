@@ -10,6 +10,7 @@ import {
   Trash2, 
   Edit,
   AlertCircle,
+  AlertTriangle,
   Coffee,
   TrendingUp,
   Wallet,
@@ -293,6 +294,10 @@ export default function App() {
   const [customerName, setCustomerName] = useState('');
   const [posNotes, setPosNotes] = useState('');
   const [cashReceived, setCashReceived] = useState<number | string>('');
+  const [txPage, setTxPage] = useState(1);
+  const [invPage, setInvPage] = useState(1);
+  const [menuPage, setMenuPage] = useState(1);
+  const ITEMS_PER_PAGE = 12;
   const [appSettings, setAppSettings] = useState({
     app_name: 'MOPI',
     app_icon: 'Coffee',
@@ -470,6 +475,7 @@ export default function App() {
   const [customerActiveOrders, setCustomerActiveOrders] = useState<any[]>([]);
   const [proofFile, setProofFile] = useState<File | null>(null);
   const [isUploadingProof, setIsUploadingProof] = useState(false);
+  const [confirmDialog, setConfirmDialog] = useState<{ show: boolean, title: string, message: string, onConfirm: () => void, confirmText?: string, cancelText?: string, isDestructive?: boolean } | null>(null);
 
   // Forms
   const [showInvModal, setShowInvModal] = useState(false);
@@ -478,7 +484,7 @@ export default function App() {
   const [editingMenuId, setEditingMenuId] = useState<number | null>(null);
   const [editingInvId, setEditingInvId] = useState<number | null>(null);
   
-  const [newInv, setNewInv] = useState({ name: '', quantity: 0, unit: 'pcs', min_stock: 0, unit_price: 0, category: 'Biji Kopi', type: 'Bahan' as 'Bahan' | 'Barang' });
+  const [newInv, setNewInv] = useState({ name: '', quantity: 0, unit: 'pcs', min_stock: 0, unit_price: 0, category: 'Biji Kopi', type: 'Bahan' as 'Bahan' | 'Barang', expiration_date: '' });
   const [invCategoryFilter, setInvCategoryFilter] = useState<string>('Semua');
   const [newTx, setNewTx] = useState({ type: 'income' as 'income' | 'expense', category: 'Sales', amount: 0, description: '' });
   const [newMenu, setNewMenu] = useState({ 
@@ -847,28 +853,42 @@ export default function App() {
   };
 
   const handleResetOrderId = async () => {
-    if (!confirm(t('reset_order_id_desc'))) return;
-    try {
-      const res = await fetch('/api/settings/reset-order-id', { method: 'POST' });
-      if (res.ok) {
-        toast.success(t('reset_order_id') + ' ' + (appSettings.language === 'id' ? 'berhasil direset' : 'successfully reset'));
+    setConfirmDialog({
+      show: true,
+      title: t('reset_order_id'),
+      message: t('reset_order_id_desc'),
+      onConfirm: async () => {
+        try {
+          const res = await fetch('/api/settings/reset-order-id', { method: 'POST' });
+          if (res.ok) {
+            toast.success(t('reset_order_id') + ' ' + (appSettings.language === 'id' ? 'berhasil direset' : 'successfully reset'));
+          }
+        } catch (error) {
+          toast.error(t('reset_order_id') + ' ' + (appSettings.language === 'id' ? 'gagal direset' : 'failed to reset'));
+        }
+        setConfirmDialog(null);
       }
-    } catch (error) {
-      toast.error(t('reset_order_id') + ' ' + (appSettings.language === 'id' ? 'gagal direset' : 'failed to reset'));
-    }
+    });
   };
 
   const handleResetTheme = async () => {
-    if (!confirm('Apakah Anda yakin ingin mereset tema ke pengaturan awal?')) return;
-    try {
-      const res = await fetch('/api/settings/reset-theme', { method: 'POST' });
-      if (res.ok) {
-        await fetchData();
-        toast.success('Tema berhasil direset ke pengaturan awal');
+    setConfirmDialog({
+      show: true,
+      title: 'Reset Tema',
+      message: 'Apakah Anda yakin ingin mereset tema ke pengaturan awal?',
+      onConfirm: async () => {
+        try {
+          const res = await fetch('/api/settings/reset-theme', { method: 'POST' });
+          if (res.ok) {
+            await fetchData();
+            toast.success('Tema berhasil direset ke pengaturan awal');
+          }
+        } catch (error) {
+          toast.error('Gagal mereset tema');
+        }
+        setConfirmDialog(null);
       }
-    } catch (error) {
-      toast.error('Gagal mereset tema');
-    }
+    });
   };
 
   const handleBackup = async (type: 'database' | 'settings') => {
@@ -891,80 +911,101 @@ export default function App() {
   };
 
   const handleRestore = async (type: 'database' | 'settings', file: File) => {
-    if (!confirm(t('confirm_restore') + file.name + '? ' + t('restore_warning'))) return;
-    
-    const formData = new FormData();
-    formData.append('file', file);
-    
-    try {
-      const res = await fetch(`/api/backup/restore-${type}`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        },
-        body: formData
-      });
-      const data = await res.json();
-      if (res.ok) {
-        toast.success(data.message);
-        if (type === 'database') setDbRestoreFile(null);
-        if (type === 'settings') setSettingsRestoreFile(null);
+    setConfirmDialog({
+      show: true,
+      title: t('confirm_restore'),
+      message: t('confirm_restore') + file.name + '? ' + t('restore_warning'),
+      isDestructive: true,
+      onConfirm: async () => {
+        const formData = new FormData();
+        formData.append('file', file);
         
-        if (type === 'settings') {
-          window.location.reload();
-        } else {
-          fetchData();
+        try {
+          const res = await fetch(`/api/backup/restore-${type}`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${localStorage.getItem('token')}`
+            },
+            body: formData
+          });
+          const data = await res.json();
+          if (res.ok) {
+            toast.success(data.message);
+            if (type === 'database') setDbRestoreFile(null);
+            if (type === 'settings') setSettingsRestoreFile(null);
+            
+            if (type === 'settings') {
+              window.location.reload();
+            } else {
+              fetchData();
+            }
+          } else {
+            toast.error(data.error);
+          }
+        } catch (error) {
+          toast.error('Gagal merestore data');
         }
-      } else {
-        toast.error(data.error);
+        setConfirmDialog(null);
       }
-    } catch (error) {
-      toast.error('Gagal merestore data');
-    }
+    });
   };
 
   const handleResetDatabase = async () => {
-    if (!confirm(appSettings.language === 'id' ? 'PERINGATAN: Ini akan menghapus SEMUA data (transaksi, menu, inventory, dll). Lanjutkan?' : 'WARNING: This will delete ALL data (transactions, menu, inventory, etc). Continue?')) return;
-    
-    try {
-      const res = await fetch('/api/admin/reset-database', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+    setConfirmDialog({
+      show: true,
+      title: appSettings.language === 'id' ? 'Reset Database' : 'Reset Database',
+      message: appSettings.language === 'id' ? 'PERINGATAN: Ini akan menghapus SEMUA data (transaksi, menu, inventory, dll). Lanjutkan?' : 'WARNING: This will delete ALL data (transactions, menu, inventory, etc). Continue?',
+      isDestructive: true,
+      onConfirm: async () => {
+        try {
+          const res = await fetch('/api/admin/reset-database', {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${localStorage.getItem('token')}`
+            }
+          });
+          const data = await res.json();
+          if (res.ok) {
+            toast.success(data.message);
+            fetchData();
+          } else {
+            toast.error(data.error);
+          }
+        } catch (error) {
+          toast.error('Gagal mereset database');
         }
-      });
-      const data = await res.json();
-      if (res.ok) {
-        toast.success(data.message);
-        fetchData();
-      } else {
-        toast.error(data.error);
+        setConfirmDialog(null);
       }
-    } catch (error) {
-      toast.error('Gagal mereset database');
-    }
+    });
   };
 
   const handleLoadDemoData = async () => {
-    if (!confirm(appSettings.language === 'id' ? 'Ini akan menghapus data saat ini dan memuat data demo. Lanjutkan?' : 'This will clear current data and load demo data. Continue?')) return;
-    
-    try {
-      const res = await fetch('/api/admin/load-demo-data', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+    setConfirmDialog({
+      show: true,
+      title: appSettings.language === 'id' ? 'Muat Data Demo' : 'Load Demo Data',
+      message: appSettings.language === 'id' ? 'Ini akan menghapus data saat ini dan memuat data demo. Lanjutkan?' : 'This will clear current data and load demo data. Continue?',
+      isDestructive: true,
+      onConfirm: async () => {
+        try {
+          const res = await fetch('/api/admin/load-demo-data', {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${localStorage.getItem('token')}`
+            }
+          });
+          const data = await res.json();
+          if (res.ok) {
+            toast.success(data.message);
+            fetchData();
+          } else {
+            toast.error(data.error);
+          }
+        } catch (error) {
+          toast.error('Gagal memuat data demo');
         }
-      });
-      const data = await res.json();
-      if (res.ok) {
-        toast.success(data.message);
-        fetchData();
-      } else {
-        toast.error(data.error);
+        setConfirmDialog(null);
       }
-    } catch (error) {
-      toast.error('Gagal memuat data demo');
-    }
+    });
   };
 
   const handleExportAllReports = async () => {
@@ -1297,7 +1338,7 @@ export default function App() {
     });
     setShowInvModal(false);
     setEditingInvId(null);
-    setNewInv({ name: '', quantity: 0, unit: 'pcs', min_stock: 0, unit_price: 0, category: 'Bahan', type: 'Bahan' });
+    setNewInv({ name: '', quantity: 0, unit: 'pcs', min_stock: 0, unit_price: 0, category: 'Bahan', type: 'Bahan', expiration_date: '' });
     setCalcPurchase({ qty: 1, content: 0, totalPrice: 0 });
     setShowCalculator(false);
     fetchData();
@@ -1312,7 +1353,8 @@ export default function App() {
       min_stock: item.min_stock,
       unit_price: item.unit_price,
       category: item.category || 'Bahan',
-      type: item.type || 'Bahan'
+      type: item.type || 'Bahan',
+      expiration_date: item.expiration_date || ''
     });
     setCalcPurchase({ qty: 1, content: 0, totalPrice: 0 });
     setShowCalculator(false);
@@ -4970,7 +5012,7 @@ export default function App() {
                   <button 
                     onClick={() => {
                       setEditingInvId(null);
-                      setNewInv({ name: '', quantity: 0, unit: 'pcs', min_stock: 0, unit_price: 0, category: 'Bahan', type: (invCategoryFilter === 'Bahan' || invCategoryFilter === 'Barang') ? invCategoryFilter : 'Bahan' });
+                      setNewInv({ name: '', quantity: 0, unit: 'pcs', min_stock: 0, unit_price: 0, category: 'Bahan', type: (invCategoryFilter === 'Bahan' || invCategoryFilter === 'Barang') ? invCategoryFilter : 'Bahan', expiration_date: '' });
                       setCalcPurchase({ qty: 1, content: 0, totalPrice: 0 });
                       setShowCalculator(false);
                       setShowInvModal(true);
@@ -4984,92 +5026,118 @@ export default function App() {
               </header>
 
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {inventory
-                  .filter(item => invCategoryFilter === 'Semua' || item.type === invCategoryFilter || item.category === invCategoryFilter)
-                  .map(item => (
-                  <div key={item.id} className="glass-card p-6 group hover:border-coffee-400 transition-colors relative">
-                    <div className="absolute top-4 right-16 flex gap-2">
-                      <span className={cn(
-                        "text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded-md",
-                        item.type === 'Barang' ? "bg-blue-100 text-blue-600" : "bg-amber-100 text-amber-600"
-                      )}>
-                        {item.type === 'Bahan' ? t('raw_material') : t('goods')}
-                      </span>
-                      <span className={cn(
-                        "text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded-md bg-coffee-100 text-coffee-600"
-                      )}>
-                        {item.category || 'Bahan'}
-                      </span>
-                    </div>
-                    <div className="flex justify-between items-start mb-4">
-                      <div className="bg-coffee-100 p-3 rounded-2xl group-hover:bg-coffee-200 transition-colors">
-                        <Package className="text-coffee-600" />
-                      </div>
-                      <div className="flex gap-2">
-                        <button 
-                          onClick={() => handleEditInventory(item)}
-                          className="text-coffee-300 hover:text-coffee-600 transition-colors"
-                        >
-                          <Edit size={18} />
-                        </button>
-                        <button 
-                          onClick={() => handleDeleteInventory(item.id)}
-                          className="text-coffee-300 hover:text-rose-500 transition-colors"
-                        >
-                          <Trash2 size={18} />
-                        </button>
-                      </div>
-                    </div>
-                    <h4 className="text-xl font-bold text-coffee-950 mb-1">{item.name}</h4>
-                    <div className="flex items-baseline gap-2 mb-1">
-                      <span className="text-3xl font-bold text-coffee-900">{item.quantity}</span>
-                      <span className="text-coffee-500 font-medium">{item.unit}</span>
-                    </div>
-                    <p className="text-xs font-bold text-coffee-400 mb-4">
-                      Harga: {formatIDR(item.unit_price)} / {item.unit}
-                    </p>
-                    
-                    <div className="space-y-4">
-                      <div className="w-full bg-coffee-100 h-2 rounded-full overflow-hidden">
-                        <div 
-                          className={cn(
-                            "h-full transition-all duration-500",
-                            item.quantity <= item.min_stock ? "bg-amber-500" : "bg-coffee-600"
+                {(() => {
+                  const filtered = inventory.filter(item => invCategoryFilter === 'Semua' || item.type === invCategoryFilter || item.category === invCategoryFilter);
+                  const visible = filtered.slice(0, invPage * ITEMS_PER_PAGE);
+                  return (
+                    <>
+                      {visible.map(item => (
+                        <div key={item.id} className="glass-card p-6 group hover:border-coffee-400 transition-colors relative">
+                          <div className="absolute top-4 right-16 flex gap-2">
+                            <span className={cn(
+                              "text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded-md",
+                              item.type === 'Barang' ? "bg-blue-100 text-blue-600" : "bg-amber-100 text-amber-600"
+                            )}>
+                              {item.type === 'Bahan' ? t('raw_material') : t('goods')}
+                            </span>
+                            <span className={cn(
+                              "text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded-md bg-coffee-100 text-coffee-600"
+                            )}>
+                              {item.category || 'Bahan'}
+                            </span>
+                          </div>
+                          <div className="flex justify-between items-start mb-4">
+                            <div className="bg-coffee-100 p-3 rounded-2xl group-hover:bg-coffee-200 transition-colors">
+                              <Package className="text-coffee-600" />
+                            </div>
+                            <div className="flex gap-2">
+                              <button 
+                                onClick={() => handleEditInventory(item)}
+                                className="text-coffee-300 hover:text-coffee-600 transition-colors"
+                              >
+                                <Edit size={18} />
+                              </button>
+                              <button 
+                                onClick={() => handleDeleteInventory(item.id)}
+                                className="text-coffee-300 hover:text-rose-500 transition-colors"
+                              >
+                                <Trash2 size={18} />
+                              </button>
+                            </div>
+                          </div>
+                          <h4 className="text-xl font-bold text-coffee-950 mb-1">{item.name}</h4>
+                          <div className="flex items-baseline gap-2 mb-1">
+                            <span className="text-3xl font-bold text-coffee-900">{item.quantity}</span>
+                            <span className="text-coffee-500 font-medium">{item.unit}</span>
+                          </div>
+                          <p className="text-xs font-bold text-coffee-400 mb-1">
+                            Harga: {formatIDR(item.unit_price)} / {item.unit}
+                          </p>
+                          {item.expiration_date && (
+                            <p className={cn(
+                              "text-[10px] font-bold uppercase tracking-wider mb-4 flex items-center gap-1",
+                              new Date(item.expiration_date) < new Date() ? "text-rose-500" : "text-coffee-400"
+                            )}>
+                              <Calendar size={10} /> Exp: {formatDate(new Date(item.expiration_date), 'dd MMM yyyy')}
+                              {new Date(item.expiration_date) < new Date() && " (Expired)"}
+                            </p>
                           )}
-                          style={{ width: `${Math.min(100, (item.quantity / (item.min_stock * 3)) * 100)}%` }}
-                        />
-                      </div>
-                      <div className="flex justify-between items-center text-xs font-bold uppercase tracking-wider">
-                        <span className="text-coffee-400">Min: {item.min_stock} {item.unit}</span>
-                        <div className="flex gap-2">
+                          {!item.expiration_date && <div className="mb-4" />}
+                          
+                          <div className="space-y-4">
+                            <div className="w-full bg-coffee-100 h-2 rounded-full overflow-hidden">
+                              <div 
+                                className={cn(
+                                  "h-full transition-all duration-500",
+                                  item.quantity <= item.min_stock ? "bg-amber-500" : "bg-coffee-600"
+                                )}
+                                style={{ width: `${Math.min(100, (item.quantity / (item.min_stock * 3)) * 100)}%` }}
+                              />
+                            </div>
+                            <div className="flex justify-between items-center text-xs font-bold uppercase tracking-wider">
+                              <span className="text-coffee-400">Min: {item.min_stock} {item.unit}</span>
+                              <div className="flex gap-2">
+                                <button 
+                                  onClick={() => setConfirmUpdate({ id: item.id, name: item.name, currentQty: item.quantity, delta: -1 })}
+                                  className="w-8 h-8 flex items-center justify-center rounded-lg border border-coffee-200 text-coffee-600 hover:bg-coffee-50"
+                                >
+                                  -
+                                </button>
+                                <button 
+                                  onClick={() => setConfirmUpdate({ id: item.id, name: item.name, currentQty: item.quantity, delta: 1 })}
+                                  className="w-8 h-8 flex items-center justify-center rounded-lg border border-coffee-200 text-coffee-600 hover:bg-coffee-50"
+                                >
+                                  +
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+
                           <button 
-                            onClick={() => setConfirmUpdate({ id: item.id, name: item.name, currentQty: item.quantity, delta: -1 })}
-                            className="w-8 h-8 flex items-center justify-center rounded-lg border border-coffee-200 text-coffee-600 hover:bg-coffee-50"
+                            onClick={() => {
+                              setPurchaseData({ id: item.id, name: item.name, unit: item.unit, quantity: 1, totalPrice: item.unit_price });
+                              setShowPurchaseModal(true);
+                            }}
+                            className="w-full mt-4 bg-emerald-50 text-emerald-600 py-2 rounded-xl font-bold hover:bg-emerald-100 transition-all flex items-center justify-center gap-2"
                           >
-                            -
-                          </button>
-                          <button 
-                            onClick={() => setConfirmUpdate({ id: item.id, name: item.name, currentQty: item.quantity, delta: 1 })}
-                            className="w-8 h-8 flex items-center justify-center rounded-lg border border-coffee-200 text-coffee-600 hover:bg-coffee-50"
-                          >
-                            +
+                            <Plus size={16} />
+                            Beli Stok
                           </button>
                         </div>
-                      </div>
-                    </div>
-
-                    <button 
-                      onClick={() => {
-                        setPurchaseData({ id: item.id, name: item.name, unit: item.unit, quantity: 1, totalPrice: item.unit_price });
-                        setShowPurchaseModal(true);
-                      }}
-                      className="w-full mt-4 bg-emerald-50 text-emerald-600 py-2 rounded-xl font-bold hover:bg-emerald-100 transition-all flex items-center justify-center gap-2"
-                    >
-                      <Plus size={16} />
-                      Beli Stok
-                    </button>
-                  </div>
-                ))}
+                      ))}
+                      {filtered.length > visible.length && (
+                        <div className="col-span-full py-8 text-center">
+                          <button 
+                            onClick={() => setInvPage(prev => prev + 1)}
+                            className="bg-coffee-50 text-coffee-600 px-8 py-3 rounded-2xl font-bold hover:bg-coffee-100 transition-all border border-coffee-100"
+                          >
+                            Muat Lebih Banyak
+                          </button>
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
               </div>
             </motion.div>
           )}
@@ -5261,139 +5329,156 @@ export default function App() {
               </header>
 
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {menus.map(menu => (
-                  <div key={menu.id} className="glass-card overflow-hidden group hover:border-coffee-400 transition-colors flex flex-col">
-                    <div className="relative h-48 bg-coffee-50 overflow-hidden">
-                      {menu.image_url ? (
-                        <img 
-                          src={menu.image_url} 
-                          alt={menu.name} 
-                          className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
-                          referrerPolicy="no-referrer"
-                        />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center text-coffee-200">
-                          <Coffee size={48} />
-                        </div>
-                      )}
-                      <div className="absolute top-4 left-4 flex flex-col gap-2">
-                        <span className="bg-white/90 backdrop-blur-sm text-coffee-900 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest shadow-sm border border-coffee-100 w-fit">
-                          {menu.category || 'Menu'}
-                        </span>
-                        {menu.type === 'Consignment' && (
-                          <span className="bg-amber-500/90 backdrop-blur-sm text-white px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest shadow-sm border border-amber-400 w-fit">
-                            {t('consignment')}
-                          </span>
-                        )}
-                      </div>
-                      <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button 
-                          onClick={() => handleEditMenu(menu)}
-                          className="bg-white text-coffee-600 p-2 rounded-xl shadow-lg hover:bg-coffee-900 hover:text-white transition-all"
-                        >
-                          <Edit size={16} />
-                        </button>
-                        <button 
-                          onClick={() => handleDeleteMenu(menu.id)}
-                          className="bg-white text-rose-600 p-2 rounded-xl shadow-lg hover:bg-rose-600 hover:text-white transition-all"
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                      </div>
-                    </div>
-                    <div className="p-6 flex-1 flex flex-col">
-                      <div className="flex justify-between items-start mb-2">
-                        <h4 className="text-xl font-bold text-coffee-950">{menu.name}</h4>
-                        {menu.size && (
-                          <span className="bg-coffee-50 text-coffee-600 px-2 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider border border-coffee-100">
-                            {menu.size}
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-sm text-coffee-500 mb-4 line-clamp-2 flex-1">{menu.description}</p>
-                      <div className="flex justify-between items-end mb-6">
-                        <p className="text-2xl font-bold text-coffee-900">{formatIDR(menu.price)}</p>
-                        <div className="text-right">
-                          {menu.type === 'Consignment' ? (
-                            <>
-                              <p className="text-[10px] font-bold text-coffee-400 uppercase tracking-widest">
-                                {t('supplier_price')}: {formatIDR(menu.supplier_price || 0)}
-                              </p>
-                              <p className={cn(
-                                "text-xs font-bold uppercase tracking-widest",
-                                (menu.price - (menu.supplier_price || 0)) > 0 ? "text-emerald-600" : "text-rose-600"
-                              )}>
-                                {t('profit_share')}: {formatIDR(menu.price - (menu.supplier_price || 0))}
-                                {menu.price > 0 && (
-                                  <span className="text-[10px] ml-1 opacity-70">
-                                    ({Math.round(((menu.price - (menu.supplier_price || 0)) / menu.price) * 100)}%)
-                                  </span>
+                {(() => {
+                  const visible = menus.slice(0, menuPage * ITEMS_PER_PAGE);
+                  return (
+                    <>
+                      {visible.map(menu => (
+                        <div key={menu.id} className="glass-card overflow-hidden group hover:border-coffee-400 transition-colors flex flex-col">
+                          <div className="relative h-48 bg-coffee-50 overflow-hidden">
+                            {menu.image_url ? (
+                              <img 
+                                src={menu.image_url} 
+                                alt={menu.name} 
+                                className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+                                referrerPolicy="no-referrer"
+                              />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center text-coffee-200">
+                                <Coffee size={48} />
+                              </div>
+                            )}
+                            <div className="absolute top-4 left-4 flex flex-col gap-2">
+                              <span className="bg-white/90 backdrop-blur-sm text-coffee-900 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest shadow-sm border border-coffee-100 w-fit">
+                                {menu.category || 'Menu'}
+                              </span>
+                              {menu.type === 'Consignment' && (
+                                <span className="bg-amber-500/90 backdrop-blur-sm text-white px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest shadow-sm border border-amber-400 w-fit">
+                                  {t('consignment')}
+                                </span>
+                              )}
+                            </div>
+                            <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <button 
+                                onClick={() => handleEditMenu(menu)}
+                                className="bg-white text-coffee-600 p-2 rounded-xl shadow-lg hover:bg-coffee-900 hover:text-white transition-all"
+                              >
+                                <Edit size={16} />
+                              </button>
+                              <button 
+                                onClick={() => handleDeleteMenu(menu.id)}
+                                className="bg-white text-rose-600 p-2 rounded-xl shadow-lg hover:bg-rose-600 hover:text-white transition-all"
+                              >
+                                <Trash2 size={16} />
+                              </button>
+                            </div>
+                          </div>
+                          <div className="p-6 flex-1 flex flex-col">
+                            <div className="flex justify-between items-start mb-2">
+                              <h4 className="text-xl font-bold text-coffee-950">{menu.name}</h4>
+                              {menu.size && (
+                                <span className="bg-coffee-50 text-coffee-600 px-2 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider border border-coffee-100">
+                                  {menu.size}
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-sm text-coffee-500 mb-4 line-clamp-2 flex-1">{menu.description}</p>
+                            <div className="flex justify-between items-end mb-6">
+                              <p className="text-2xl font-bold text-coffee-900">{formatIDR(menu.price)}</p>
+                              <div className="text-right">
+                                {menu.type === 'Consignment' ? (
+                                  <>
+                                    <p className="text-[10px] font-bold text-coffee-400 uppercase tracking-widest">
+                                      {t('supplier_price')}: {formatIDR(menu.supplier_price || 0)}
+                                    </p>
+                                    <p className={cn(
+                                      "text-xs font-bold uppercase tracking-widest",
+                                      (menu.price - (menu.supplier_price || 0)) > 0 ? "text-emerald-600" : "text-rose-600"
+                                    )}>
+                                      {t('profit_share')}: {formatIDR(menu.price - (menu.supplier_price || 0))}
+                                      {menu.price > 0 && (
+                                        <span className="text-[10px] ml-1 opacity-70">
+                                          ({Math.round(((menu.price - (menu.supplier_price || 0)) / menu.price) * 100)}%)
+                                        </span>
+                                      )}
+                                    </p>
+                                  </>
+                                ) : (
+                                  <>
+                                    <p className="text-[10px] font-bold text-coffee-400 uppercase tracking-widest">
+                                      Modal: {formatIDR(menu.ingredients.reduce((sum, ing) => sum + (ing.unit_price || 0) * ing.quantity, 0))}
+                                    </p>
+                                    <p className={cn(
+                                      "text-xs font-bold uppercase tracking-widest",
+                                      (menu.price - menu.ingredients.reduce((sum, ing) => sum + (ing.unit_price || 0) * ing.quantity, 0)) > 0 ? "text-emerald-600" : "text-rose-600"
+                                    )}>
+                                      Margin: {formatIDR(menu.price - menu.ingredients.reduce((sum, ing) => sum + (ing.unit_price || 0) * ing.quantity, 0))}
+                                      {menu.price > 0 && (
+                                        <span className="text-[10px] ml-1 opacity-70">
+                                          ({Math.round(((menu.price - menu.ingredients.reduce((sum, ing) => sum + (ing.unit_price || 0) * ing.quantity, 0)) / menu.price) * 100)}%)
+                                        </span>
+                                      )}
+                                    </p>
+                                  </>
                                 )}
-                              </p>
-                            </>
-                          ) : (
-                            <>
-                              <p className="text-[10px] font-bold text-coffee-400 uppercase tracking-widest">
-                                Modal: {formatIDR(menu.ingredients.reduce((sum, ing) => sum + (ing.unit_price || 0) * ing.quantity, 0))}
-                              </p>
-                              <p className={cn(
-                                "text-xs font-bold uppercase tracking-widest",
-                                (menu.price - menu.ingredients.reduce((sum, ing) => sum + (ing.unit_price || 0) * ing.quantity, 0)) > 0 ? "text-emerald-600" : "text-rose-600"
-                              )}>
-                                Margin: {formatIDR(menu.price - menu.ingredients.reduce((sum, ing) => sum + (ing.unit_price || 0) * ing.quantity, 0))}
-                                {menu.price > 0 && (
-                                  <span className="text-[10px] ml-1 opacity-70">
-                                    ({Math.round(((menu.price - menu.ingredients.reduce((sum, ing) => sum + (ing.unit_price || 0) * ing.quantity, 0)) / menu.price) * 100)}%)
-                                  </span>
-                                )}
-                              </p>
-                            </>
-                          )}
-                        </div>
-                      </div>
-                      
-                      {menu.type === 'Internal' ? (
-                        <div className="space-y-3 mb-6">
-                          <p className="text-xs font-bold uppercase tracking-widest text-coffee-400 flex items-center gap-2">
-                            <Info size={14} /> Resep & Takaran
-                          </p>
-                          <div className="max-h-32 overflow-y-auto pr-2 custom-scrollbar">
-                            {menu.ingredients.map(ing => (
-                              <div key={ing.id} className="flex justify-between text-sm mb-2 last:mb-0">
-                                <div className="flex flex-col">
-                                  <span className="text-coffee-600">{ing.inventory_name}</span>
-                                  <span className="text-[10px] text-coffee-400 italic">
-                                    {ing.quantity} {ing.unit} x {formatIDR(ing.unit_price || 0)}
+                              </div>
+                            </div>
+                            
+                            {menu.type === 'Internal' ? (
+                              <div className="space-y-3 mb-6">
+                                <p className="text-xs font-bold uppercase tracking-widest text-coffee-400 flex items-center gap-2">
+                                  <Info size={14} /> Resep & Takaran
+                                </p>
+                                <div className="max-h-32 overflow-y-auto pr-2 custom-scrollbar">
+                                  {menu.ingredients.map(ing => (
+                                    <div key={ing.id} className="flex justify-between text-sm mb-2 last:mb-0">
+                                      <div className="flex flex-col">
+                                        <span className="text-coffee-600">{ing.inventory_name}</span>
+                                        <span className="text-[10px] text-coffee-400 italic">
+                                          {ing.quantity} {ing.unit} x {formatIDR(ing.unit_price || 0)}
+                                        </span>
+                                      </div>
+                                      <span className="font-bold text-coffee-900">{formatIDR((ing.quantity || 0) * (ing.unit_price || 0))}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="space-y-3 mb-6 p-4 bg-amber-50 rounded-2xl border border-amber-100">
+                                <p className="text-xs font-bold uppercase tracking-widest text-amber-600 flex items-center gap-2">
+                                  <Info size={14} /> Info Penitip
+                                </p>
+                                <div className="flex justify-between items-center">
+                                  <span className="text-sm font-bold text-amber-900">{menu.supplier_name}</span>
+                                  <span className="text-[10px] font-bold text-amber-600 bg-white px-2 py-1 rounded border border-amber-200">
+                                    {t('consignment')}
                                   </span>
                                 </div>
-                                <span className="font-bold text-coffee-900">{formatIDR((ing.quantity || 0) * (ing.unit_price || 0))}</span>
                               </div>
-                            ))}
+                            )}
                           </div>
+                          <button 
+                            onClick={(e) => handleAddToCart(menu, e)}
+                            className="w-full bg-coffee-100 text-coffee-900 py-4 font-bold flex items-center justify-center gap-2 hover:bg-coffee-900 hover:text-white transition-all border-t border-coffee-200"
+                          >
+                            <Plus size={18} />
+                            Tambah ke Order
+                          </button>
                         </div>
-                      ) : (
-                        <div className="space-y-3 mb-6 p-4 bg-amber-50 rounded-2xl border border-amber-100">
-                          <p className="text-xs font-bold uppercase tracking-widest text-amber-600 flex items-center gap-2">
-                            <Info size={14} /> Info Penitip
-                          </p>
-                          <div className="flex justify-between items-center">
-                            <span className="text-sm font-bold text-amber-900">{menu.supplier_name}</span>
-                            <span className="text-[10px] font-bold text-amber-600 bg-white px-2 py-1 rounded border border-amber-200">
-                              {t('consignment')}
-                            </span>
-                          </div>
+                      ))}
+                      {menus.length > visible.length && (
+                        <div className="col-span-full py-8 text-center">
+                          <button 
+                            onClick={() => setMenuPage(prev => prev + 1)}
+                            className="bg-coffee-50 text-coffee-600 px-8 py-3 rounded-2xl font-bold hover:bg-coffee-100 transition-all border border-coffee-100"
+                          >
+                            Muat Lebih Banyak
+                          </button>
                         </div>
                       )}
-                    </div>
-                    <button 
-                      onClick={(e) => handleAddToCart(menu, e)}
-                      className="w-full bg-coffee-100 text-coffee-900 py-4 font-bold flex items-center justify-center gap-2 hover:bg-coffee-900 hover:text-white transition-all border-t border-coffee-200"
-                    >
-                      <Plus size={18} />
-                      Tambah ke Order
-                    </button>
-                  </div>
-                ))}
+                    </>
+                  );
+                })()}
               </div>
             </motion.div>
           )}
@@ -5501,8 +5586,8 @@ export default function App() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-coffee-50">
-                      {transactions
-                        .filter(tx => {
+                      {(() => {
+                        const filtered = transactions.filter(tx => {
                           if (!txSearch) return true;
                           const search = txSearch.toLowerCase();
                           return (
@@ -5510,38 +5595,56 @@ export default function App() {
                             (tx.customer_name && tx.customer_name.toLowerCase().includes(search)) ||
                             (tx.description && tx.description.toLowerCase().includes(search))
                           );
-                        })
-                        .map(tx => (
-                        <tr key={tx.id} className="hover:bg-coffee-50/50 transition-colors">
-                          <td className="py-4 text-sm text-coffee-600">
-                            <div className="flex items-center gap-2">
-                              <Calendar size={14} />
-                              {formatDate(new Date(tx.date), 'dd/MM/yy HH:mm')}
-                            </div>
-                          </td>
-                          <td className="py-4">
-                            <span className="text-xs font-mono font-bold text-coffee-400">{tx.order_id || '-'}</span>
-                          </td>
-                          <td className="py-4">
-                            <div className={cn(
-                              "w-8 h-8 rounded-full flex items-center justify-center",
-                              tx.type === 'income' ? "bg-emerald-100 text-emerald-600" : "bg-rose-100 text-rose-600"
-                            )}>
-                              {tx.type === 'income' ? <ArrowUpRight size={16} /> : <ArrowDownLeft size={16} />}
-                            </div>
-                          </td>
-                          <td className="py-4">
-                            <span className="text-sm font-bold text-coffee-900">{tx.category}</span>
-                          </td>
-                          <td className="py-4 text-sm text-coffee-600 italic">{tx.description || '-'}</td>
-                          <td className={cn(
-                            "py-4 text-sm font-bold text-right",
-                            tx.type === 'income' ? "text-emerald-600" : "text-rose-600"
-                          )}>
-                            {tx.type === 'income' ? '+' : '-'} {formatIDR(tx.amount)}
-                          </td>
-                        </tr>
-                      ))}
+                        });
+                        const visible = filtered.slice(0, txPage * ITEMS_PER_PAGE);
+                        return (
+                          <>
+                            {visible.map(tx => (
+                              <tr key={tx.id} className="hover:bg-coffee-50/50 transition-colors">
+                                <td className="py-4 text-sm text-coffee-600">
+                                  <div className="flex items-center gap-2">
+                                    <Calendar size={14} />
+                                    {formatDate(new Date(tx.date), 'dd/MM/yy HH:mm')}
+                                  </div>
+                                </td>
+                                <td className="py-4">
+                                  <span className="text-xs font-mono font-bold text-coffee-400">{tx.order_id || '-'}</span>
+                                </td>
+                                <td className="py-4">
+                                  <div className={cn(
+                                    "w-8 h-8 rounded-full flex items-center justify-center",
+                                    tx.type === 'income' ? "bg-emerald-100 text-emerald-600" : "bg-rose-100 text-rose-600"
+                                  )}>
+                                    {tx.type === 'income' ? <ArrowUpRight size={16} /> : <ArrowDownLeft size={16} />}
+                                  </div>
+                                </td>
+                                <td className="py-4">
+                                  <span className="text-sm font-bold text-coffee-900">{tx.category}</span>
+                                </td>
+                                <td className="py-4 text-sm text-coffee-600 italic">{tx.description || '-'}</td>
+                                <td className={cn(
+                                  "py-4 text-sm font-bold text-right",
+                                  tx.type === 'income' ? "text-emerald-600" : "text-rose-600"
+                                )}>
+                                  {tx.type === 'income' ? '+' : '-'} {formatIDR(tx.amount)}
+                                </td>
+                              </tr>
+                            ))}
+                            {filtered.length > visible.length && (
+                              <tr>
+                                <td colSpan={6} className="py-8 text-center">
+                                  <button 
+                                    onClick={() => setTxPage(prev => prev + 1)}
+                                    className="bg-coffee-50 text-coffee-600 px-8 py-3 rounded-2xl font-bold hover:bg-coffee-100 transition-all border border-coffee-100"
+                                  >
+                                    Muat Lebih Banyak
+                                  </button>
+                                </td>
+                              </tr>
+                            )}
+                          </>
+                        );
+                      })()}
                     </tbody>
                   </table>
                 </div>
@@ -7504,6 +7607,15 @@ export default function App() {
                     className="w-full bg-coffee-50 border border-coffee-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-coffee-500"
                     placeholder="0"
                   />
+                  <div className="mt-4">
+                    <label className="block text-xs font-bold uppercase text-coffee-500 mb-1">Tanggal Kedaluwarsa (Opsional)</label>
+                    <input 
+                      type="date" 
+                      value={newInv.expiration_date}
+                      onChange={e => setNewInv({...newInv, expiration_date: e.target.value})}
+                      className="w-full bg-coffee-50 border border-coffee-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-coffee-500"
+                    />
+                  </div>
                   <div className="mt-2">
                     <button 
                       type="button"
@@ -8905,6 +9017,40 @@ export default function App() {
           </div>
         )}
       </div>
+
+      {/* Custom Confirm Dialog */}
+      {confirmDialog && confirmDialog.show && (
+        <div className="fixed inset-0 bg-coffee-950/40 backdrop-blur-sm flex items-center justify-center z-[100] p-4">
+          <motion.div 
+            initial={{ scale: 0.9, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            className="bg-white rounded-3xl p-8 w-full max-w-md shadow-2xl"
+          >
+            <div className={`w-16 h-16 rounded-2xl flex items-center justify-center mb-6 ${confirmDialog.isDestructive ? 'bg-rose-100' : 'bg-amber-100'}`}>
+              <AlertTriangle className={`w-8 h-8 ${confirmDialog.isDestructive ? 'text-rose-600' : 'text-amber-600'}`} />
+            </div>
+            <h3 className="text-2xl font-serif font-bold mb-2">{confirmDialog.title}</h3>
+            <p className="text-coffee-600 mb-8 leading-relaxed">
+              {confirmDialog.message}
+            </p>
+            
+            <div className="flex gap-3">
+              <button 
+                onClick={() => setConfirmDialog(null)}
+                className="flex-1 px-6 py-3 rounded-xl font-bold text-coffee-600 hover:bg-coffee-50 transition-colors"
+              >
+                {confirmDialog.cancelText || (appSettings.language === 'id' ? 'Batal' : 'Cancel')}
+              </button>
+              <button 
+                onClick={confirmDialog.onConfirm}
+                className={`flex-1 text-white px-6 py-3 rounded-xl font-bold transition-all shadow-lg ${confirmDialog.isDestructive ? 'bg-rose-600 hover:bg-rose-700 shadow-rose-200' : 'bg-coffee-900 hover:bg-coffee-800 shadow-coffee-200'}`}
+              >
+                {confirmDialog.confirmText || (appSettings.language === 'id' ? 'Ya, Lanjutkan' : 'Yes, Continue')}
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
     </div>
   );
 }

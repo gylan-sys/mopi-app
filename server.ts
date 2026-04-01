@@ -66,6 +66,7 @@ function initDb() {
       category TEXT DEFAULT 'Bahan',
       unit_price REAL DEFAULT 0,
       min_stock REAL DEFAULT 0,
+      expiration_date DATE,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
@@ -159,6 +160,7 @@ function initDb() {
     { table: 'inventory', column: 'category', type: 'TEXT DEFAULT \'Bahan\'' },
     { table: 'inventory', column: 'unit_price', type: 'REAL DEFAULT 0' },
     { table: 'inventory', column: 'min_stock', type: 'REAL DEFAULT 0' },
+    { table: 'inventory', column: 'expiration_date', type: 'DATE' },
     { table: 'menus', column: 'type', type: 'TEXT DEFAULT \'Internal\'' },
     { table: 'menus', column: 'supplier_name', type: 'TEXT' },
     { table: 'menus', column: 'supplier_price', type: 'REAL DEFAULT 0' },
@@ -1169,15 +1171,15 @@ async function startServer() {
   });
 
   app.post("/api/inventory", authenticateToken, isAdmin, (req, res) => {
-    const { name, quantity, unit, min_stock, unit_price, category, type } = req.body;
-    const result = db.prepare("INSERT INTO inventory (name, quantity, unit, min_stock, unit_price, category, type) VALUES (?, ?, ?, ?, ?, ?, ?)").run(
-      name, quantity, unit, min_stock || 0, unit_price || 0, category || 'Bahan', type || 'Bahan'
+    const { name, quantity, unit, min_stock, unit_price, category, type, expiration_date } = req.body;
+    const result = db.prepare("INSERT INTO inventory (name, quantity, unit, min_stock, unit_price, category, type, expiration_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?)").run(
+      name, quantity, unit, min_stock || 0, unit_price || 0, category || 'Bahan', type || 'Bahan', expiration_date || null
     );
     res.json({ id: result.lastInsertRowid });
   });
 
   app.put("/api/inventory/:id", authenticateToken, isAdmin, (req, res) => {
-    const { name, quantity, unit, min_stock, unit_price, category, type } = req.body;
+    const { name, quantity, unit, min_stock, unit_price, category, type, expiration_date } = req.body;
     const fields = [];
     const values = [];
 
@@ -1188,6 +1190,7 @@ async function startServer() {
     if (unit_price !== undefined) { fields.push("unit_price = ?"); values.push(unit_price); }
     if (category !== undefined) { fields.push("category = ?"); values.push(category); }
     if (type !== undefined) { fields.push("type = ?"); values.push(type); }
+    if (expiration_date !== undefined) { fields.push("expiration_date = ?"); values.push(expiration_date); }
 
     if (fields.length === 0) return res.json({ success: true });
 

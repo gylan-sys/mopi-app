@@ -14,6 +14,7 @@ export interface InventoryItem {
   unit_price: number;
   min_stock: number;
   type: 'Bahan' | 'Barang';
+  expiration_date?: string;
   updated_at: string;
 }
 

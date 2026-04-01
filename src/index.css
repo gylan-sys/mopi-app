@@ -88,7 +88,7 @@
 @media print {
   @page {
     margin: 0;
-    size: auto;
+    size: 58mm auto;
   }
 
   /* Hide everything on the page */
@@ -109,10 +109,25 @@
     position: absolute;
     left: 0;
     top: 0;
-    width: 100%;
+    width: 58mm !important;
     margin: 0;
-    padding: 0;
+    padding: 2mm;
     display: block !important;
+    background: white !important;
+    color: black !important;
+  }
+
+  .thermal-receipt {
+    width: 58mm !important;
+    max-width: 58mm !important;
+    font-family: 'JetBrains Mono', monospace !important;
+    font-size: 8pt !important;
+    line-height: 1.2 !important;
+  }
+
+  .thermal-receipt * {
+    color: black !important;
+    border-color: black !important;
   }
 
   /* Ensure no background colors or shadows interfere */
@@ -120,5 +135,10 @@
     background: transparent !important;
     box-shadow: none !important;
     text-shadow: none !important;
+    -webkit-print-color-adjust: exact;
+  }
+
+  .no-print {
+    display: none !important;
   }
 }

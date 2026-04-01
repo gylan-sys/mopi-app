@@ -117,7 +117,7 @@ const isMenuAvailable = (menu: Menu) => {
 interface Notification {
   id: number;
   message: string;
-  type: 'success' | 'info';
+  type: 'success' | 'info' | 'warning';
   time: string;
 }
 
@@ -283,7 +283,7 @@ export default function App() {
   const [editingCustomerId, setEditingCustomerId] = useState<number | null>(null);
   const [newCustomer, setNewCustomer] = useState({ name: '', phone: '', email: '' });
   const [tableNumber, setTableNumber] = useState('');
-  const [reportSubTab, setReportSubTab] = useState<'transactions' | 'financial' | 'consignment'>('transactions');
+  const [reportSubTab, setReportSubTab] = useState<'transactions' | 'financial' | 'consignment' | 'daily-summary'>('transactions');
   const [isInventoryOpen, setIsInventoryOpen] = useState(false);
   const [isReportsOpen, setIsReportsOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -398,6 +398,19 @@ export default function App() {
     }
   };
 
+  const [dailySummary, setDailySummary] = useState<any>(null);
+
+  const fetchDailySummary = async () => {
+    try {
+      const res = await fetch('/api/reports/daily-summary', {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+      });
+      if (res.ok) setDailySummary(await res.json());
+    } catch (error) {
+      console.error('Error fetching daily summary:', error);
+    }
+  };
+
   const fetchPromos = async () => {
     try {
       const response = await fetch('/api/promos', {
@@ -422,6 +435,8 @@ export default function App() {
         fetchFinancialData();
       } else if (reportSubTab === 'consignment') {
         fetchConsignmentData();
+      } else if (reportSubTab === 'daily-summary') {
+        fetchDailySummary();
       }
     }
   }, [activeTab, reportSubTab, financialRange]);
@@ -460,7 +475,7 @@ export default function App() {
   const [editingMenuId, setEditingMenuId] = useState<number | null>(null);
   const [editingInvId, setEditingInvId] = useState<number | null>(null);
   
-  const [newInv, setNewInv] = useState({ name: '', quantity: 0, unit: 'pcs', min_stock: 0, unit_price: 0, category: 'Bahan', type: 'Bahan' as 'Bahan' | 'Barang' });
+  const [newInv, setNewInv] = useState({ name: '', quantity: 0, unit: 'pcs', min_stock: 0, unit_price: 0, category: 'Biji Kopi', type: 'Bahan' as 'Bahan' | 'Barang' });
   const [invCategoryFilter, setInvCategoryFilter] = useState<string>('Semua');
   const [newTx, setNewTx] = useState({ type: 'income' as 'income' | 'expense', category: 'Sales', amount: 0, description: '' });
   const [newMenu, setNewMenu] = useState({ 
@@ -502,14 +517,11 @@ export default function App() {
   } | null>(null);
 
   useEffect(() => {
+    // Initialize socket once
     socketRef.current = io();
     
-    socketRef.current.on('PAYMENT_SUCCESS', (data: any) => {
+    const handlePaymentSuccess = (data: any) => {
       console.log('Payment success received:', data);
-      if (showOrderReview) {
-        handleProcessOrder();
-      }
-      
       // If in customer mode and waiting for QRIS
       if (isCustomerMode && showQRISModal) {
         setShowQRISModal(false);
@@ -521,12 +533,64 @@ export default function App() {
         setCustomerOrder({ name: '', table: '', notes: '', paymentMethod: 'Cash' });
         setActivePromo(null);
       }
-    });
+    };
+
+    const handleLowStockAlert = (data: any) => {
+      toast.warning(`Stok Menipis: ${data.name} sisa ${data.quantity} ${data.unit}`, {
+        description: `Batas minimum: ${data.min_stock} ${data.unit}`,
+        duration: 5000,
+      });
+      
+      const newNotification: Notification = {
+        id: Date.now() + Math.random(),
+        message: `Stok ${data.name} menipis (${data.quantity} ${data.unit})`,
+        type: 'warning',
+        time: formatDate(new Date(), 'HH:mm')
+      };
+      setNotifications(prev => [newNotification, ...prev]);
+      fetchData();
+    };
+
+    const handleOrderUpdate = () => {
+      fetchActiveOrders();
+      if (isCustomerMode) {
+        fetchCustomerActiveOrders();
+        // Use a ref or a way to get the current customer name if needed, 
+        // but for now we'll just refresh the active orders list which is usually enough.
+        // If we really need the history, we can't easily get it here without stale closure issues
+        // unless we use a ref for customerOrder.name
+      } else {
+        // Cashier notification
+        toast.info("Ada orderan baru atau pembaruan antrian!", {
+          position: "top-right",
+          icon: <Bell className="text-amber-500" />,
+          duration: 5000
+        });
+        
+        const newNotification: Notification = {
+          id: Date.now() + Math.random(),
+          message: "Antrian pesanan telah diperbarui.",
+          type: 'info',
+          time: formatDate(new Date(), 'HH:mm')
+        };
+        setNotifications(prev => [newNotification, ...prev]);
+        fetchData(); // Refresh all data for cashier
+      }
+    };
+
+    socketRef.current.on('PAYMENT_SUCCESS', handlePaymentSuccess);
+    socketRef.current.on('LOW_STOCK_ALERT', handleLowStockAlert);
+    socketRef.current.on('ORDER_UPDATED', handleOrderUpdate);
 
     return () => {
-      if (socketRef.current) socketRef.current.disconnect();
+      if (socketRef.current) {
+        socketRef.current.off('PAYMENT_SUCCESS', handlePaymentSuccess);
+        socketRef.current.off('LOW_STOCK_ALERT', handleLowStockAlert);
+        socketRef.current.off('ORDER_UPDATED', handleOrderUpdate);
+        socketRef.current.disconnect();
+      }
     };
-  }, [showOrderReview]);
+  }, [isCustomerMode, showQRISModal]); // We need these to handle the logic inside listeners correctly if they change
 
   useEffect(() => {
     if (showOrderReview && !currentOrderId) {
@@ -638,42 +702,6 @@ export default function App() {
       return () => clearInterval(interval);
     }
   }, [showCustomerOrderStatus]);
-
-  useEffect(() => {
-    if (socketRef.current) {
-      const handleOrderUpdate = () => {
-        fetchActiveOrders();
-        if (isCustomerMode) {
-          fetchCustomerActiveOrders();
-          if (customerOrder.name) fetchCustomerHistory(customerOrder.name);
-          toast.info("Ada pembaruan pada pesanan!", {
-            position: "bottom-right",
-            duration: 3000
-          });
-        } else {
-          // Cashier notification
-          toast.info("Ada orderan baru atau pembaruan antrian!", {
-            position: "top-right",
-            icon: <Bell className="text-amber-500" />,
-            duration: 5000
-          });
-          
-          // Play a subtle sound if possible or just visual cue
-          const newNotification: Notification = {
-            id: Date.now() + Math.random(),
-            message: "Antrian pesanan telah diperbarui.",
-            type: 'info',
-            time: formatDate(new Date(), 'HH:mm')
-          };
-          setNotifications(prev => [newNotification, ...prev]);
-        }
-      };
-      socketRef.current.on('ORDER_UPDATED', handleOrderUpdate);
-      return () => {
-        socketRef.current?.off('ORDER_UPDATED', handleOrderUpdate);
-      };
-    }
-  }, [isCustomerMode, customerOrder.name]);
 
   const fetchData = async (filters = txFilter) => {
     if (!user) return;
@@ -1151,7 +1179,11 @@ export default function App() {
   const handleConfirmPayment = async (orderId: string) => {
     try {
       const order = activeOrders.find(o => o.orderId === orderId);
-      const nextStatus = order?.status === 'awaiting_confirmation' ? 'processing' : 'completed';
+      // If pending or awaiting_confirmation, move to processing (paid)
+      // If already processing, move to completed
+      const nextStatus = (order?.status === 'pending' || order?.status === 'awaiting_confirmation') 
+        ? 'processing' 
+        : 'completed';
       
       const res = await fetch(`/api/orders/${orderId}/status`, {
         method: 'PUT',
@@ -1834,16 +1866,16 @@ export default function App() {
             </div>
 
             {/* Menu Grid */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+            <div className="grid grid-cols-1 min-[400px]:grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 md:gap-6">
               {filteredMenus.map(menu => (
                 <motion.div 
                   key={menu.id}
                   layout
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className="bg-white rounded-[1.5rem] overflow-hidden border border-coffee-100 shadow-sm hover:shadow-xl transition-all group flex flex-col"
+                  className="bg-white rounded-[1.5rem] overflow-hidden border border-coffee-100 shadow-sm hover:shadow-xl transition-all group flex flex-row min-[400px]:flex-col"
                 >
-                  <div className="relative aspect-square overflow-hidden bg-coffee-50">
+                  <div className="relative w-24 min-[400px]:w-full aspect-square overflow-hidden bg-coffee-50 shrink-0">
                     {menu.image_url ? (
                       <img 
                         src={menu.image_url} 
@@ -1853,33 +1885,34 @@ export default function App() {
                       />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center text-coffee-200">
-                        <Coffee size={48} />
+                        <Coffee size={32} className="min-[400px]:hidden" />
+                        <Coffee size={48} className="hidden min-[400px]:block" />
                       </div>
                     )}
-                    <div className="absolute top-2 right-2">
-                      <span className="bg-white/90 backdrop-blur-sm px-2 py-1 rounded-full text-[8px] font-bold uppercase tracking-widest text-coffee-900 shadow-sm">
+                    <div className="absolute top-1.5 right-1.5 min-[400px]:top-2 min-[400px]:right-2">
+                      <span className="bg-white/90 backdrop-blur-sm px-1.5 py-0.5 min-[400px]:px-2 min-[400px]:py-1 rounded-full text-[7px] min-[400px]:text-[8px] font-bold uppercase tracking-widest text-coffee-900 shadow-sm">
                         {menu.category}
                       </span>
                     </div>
                   </div>
-                  <div className="p-3 flex flex-col flex-1">
+                  <div className="p-3 min-[400px]:p-4 flex flex-col flex-1 min-w-0">
                     <div className="mb-2">
-                      <h3 className="text-sm font-bold text-coffee-950 mb-0.5 group-hover:text-coffee-600 transition-colors line-clamp-1">{menu.name}</h3>
+                      <h3 className="text-sm min-[400px]:text-base font-bold text-coffee-950 mb-0.5 group-hover:text-coffee-600 transition-colors line-clamp-1">{menu.name}</h3>
                       <div className="flex items-center gap-2">
-                        {menu.size && <span className="text-[10px] font-bold text-coffee-600 bg-coffee-100 px-1.5 py-0.5 rounded uppercase tracking-wider">{menu.size}</span>}
+                        {menu.size && <span className="text-[9px] min-[400px]:text-[10px] font-bold text-coffee-600 bg-coffee-100 px-1.5 py-0.5 rounded uppercase tracking-wider">{menu.size}</span>}
                         {menu.ingredients && menu.ingredients.length > 0 && (
-                          <span className="text-[10px] font-medium text-coffee-400 italic">
+                          <span className="text-[9px] min-[400px]:text-[10px] font-medium text-coffee-400 italic">
                             {menu.ingredients.length} Bahan
                           </span>
                         )}
                       </div>
-                      <p className="text-[10px] text-coffee-500 line-clamp-2 mt-1 leading-tight">{menu.description || 'Tidak ada deskripsi'}</p>
+                      <p className="text-[10px] min-[400px]:text-xs text-coffee-500 line-clamp-2 mt-1 leading-tight">{menu.description || 'Tidak ada deskripsi'}</p>
                     </div>
                     <div className="mt-auto flex items-center justify-between pt-2 border-t border-coffee-50">
-                      <span className="text-sm font-bold text-coffee-900">{formatIDR(menu.price)}</span>
+                      <span className="text-sm min-[400px]:text-base font-bold text-coffee-900">{formatIDR(menu.price)}</span>
                       <button 
                         onClick={(e) => handleAddToCart(menu, e)}
-                        className="bg-coffee-900 text-white p-2 rounded-xl hover:bg-coffee-800 transition-all shadow-md shadow-coffee-100 active:scale-95"
+                        className="bg-coffee-900 text-white p-2 min-[400px]:p-2.5 rounded-xl hover:bg-coffee-800 transition-all shadow-md shadow-coffee-100 active:scale-95"
                       >
                         <Plus size={16} />
                       </button>
@@ -3489,6 +3522,15 @@ export default function App() {
                 >
                   Laporan Transaksi
                 </button>
+                <button 
+                  onClick={() => setReportSubTab('daily-summary')}
+                  className={cn(
+                    "px-6 py-2 rounded-xl text-sm font-bold transition-all",
+                    reportSubTab === 'daily-summary' ? "bg-coffee-900 text-white shadow-lg" : "text-coffee-500 hover:bg-coffee-50"
+                  )}
+                >
+                  Ringkasan Harian
+                </button>
                 {user.role === 'admin' && (
                   <>
                     <button 
@@ -3669,6 +3711,86 @@ export default function App() {
                       </table>
                     </div>
                   </div>
+                </div>
+              ) : reportSubTab === 'daily-summary' ? (
+                <div className="space-y-8">
+                  <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                    <div>
+                      <p className="text-coffee-500 font-medium uppercase tracking-widest text-xs mb-1">Ringkasan Penjualan</p>
+                      <h2 className="text-4xl font-serif font-bold text-coffee-950">Ringkasan Hari Ini</h2>
+                    </div>
+                    <button 
+                      onClick={fetchDailySummary}
+                      className="p-3 bg-coffee-900 text-white rounded-2xl hover:bg-coffee-800 transition-all shadow-lg shadow-coffee-200 active:scale-95"
+                    >
+                      <RefreshCw size={18} />
+                    </button>
+                  </header>
+
+                  {dailySummary && (
+                    <div className="space-y-8">
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <div className="glass-card p-6 bg-emerald-50 border-emerald-100">
+                          <p className="text-emerald-700 text-xs font-bold uppercase tracking-widest mb-2">Total Pendapatan</p>
+                          <p className="text-3xl font-bold text-emerald-600">{formatIDR(dailySummary.totalRevenue)}</p>
+                        </div>
+                        <div className="glass-card p-6 bg-blue-50 border-blue-100">
+                          <p className="text-blue-700 text-xs font-bold uppercase tracking-widest mb-2">Total Pesanan</p>
+                          <p className="text-3xl font-bold text-blue-600">{dailySummary.totalOrders} <span className="text-sm font-medium">Order</span></p>
+                        </div>
+                        <div className="glass-card p-6 bg-amber-50 border-amber-100">
+                          <p className="text-amber-700 text-xs font-bold uppercase tracking-widest mb-2">Item Terjual</p>
+                          <p className="text-3xl font-bold text-amber-600">{dailySummary.totalItems} <span className="text-sm font-medium">Pcs</span></p>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                        <div className="glass-card p-8">
+                          <h3 className="text-xl font-serif font-bold mb-6 flex items-center gap-2">
+                            <TrendingUp size={20} className="text-coffee-600" />
+                            Menu Terlaris
+                          </h3>
+                          <div className="space-y-4">
+                            {dailySummary.topItems.map((item: any, idx: number) => (
+                              <div key={idx} className="flex items-center justify-between p-4 bg-coffee-50/50 rounded-2xl">
+                                <div className="flex items-center gap-4">
+                                  <div className="w-8 h-8 bg-coffee-900 text-white rounded-full flex items-center justify-center font-bold text-sm">
+                                    {idx + 1}
+                                  </div>
+                                  <div>
+                                    <p className="font-bold text-coffee-950">{item.name}</p>
+                                    <p className="text-xs text-coffee-500">{item.quantity} terjual</p>
+                                  </div>
+                                </div>
+                                <p className="font-bold text-coffee-900">{formatIDR(item.revenue)}</p>
+                              </div>
+                            ))}
+                            {dailySummary.topItems.length === 0 && (
+                              <p className="text-center text-coffee-400 italic py-8">Belum ada data penjualan hari ini</p>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="glass-card p-8">
+                          <h3 className="text-xl font-serif font-bold mb-6 flex items-center gap-2">
+                            <CreditCard size={20} className="text-coffee-600" />
+                            Metode Pembayaran
+                          </h3>
+                          <div className="space-y-4">
+                            {dailySummary.salesByPayment.map((item: any, idx: number) => (
+                              <div key={idx} className="flex items-center justify-between p-4 bg-coffee-50/50 rounded-2xl">
+                                <p className="font-bold text-coffee-950">{item.payment_method}</p>
+                                <p className="font-bold text-coffee-900">{formatIDR(item.total)}</p>
+                              </div>
+                            ))}
+                            {dailySummary.salesByPayment.length === 0 && (
+                              <p className="text-center text-coffee-400 italic py-8">Belum ada data pembayaran hari ini</p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               ) : reportSubTab === 'financial' ? (
                 <div className="space-y-6 pb-20 md:pb-0">
@@ -4097,8 +4219,7 @@ export default function App() {
                           </button>
                         ))}
                       </div>
-                      
-                      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4 max-h-[calc(100vh-320px)] overflow-y-auto pr-2 custom-scrollbar pb-4">
+                           <div className="grid grid-cols-1 min-[400px]:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4 max-h-[calc(100vh-320px)] overflow-y-auto pr-2 custom-scrollbar pb-4">
                         {menus
                           .filter(m => {
                             const matchSearch = m.name.toLowerCase().includes(menuSearch.toLowerCase());
@@ -4114,7 +4235,7 @@ export default function App() {
                                 disabled={!available}
                                 onClick={(e) => handleAddToCart(menu, e)}
                                 className={cn(
-                                  "glass-card p-0 text-left transition-all group relative overflow-hidden flex flex-col h-full border-2",
+                                  "glass-card p-0 text-left transition-all group relative overflow-hidden flex flex-row min-[400px]:flex-col h-full border-2",
                                   available 
                                     ? "hover:border-coffee-400 active:scale-95 bg-white" 
                                     : "opacity-60 grayscale cursor-not-allowed bg-slate-50",
@@ -4122,7 +4243,7 @@ export default function App() {
                                 )}
                               >
                                 {/* Image Section */}
-                                <div className="relative aspect-square overflow-hidden bg-coffee-50">
+                                <div className="relative w-24 min-[400px]:w-full aspect-square overflow-hidden bg-coffee-50 shrink-0">
                                   {menu.image_url ? (
                                     <img 
                                       src={menu.image_url} 
@@ -4132,7 +4253,8 @@ export default function App() {
                                     />
                                   ) : (
                                     <div className="w-full h-full flex items-center justify-center text-coffee-200">
-                                      <Coffee size={48} />
+                                      <Coffee size={32} className="min-[400px]:hidden" />
+                                      <Coffee size={48} className="hidden min-[400px]:block" />
                                     </div>
                                   )}
                                   
@@ -4140,40 +4262,40 @@ export default function App() {
                                   <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors" />
                                   
                                   {!available && (
-                                    <div className="absolute top-2 right-2 bg-rose-500 text-white px-2 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider shadow-lg">
+                                    <div className="absolute top-1.5 right-1.5 bg-rose-500 text-white px-1.5 py-0.5 rounded-lg text-[8px] font-black uppercase tracking-wider shadow-lg">
                                       Habis
                                     </div>
                                   )}
                                   
                                   {available && !inCart && (
-                                    <div className="absolute bottom-2 right-2 bg-white/90 backdrop-blur-sm text-coffee-900 p-2 rounded-xl opacity-0 group-hover:opacity-100 transition-all duration-300 translate-y-2 group-hover:translate-y-0 shadow-lg">
+                                    <div className="absolute bottom-2 right-2 bg-white/90 backdrop-blur-sm text-coffee-900 p-2 rounded-xl opacity-0 group-hover:opacity-100 transition-all duration-300 translate-y-2 group-hover:translate-y-0 shadow-lg hidden min-[400px]:block">
                                       <Plus size={18} />
                                     </div>
                                   )}
-
+ 
                                   {inCart && (
                                     <motion.div 
                                       initial={{ scale: 0 }}
                                       animate={{ scale: 1 }}
-                                      className="absolute top-2 left-2 bg-coffee-900 text-white text-[10px] font-black w-7 h-7 rounded-full flex items-center justify-center shadow-xl border-2 border-white z-10"
+                                      className="absolute top-1.5 left-1.5 min-[400px]:top-2 min-[400px]:left-2 bg-coffee-900 text-white text-[8px] min-[400px]:text-[10px] font-black w-5 h-5 min-[400px]:w-7 min-[400px]:h-7 rounded-full flex items-center justify-center shadow-xl border-2 border-white z-10"
                                     >
                                       {inCart.quantity}
                                     </motion.div>
                                   )}
                                 </div>
-
-                                <div className="p-4 flex-1 flex flex-col">
+ 
+                                <div className="p-3 min-[400px]:p-4 flex-1 flex flex-col min-w-0">
                                   <div className="flex justify-between items-start mb-1">
-                                    <p className="text-[10px] font-black text-coffee-400 uppercase tracking-widest">{menu.category || 'Menu'}</p>
+                                    <p className="text-[8px] min-[400px]:text-[10px] font-black text-coffee-400 uppercase tracking-widest">{menu.category || 'Menu'}</p>
                                   </div>
-                                  <h4 className="font-bold text-coffee-950 text-sm mb-2 line-clamp-2 leading-tight group-hover:text-coffee-700 transition-colors">{menu.name}</h4>
+                                  <h4 className="font-bold text-coffee-950 text-xs min-[400px]:text-sm mb-2 line-clamp-2 leading-tight group-hover:text-coffee-700 transition-colors">{menu.name}</h4>
                                   <div className="mt-auto flex justify-between items-center">
-                                    <p className="text-sm text-coffee-900 font-black">{formatIDR(menu.price)}</p>
+                                    <p className="text-xs min-[400px]:text-sm text-coffee-900 font-black">{formatIDR(menu.price)}</p>
                                     <div className={cn(
-                                      "w-8 h-8 rounded-full flex items-center justify-center transition-all duration-300",
+                                      "w-7 h-7 min-[400px]:w-8 min-[400px]:h-8 rounded-full flex items-center justify-center transition-all duration-300",
                                       inCart ? "bg-coffee-900 text-white" : "bg-coffee-50 text-coffee-400 group-hover:bg-coffee-100"
                                     )}>
-                                      {inCart ? <Check size={16} /> : <Coffee size={16} />}
+                                      {inCart ? <Check size={14} /> : <Coffee size={14} />}
                                     </div>
                                   </div>
                                 </div>
@@ -4443,13 +4565,19 @@ export default function App() {
                           <div className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar">
                             <div className="space-y-4">
                               {cart.map((item) => (
-                                <div key={item.menu.id} className="flex items-center gap-4 bg-slate-50 p-4 rounded-2xl border border-slate-100">
-                                  <div className="bg-white p-3 rounded-xl shadow-sm">
-                                    <Coffee size={20} className="text-coffee-600" />
+                                <div key={item.menu.id} className="flex items-center gap-3 min-[400px]:gap-4 bg-slate-50 p-3 min-[400px]:p-4 rounded-2xl border border-slate-100">
+                                  <div className="w-12 h-12 min-[400px]:w-16 min-[400px]:h-16 rounded-xl overflow-hidden bg-white shrink-0 shadow-sm border border-slate-100">
+                                    {item.menu.image_url ? (
+                                      <img src={item.menu.image_url} alt={item.menu.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                                    ) : (
+                                      <div className="w-full h-full flex items-center justify-center text-coffee-200">
+                                        <Coffee size={20} />
+                                      </div>
+                                    )}
                                   </div>
-                                  <div className="flex-1">
-                                    <h4 className="font-bold text-coffee-950 text-sm">{item.menu.name}</h4>
-                                    <p className="text-xs text-coffee-500">{formatIDR(item.menu.price)}</p>
+                                  <div className="flex-1 min-w-0">
+                                    <h4 className="font-bold text-coffee-950 text-xs min-[400px]:text-sm truncate">{item.menu.name}</h4>
+                                    <p className="text-[10px] min-[400px]:text-xs text-coffee-500">{formatIDR(item.menu.price)}</p>
                                     
                                     {/* Sugar and Ice Options */}
                                     {(item.menu.category?.toLowerCase().includes('kopi') || 
@@ -4458,11 +4586,11 @@ export default function App() {
                                       item.menu.category?.toLowerCase().includes('tea') || 
                                       item.menu.category?.toLowerCase().includes('drink') || 
                                       item.menu.category?.toLowerCase().includes('minuman')) && (
-                                      <div className="mt-2 flex gap-2">
+                                      <div className="mt-1.5 flex gap-1.5">
                                         <select 
                                           value={item.sugarLevel || 'Normal'}
                                           onChange={(e) => handleUpdateCartOptions(item.menu.id, { sugarLevel: e.target.value })}
-                                          className="bg-white border border-slate-200 rounded-lg text-[10px] py-1 px-2 focus:outline-none focus:ring-1 focus:ring-coffee-500"
+                                          className="bg-white border border-slate-200 rounded-lg text-[9px] min-[400px]:text-[10px] py-0.5 min-[400px]:py-1 px-1.5 min-[400px]:px-2 focus:outline-none focus:ring-1 focus:ring-coffee-500"
                                         >
                                           <option value="No Sugar">No Sugar</option>
                                           <option value="Less Sugar">Less Sugar</option>
@@ -4472,7 +4600,7 @@ export default function App() {
                                         <select 
                                           value={item.iceLevel || 'Normal'}
                                           onChange={(e) => handleUpdateCartOptions(item.menu.id, { iceLevel: e.target.value })}
-                                          className="bg-white border border-slate-200 rounded-lg text-[10px] py-1 px-2 focus:outline-none focus:ring-1 focus:ring-coffee-500"
+                                          className="bg-white border border-slate-200 rounded-lg text-[9px] min-[400px]:text-[10px] py-0.5 min-[400px]:py-1 px-1.5 min-[400px]:px-2 focus:outline-none focus:ring-1 focus:ring-coffee-500"
                                         >
                                           <option value="No Ice">No Ice</option>
                                           <option value="Less Ice">Less Ice</option>
@@ -4482,17 +4610,17 @@ export default function App() {
                                       </div>
                                     )}
                                   </div>
-                                  <div className="flex items-center gap-3 bg-white p-1 rounded-xl border border-slate-200">
+                                  <div className="flex items-center gap-2 min-[400px]:gap-3 bg-white p-1 rounded-xl border border-slate-200">
                                     <button 
                                       onClick={() => handleUpdateCartQuantity(item.menu.id, -1)}
-                                      className="w-8 h-8 flex items-center justify-center rounded-lg text-coffee-600 hover:bg-coffee-50 active:bg-coffee-100"
+                                      className="w-6 h-6 min-[400px]:w-8 min-[400px]:h-8 flex items-center justify-center rounded-lg text-coffee-600 hover:bg-coffee-50 active:bg-coffee-100"
                                     >
                                       -
                                     </button>
-                                    <span className="font-bold text-coffee-900 w-4 text-center">{item.quantity}</span>
+                                    <span className="font-bold text-coffee-900 text-xs min-[400px]:text-sm w-4 text-center">{item.quantity}</span>
                                     <button 
                                       onClick={() => handleUpdateCartQuantity(item.menu.id, 1)}
-                                      className="w-8 h-8 flex items-center justify-center rounded-lg text-coffee-600 hover:bg-coffee-50 active:bg-coffee-100"
+                                      className="w-6 h-6 min-[400px]:w-8 min-[400px]:h-8 flex items-center justify-center rounded-lg text-coffee-600 hover:bg-coffee-50 active:bg-coffee-100"
                                     >
                                       +
                                     </button>
@@ -4580,10 +4708,11 @@ export default function App() {
                                 {tx.order_id && (
                                   <button
                                     onClick={() => handleReprint(tx.order_id)}
-                                    className="p-2 text-coffee-400 hover:text-coffee-900 hover:bg-coffee-100 rounded-lg transition-all"
+                                    className="inline-flex items-center gap-2 px-3 py-1.5 text-coffee-600 hover:text-coffee-900 hover:bg-coffee-100 rounded-lg transition-all border border-coffee-100"
                                     title="Cetak Ulang Struk"
                                   >
-                                    <Printer size={16} />
+                                    <Printer size={14} />
+                                    <span className="text-[10px] font-bold uppercase">Struk</span>
                                   </button>
                                 )}
                               </td>
@@ -4615,9 +4744,10 @@ export default function App() {
                             {tx.order_id && (
                               <button 
                                 onClick={() => handleReprint(tx.order_id)}
-                                className="p-2 bg-white border border-coffee-100 text-coffee-600 rounded-xl shadow-sm active:scale-90 transition-transform"
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-coffee-100 text-coffee-600 rounded-xl shadow-sm active:scale-90 transition-transform"
                               >
-                                <Printer size={14} />
+                                <Printer size={12} />
+                                <span className="text-[10px] font-black uppercase">Struk</span>
                               </button>
                             )}
                           </div>
@@ -4823,6 +4953,11 @@ export default function App() {
                               {order.status === 'pending' && (
                                 <span className="inline-block bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider">
                                   Belum Bayar
+                                </span>
+                              )}
+                              {order.status === 'processing' && (
+                                <span className="inline-block bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider">
+                                  Sudah Bayar
                                 </span>
                               )}
                               {order.status === 'awaiting_confirmation' && (
@@ -7089,9 +7224,11 @@ export default function App() {
                     onChange={e => setNewInv({...newInv, category: e.target.value})}
                     className="w-full bg-coffee-50 border border-coffee-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-coffee-500"
                   >
-                    <option value="Bahan">Bahan</option>
-                    <option value="Alat">Alat</option>
+                    <option value="Biji Kopi">Biji Kopi</option>
+                    <option value="Susu">Susu</option>
+                    <option value="Gula">Gula</option>
                     <option value="Kemasan">Kemasan</option>
+                    <option value="Pelengkap">Pelengkap</option>
                     <option value="Lainnya">Lainnya</option>
                   </select>
                 </div>
@@ -8320,7 +8457,7 @@ export default function App() {
               <p className="text-coffee-500 text-sm">Transaksi telah dicatat ke sistem</p>
             </div>
 
-            <div id="receipt-content" className="p-8 bg-white font-mono text-sm print:p-0">
+            <div id="receipt-content" className="p-8 bg-white font-mono text-sm print:p-0 print-section thermal-receipt">
               <div className="text-center mb-6">
                 {appSettings.app_logo_url && (
                   <img src={appSettings.app_logo_url} alt="Logo" className="w-16 h-16 object-contain mx-auto mb-3" referrerPolicy="no-referrer" />
@@ -8343,10 +8480,10 @@ export default function App() {
                   <div key={idx} className="space-y-1">
                     <div className="flex justify-between">
                       <div className="flex-1">
-                        <p className="font-bold">{item.menu.name}</p>
-                        <p className="text-[10px] text-coffee-500">{item.quantity} x {formatIDR(item.menu.price)}</p>
+                        <p className="font-bold">{item.menu?.name || item.name}</p>
+                        <p className="text-[10px] text-coffee-500">{item.quantity} x {formatIDR(item.menu?.price || item.price || 0)}</p>
                       </div>
-                      <p className="font-bold">{formatIDR(item.menu.price * item.quantity)}</p>
+                      <p className="font-bold">{formatIDR((item.menu?.price || item.price || 0) * item.quantity)}</p>
                     </div>
                     {(item.sugarLevel || item.iceLevel) && (
                       <div className="flex gap-2 text-[8px] text-coffee-400 italic">
@@ -8365,6 +8502,12 @@ export default function App() {
                   <span>Subtotal</span>
                   <span>{formatIDR(lastOrder.subtotal || lastOrder.total)}</span>
                 </div>
+                {lastOrder.discount > 0 && (
+                  <div className="flex justify-between text-rose-600">
+                    <span>Diskon</span>
+                    <span>-{formatIDR(lastOrder.discount)}</span>
+                  </div>
+                )}
                 {lastOrder.tax > 0 && (
                   <div className="flex justify-between text-coffee-500">
                     <span>Pajak</span>
@@ -8501,12 +8644,20 @@ export default function App() {
             
             <div className="space-y-1 mb-2">
               {lastOrder.items.map((item, idx) => (
-                <div key={idx} className="flex justify-between items-start">
-                  <div className="flex-1 pr-2">
-                    <p className="font-bold">{item.menu.name}</p>
-                    <p className="text-[10px]">{item.quantity} x {formatIDR(item.menu.price)}</p>
+                <div key={idx} className="space-y-0.5">
+                  <div className="flex justify-between items-start">
+                    <div className="flex-1 pr-2">
+                      <p className="font-bold">{item.menu?.name || item.name}</p>
+                      <p className="text-[10px]">{item.quantity} x {formatIDR(item.menu?.price || item.price || 0)}</p>
+                    </div>
+                    <p className="font-bold whitespace-nowrap">{formatIDR((item.menu?.price || item.price || 0) * item.quantity)}</p>
                   </div>
-                  <p className="font-bold whitespace-nowrap">{formatIDR(item.menu.price * item.quantity)}</p>
+                  {(item.sugarLevel || item.iceLevel) && (
+                    <div className="flex gap-2 text-[8px] italic">
+                      {item.sugarLevel && <span>Sugar: {item.sugarLevel}</span>}
+                      {item.iceLevel && <span>Ice: {item.iceLevel}</span>}
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -8516,8 +8667,20 @@ export default function App() {
             <div className="space-y-1">
               <div className="flex justify-between">
                 <span>Subtotal</span>
-                <span>{formatIDR(lastOrder.total)}</span>
+                <span>{formatIDR(lastOrder.subtotal || lastOrder.total)}</span>
               </div>
+              {lastOrder.discount > 0 && (
+                <div className="flex justify-between">
+                  <span>Diskon</span>
+                  <span>-{formatIDR(lastOrder.discount)}</span>
+                </div>
+              )}
+              {lastOrder.tax > 0 && (
+                <div className="flex justify-between">
+                  <span>Pajak</span>
+                  <span>{formatIDR(lastOrder.tax)}</span>
+                </div>
+              )}
               <div className="flex justify-between font-bold text-sm pt-1">
                 <span>TOTAL</span>
                 <span>{formatIDR(lastOrder.total)}</span>

@@ -78,10 +78,20 @@ function initDb() {
       customer_name TEXT,
       payment_method TEXT DEFAULT 'Cash',
       order_id TEXT,
+      display_id TEXT,
       source TEXT DEFAULT 'POS',
       status TEXT DEFAULT 'completed',
       menu_id INTEGER,
       quantity INTEGER DEFAULT 1,
+      sugar_level TEXT,
+      ice_level TEXT,
+      proof_of_payment_url TEXT,
+      notes TEXT,
+      table_number TEXT,
+      promo_code TEXT,
+      discount_amount REAL DEFAULT 0,
+      customer_id INTEGER,
+      order_sequence INTEGER DEFAULT 0,
       date DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
@@ -92,7 +102,10 @@ function initDb() {
       size TEXT,
       category TEXT DEFAULT 'Kopi',
       image_url TEXT,
-      description TEXT
+      description TEXT,
+      type TEXT DEFAULT 'Internal',
+      supplier_name TEXT,
+      supplier_price REAL DEFAULT 0
     );
 
     CREATE TABLE IF NOT EXISTS menu_ingredients (
@@ -138,126 +151,39 @@ function initDb() {
     CREATE INDEX IF NOT EXISTS idx_transactions_status ON transactions(status);
     CREATE INDEX IF NOT EXISTS idx_transactions_date ON transactions(date);
     CREATE INDEX IF NOT EXISTS idx_inventory_category ON inventory(category);
-
-    -- Add new columns if they don't exist
-    PRAGMA table_info(inventory);
-    -- We'll use a safer way to add columns in SQLite
-    -- Check if 'type' column exists in inventory
-    -- Note: In SQLite, we can't easily check column existence in a single statement without a script or PRAGMA
   `);
 
-  // Safely add columns
-  try { db.prepare("ALTER TABLE inventory ADD COLUMN type TEXT DEFAULT 'Bahan'").run(); } catch(e) {}
-  try { db.prepare("ALTER TABLE menus ADD COLUMN type TEXT DEFAULT 'Internal'").run(); } catch(e) {}
-  try { db.prepare("ALTER TABLE transactions ADD COLUMN notes TEXT").run(); } catch(e) {}
-  try { db.prepare("ALTER TABLE transactions ADD COLUMN table_number TEXT").run(); } catch(e) {}
-  try { db.prepare("ALTER TABLE transactions ADD COLUMN promo_code TEXT").run(); } catch(e) {}
-  try { db.prepare("ALTER TABLE transactions ADD COLUMN discount_amount REAL DEFAULT 0").run(); } catch(e) {}
-  try { db.prepare("ALTER TABLE transactions ADD COLUMN customer_id INTEGER").run(); } catch(e) {}
-  try { db.prepare("ALTER TABLE transactions ADD COLUMN proof_of_payment_url TEXT").run(); } catch(e) {}
-  try { db.prepare("ALTER TABLE transactions ADD COLUMN display_id TEXT").run(); } catch(e) {}
-  try { db.prepare("ALTER TABLE menus ADD COLUMN supplier_name TEXT").run(); } catch(e) {}
-  try { db.prepare("ALTER TABLE menus ADD COLUMN supplier_price REAL DEFAULT 0").run(); } catch(e) {}
+  // Migration: Add new columns if they don't exist (for existing databases)
+  const columnsToAdd = [
+    { table: 'inventory', column: 'type', type: 'TEXT DEFAULT \'Bahan\'' },
+    { table: 'inventory', column: 'category', type: 'TEXT DEFAULT \'Bahan\'' },
+    { table: 'inventory', column: 'unit_price', type: 'REAL DEFAULT 0' },
+    { table: 'inventory', column: 'min_stock', type: 'REAL DEFAULT 0' },
+    { table: 'menus', column: 'type', type: 'TEXT DEFAULT \'Internal\'' },
+    { table: 'menus', column: 'supplier_name', type: 'TEXT' },
+    { table: 'menus', column: 'supplier_price', type: 'REAL DEFAULT 0' },
+    { table: 'transactions', column: 'notes', type: 'TEXT' },
+    { table: 'transactions', column: 'table_number', type: 'TEXT' },
+    { table: 'transactions', column: 'promo_code', type: 'TEXT' },
+    { table: 'transactions', column: 'discount_amount', type: 'REAL DEFAULT 0' },
+    { table: 'transactions', column: 'customer_id', type: 'INTEGER' },
+    { table: 'transactions', column: 'proof_of_payment_url', type: 'TEXT' },
+    { table: 'transactions', column: 'display_id', type: 'TEXT' },
+    { table: 'transactions', column: 'source', type: 'TEXT DEFAULT \'POS\'' },
+    { table: 'transactions', column: 'status', type: 'TEXT DEFAULT \'completed\'' },
+    { table: 'transactions', column: 'menu_id', type: 'INTEGER' },
+    { table: 'transactions', column: 'quantity', type: 'INTEGER DEFAULT 1' },
+    { table: 'transactions', column: 'sugar_level', type: 'TEXT' },
+    { table: 'transactions', column: 'ice_level', type: 'TEXT' },
+    { table: 'transactions', column: 'order_sequence', type: 'INTEGER DEFAULT 0' }
+  ];
 
-  // Migration: Add source column to transactions if it doesn't exist
-  try {
-    db.prepare("SELECT source FROM transactions LIMIT 1").get();
-  } catch (e) {
-    db.exec("ALTER TABLE transactions ADD COLUMN source TEXT DEFAULT 'POS'");
-  }
-
-  // Migration: Add status column to transactions if it doesn't exist
-  try {
-    db.prepare("SELECT status FROM transactions LIMIT 1").get();
-  } catch (e) {
-    db.exec("ALTER TABLE transactions ADD COLUMN status TEXT DEFAULT 'completed'");
-  }
-
-  // Migration: Add table_number column to transactions if it doesn't exist
-  try {
-    db.prepare("SELECT table_number FROM transactions LIMIT 1").get();
-  } catch (e) {
-    db.exec("ALTER TABLE transactions ADD COLUMN table_number TEXT");
-  }
-
-  // Migration: Add customer_id column to transactions if it doesn't exist
-  try {
-    db.prepare("SELECT customer_id FROM transactions LIMIT 1").get();
-  } catch (e) {
-    db.exec("ALTER TABLE transactions ADD COLUMN customer_id INTEGER");
-  }
-
-  // Migration: Add menu_id column to transactions if it doesn't exist
-  try {
-    db.prepare("SELECT menu_id FROM transactions LIMIT 1").get();
-  } catch (e) {
-    db.exec("ALTER TABLE transactions ADD COLUMN menu_id INTEGER");
-  }
-
-  // Migration: Add quantity column to transactions if it doesn't exist
-  try {
-    db.prepare("SELECT quantity FROM transactions LIMIT 1").get();
-  } catch (e) {
-    db.exec("ALTER TABLE transactions ADD COLUMN quantity INTEGER DEFAULT 1");
-  }
-
-  // Migration: Add promo_code column to transactions if it doesn't exist
-  try {
-    db.prepare("SELECT promo_code FROM transactions LIMIT 1").get();
-  } catch (e) {
-    db.exec("ALTER TABLE transactions ADD COLUMN promo_code TEXT");
-  }
-
-  // Migration: Add discount_amount column to transactions if it doesn't exist
-  try {
-    db.prepare("SELECT discount_amount FROM transactions LIMIT 1").get();
-  } catch (e) {
-    db.exec("ALTER TABLE transactions ADD COLUMN discount_amount REAL DEFAULT 0");
-  }
-
-  // Migration: Add category column to inventory if it doesn't exist
-  try {
-    db.prepare("SELECT category FROM inventory LIMIT 1").get();
-  } catch (e) {
-    db.exec("ALTER TABLE inventory ADD COLUMN category TEXT DEFAULT 'Bahan'");
-  }
-
-  // Default Promos
-  try {
-    const promoCheck = db.prepare("SELECT * FROM promos WHERE code = ?").get('BUY 1 GET 1');
-    if (!promoCheck) {
-      db.prepare("INSERT INTO promos (code, discount_type, discount_value, target_type, target_ids, active) VALUES (?, ?, ?, ?, ?, ?)")
-        .run('BUY 1 GET 1', 'fixed', 18000, 'menu', JSON.stringify(['1', '5']), 1);
+  for (const col of columnsToAdd) {
+    try {
+      db.prepare(`ALTER TABLE ${col.table} ADD COLUMN ${col.column} ${col.type}`).run();
+    } catch (e) {
+      // Column likely already exists
     }
-  } catch (e) {
-    console.error("Error inserting default promo:", e);
-  }
-
-  // Default Menus
-  try {
-    const menuCount = db.prepare("SELECT COUNT(*) as count FROM menus").get() as any;
-    if (menuCount.count === 0) {
-      db.prepare("INSERT INTO menus (id, name, price, category, description, type) VALUES (?, ?, ?, ?, ?, ?)")
-        .run(1, 'Espresso', 25000, 'Kopi', 'Espresso murni yang kuat', 'Internal');
-      db.prepare("INSERT INTO menus (id, name, price, category, description, type) VALUES (?, ?, ?, ?, ?, ?)")
-        .run(5, 'Cappuccino', 35000, 'Kopi', 'Kopi dengan susu dan busa tebal', 'Internal');
-    }
-  } catch (e) {
-    console.error("Error inserting default menus:", e);
-  }
-
-  // Migration: Add unit_price column to inventory if it doesn't exist
-  try {
-    db.prepare("SELECT unit_price FROM inventory LIMIT 1").get();
-  } catch (e) {
-    db.exec("ALTER TABLE inventory ADD COLUMN unit_price REAL DEFAULT 0");
-  }
-
-  // Migration: Add min_stock column to inventory if it doesn't exist
-  try {
-    db.prepare("SELECT min_stock FROM inventory LIMIT 1").get();
-  } catch (e) {
-    db.exec("ALTER TABLE inventory ADD COLUMN min_stock REAL DEFAULT 0");
   }
 
   const defaultSettings = [
@@ -488,15 +414,17 @@ async function startServer() {
       const status = 'processing';
       const finalOrderId = order_id || `${platform.substring(0, 1)}-${Date.now().toString().slice(-6)}`;
       
-      const insertTx = db.prepare("INSERT INTO transactions (type, category, amount, description, menu_id, quantity, payment_method, order_id, source, customer_name, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+      const insertTx = db.prepare("INSERT INTO transactions (type, category, amount, description, menu_id, quantity, payment_method, order_id, source, customer_name, status, order_sequence) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
       const updateInv = db.prepare("UPDATE inventory SET quantity = quantity - ? WHERE id = ?");
 
+      let sequence = 1;
       for (const item of processedItems) {
         const { menu, ingredients, quantity } = item;
-        insertTx.run('income', 'Sales', menu.price * quantity, `Order ${platform}: ${menu.name} (x${quantity})`, menu.id, quantity, platform, finalOrderId, platform, customer_name || 'Pelanggan Delivery', status);
+        insertTx.run('income', 'Sales', menu.price * quantity, `Order ${platform}: ${menu.name} (x${quantity})`, menu.id, quantity, platform, finalOrderId, platform, customer_name || 'Pelanggan Delivery', status, sequence++);
 
         for (const ing of ingredients) {
           updateInv.run(ing.quantity * quantity, ing.inventory_id);
+          checkLowStockAndNotify(ing.inventory_id);
         }
       }
 
@@ -600,6 +528,7 @@ async function startServer() {
         db.prepare("UPDATE settings SET value = ? WHERE key = 'order_counter'").run(String(counter + 1));
 
         let subtotal = 0;
+        let sequence = 1;
         for (const item of items) {
           if (!item.menuId) continue; // Skip items with null/undefined menuId
           const menu = db.prepare("SELECT * FROM menus WHERE id = ?").get(item.menuId) as any;
@@ -608,8 +537,8 @@ async function startServer() {
 
           // Insert into transactions as pending
           db.prepare(`
-            INSERT INTO transactions (type, category, amount, description, customer_name, table_number, order_id, display_id, source, status, menu_id, quantity, date, promo_code, payment_method, notes)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?, ?, ?)
+            INSERT INTO transactions (type, category, amount, description, customer_name, table_number, order_id, display_id, source, status, menu_id, quantity, sugar_level, ice_level, date, promo_code, payment_method, notes, order_sequence)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?, ?, ?, ?)
           `).run(
             'income',
             menu.category,
@@ -623,17 +552,20 @@ async function startServer() {
             'pending',
             item.menuId,
             item.quantity,
+            item.sugarLevel || null,
+            item.iceLevel || null,
             promoCode || null,
             paymentMethod || 'Cash',
-            notes || null
+            notes || null,
+            sequence++
           );
         }
 
         // Insert discount row if any
         if (promoCode && discountAmount > 0) {
           db.prepare(`
-            INSERT INTO transactions (type, category, amount, description, customer_name, table_number, order_id, display_id, source, status, date, promo_code, payment_method)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?, ?)
+            INSERT INTO transactions (type, category, amount, description, customer_name, table_number, order_id, display_id, source, status, date, promo_code, payment_method, order_sequence)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?, ?, ?)
           `).run(
             'income',
             'Discount',
@@ -646,7 +578,8 @@ async function startServer() {
             'Customer',
             'pending',
             promoCode,
-            paymentMethod || 'Cash'
+            paymentMethod || 'Cash',
+            sequence++
           );
         }
 
@@ -660,8 +593,8 @@ async function startServer() {
         const tax = Math.round((subtotal - (discountAmount || 0)) * (taxRate / 100));
         if (tax > 0) {
           db.prepare(`
-            INSERT INTO transactions (type, category, amount, description, customer_name, table_number, order_id, display_id, source, status, date, payment_method)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?)
+            INSERT INTO transactions (type, category, amount, description, customer_name, table_number, order_id, display_id, source, status, date, payment_method, order_sequence)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?, ?)
           `).run(
             'income',
             'Tax',
@@ -673,7 +606,8 @@ async function startServer() {
             displayId,
             'Customer',
             'pending',
-            paymentMethod || 'Cash'
+            paymentMethod || 'Cash',
+            sequence++
           );
         }
 
@@ -695,7 +629,7 @@ async function startServer() {
       FROM transactions t
       LEFT JOIN menus m ON t.menu_id = m.id
       WHERE t.customer_name = ?
-      ORDER BY t.date DESC
+      ORDER BY t.date DESC, t.order_sequence ASC
       LIMIT 50
     `).all(customerName) as any[];
 
@@ -795,6 +729,20 @@ async function startServer() {
     res.json({ success: true });
   });
 
+  // Helper to check low stock and notify
+  function checkLowStockAndNotify(inventoryId: number) {
+    const item = db.prepare("SELECT * FROM inventory WHERE id = ?").get(inventoryId) as any;
+    if (item && item.quantity <= item.min_stock) {
+      io.emit("LOW_STOCK_ALERT", {
+        id: item.id,
+        name: item.name,
+        quantity: item.quantity,
+        unit: item.unit,
+        min_stock: item.min_stock
+      });
+    }
+  }
+
   // Orders API
   app.post("/api/orders", authenticateToken, (req, res) => {
     const { items, paymentMethod, customerName, orderId: providedOrderId, source, tableNumber, customerId, notes } = req.body;
@@ -844,7 +792,7 @@ async function startServer() {
           existing.required += required;
           aggregatedIngredients.set(ing.inventory_id, existing);
         }
-        processedItems.push({ menu, ingredients, quantity: item.quantity });
+        processedItems.push({ menu, ingredients, quantity: item.quantity, sugarLevel: item.sugarLevel, iceLevel: item.iceLevel });
       }
 
       for (const [id, data] of aggregatedIngredients.entries()) {
@@ -860,15 +808,17 @@ async function startServer() {
       // All orders should go to processing to enter the queue
       const status = 'processing';
       
-      const insertTx = db.prepare("INSERT INTO transactions (type, category, amount, description, menu_id, quantity, payment_method, order_id, source, customer_name, status, table_number, customer_id, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+      const insertTx = db.prepare("INSERT INTO transactions (type, category, amount, description, menu_id, quantity, payment_method, order_id, source, customer_name, status, table_number, customer_id, notes, sugar_level, ice_level, order_sequence) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
       const updateInv = db.prepare("UPDATE inventory SET quantity = quantity - ? WHERE id = ?");
 
+      let sequence = 1;
       for (const item of processedItems) {
-        const { menu, ingredients, quantity } = item;
-        insertTx.run('income', 'Sales', menu.price * quantity, `Order: ${menu.name} (x${quantity})`, menu.id, quantity, paymentMethod || 'Cash', orderId, source || 'POS', customerName || 'Umum', status, tableNumber || null, customerId || null, notes || null);
+        const { menu, ingredients, quantity, sugarLevel, iceLevel } = item;
+        insertTx.run('income', 'Sales', menu.price * quantity, `Order: ${menu.name} (x${quantity})`, menu.id, quantity, paymentMethod || 'Cash', orderId, source || 'POS', customerName || 'Umum', status, tableNumber || null, customerId || null, notes || null, sugarLevel || null, iceLevel || null, sequence++);
 
         for (const ing of ingredients) {
           updateInv.run(ing.quantity * quantity, ing.inventory_id);
+          checkLowStockAndNotify(ing.inventory_id);
         }
       }
 
@@ -903,6 +853,7 @@ async function startServer() {
       FROM transactions t
       LEFT JOIN menus m ON t.menu_id = m.id
       WHERE t.order_id = ?
+      ORDER BY t.order_sequence ASC
     `).all(orderId) as any[];
 
     if (items.length === 0) {
@@ -917,10 +868,15 @@ async function startServer() {
       tableNumber: items[0].table_number,
       customerId: items[0].customer_id,
       status: items[0].status,
+      subtotal: items.filter(i => i.category !== 'Discount' && i.category !== 'Tax').reduce((sum, item) => sum + item.amount, 0),
+      discount: Math.abs(items.filter(i => i.category === 'Discount').reduce((sum, item) => sum + item.amount, 0)),
+      tax: items.filter(i => i.category === 'Tax').reduce((sum, item) => sum + item.amount, 0),
       total: items.reduce((sum, item) => sum + item.amount, 0),
-      items: items.map(item => ({
+      items: items.filter(i => i.menu_id !== null).map(item => ({
         menu: { id: item.menu_id, name: item.menu_name, price: item.menu_price },
-        quantity: item.quantity
+        quantity: item.quantity,
+        sugarLevel: item.sugar_level,
+        iceLevel: item.ice_level
       }))
     };
 
@@ -968,7 +924,12 @@ async function startServer() {
           status,
           date as created_at,
           json_group_array(
-            json_object('menu_name', REPLACE(description, 'Order via Customer: ', ''), 'quantity', quantity)
+            json_object(
+              'menu_name', REPLACE(description, 'Order via Customer: ', ''), 
+              'quantity', quantity,
+              'sugarLevel', sugar_level,
+              'iceLevel', ice_level
+            )
           ) as items
         FROM transactions
         WHERE status IN ('pending', 'processing')
@@ -1011,7 +972,9 @@ async function startServer() {
       }
       orders[item.order_id].items.push({
         name: item.menu_name,
-        quantity: item.quantity
+        quantity: item.quantity,
+        sugarLevel: item.sugar_level,
+        iceLevel: item.ice_level
       });
     });
 
@@ -1032,9 +995,41 @@ async function startServer() {
   app.put("/api/orders/:orderId/status", authenticateToken, (req, res) => {
     const { orderId } = req.params;
     const { status } = req.body;
-    db.prepare("UPDATE transactions SET status = ? WHERE order_id = ?").run(status, orderId);
-    io.emit("ORDER_UPDATED");
-    res.json({ success: true });
+    
+    try {
+      const transaction = db.transaction(() => {
+        // Get current status
+        const currentStatus = db.prepare("SELECT status FROM transactions WHERE order_id = ? LIMIT 1").get(orderId) as any;
+        
+        // If moving from pending/awaiting_confirmation to processing/completed, update inventory
+        if (currentStatus && (currentStatus.status === 'pending' || currentStatus.status === 'awaiting_confirmation') && (status === 'processing' || status === 'completed')) {
+          const items = db.prepare("SELECT menu_id, quantity FROM transactions WHERE order_id = ? AND menu_id IS NOT NULL").all(orderId) as any[];
+          
+          for (const item of items) {
+            const ingredients = db.prepare(`
+              SELECT mi.*, i.name, i.quantity as current_stock, i.unit
+              FROM menu_ingredients mi
+              JOIN inventory i ON mi.inventory_id = i.id
+              WHERE mi.menu_id = ?
+            `).all(item.menu_id) as any[];
+
+            for (const ing of ingredients) {
+              db.prepare("UPDATE inventory SET quantity = quantity - ? WHERE id = ?").run(ing.quantity * item.quantity, ing.inventory_id);
+              checkLowStockAndNotify(ing.inventory_id);
+            }
+          }
+        }
+        
+        db.prepare("UPDATE transactions SET status = ? WHERE order_id = ?").run(status, orderId);
+        return { success: true };
+      });
+
+      const result = transaction();
+      io.emit("ORDER_UPDATED");
+      res.json(result);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
   });
 
   // Inventory API
@@ -1240,6 +1235,50 @@ async function startServer() {
       dailyData,
       expenseByCategory,
       incomeByCategory
+    });
+  });
+
+  app.get("/api/reports/daily-summary", authenticateToken, isAdmin, (req, res) => {
+    const today = new Date().toISOString().split('T')[0];
+    
+    const summary = db.prepare(`
+      SELECT 
+        COUNT(DISTINCT order_id) as total_orders,
+        SUM(CASE WHEN category NOT IN ('Discount', 'Tax') THEN quantity ELSE 0 END) as total_items,
+        SUM(amount) as total_revenue
+      FROM transactions 
+      WHERE date >= ? AND type = 'income' AND status != 'pending'
+    `).get(today) as any;
+
+    const topItems = db.prepare(`
+      SELECT 
+        m.name,
+        SUM(t.quantity) as quantity,
+        SUM(t.amount) as revenue
+      FROM transactions t
+      JOIN menus m ON t.menu_id = m.id
+      WHERE t.date >= ? AND t.type = 'income' AND t.status != 'pending'
+      GROUP BY t.menu_id
+      ORDER BY quantity DESC
+      LIMIT 5
+    `).all(today);
+
+    const salesByPayment = db.prepare(`
+      SELECT 
+        payment_method,
+        SUM(amount) as total
+      FROM transactions 
+      WHERE date >= ? AND type = 'income' AND status != 'pending'
+      GROUP BY payment_method
+    `).all(today);
+
+    res.json({
+      date: today,
+      totalOrders: summary?.total_orders || 0,
+      totalItems: summary?.total_items || 0,
+      totalRevenue: summary?.total_revenue || 0,
+      topItems,
+      salesByPayment
     });
   });
 

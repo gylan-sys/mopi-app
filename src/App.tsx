@@ -228,6 +228,13 @@ const AdCarousel = () => {
   );
 };
 
+interface CartItem {
+  menu: Menu;
+  quantity: number;
+  sugarLevel?: string;
+  iceLevel?: string;
+}
+
 export default function App() {
   const [user, setUser] = useState<{ id: number, username: string, role: 'admin' | 'cashier' } | null>(null);
   const [darkMode, setDarkMode] = useState(() => {
@@ -337,7 +344,7 @@ export default function App() {
   const [settingsSubTab, setSettingsSubTab] = useState<'general' | 'theme' | 'email' | 'payment' | 'delivery' | 'webhook' | 'receipt' | 'shortcuts' | 'backup'>('general');
   const [testEmailTo, setTestEmailTo] = useState('');
   const [isTestingEmail, setIsTestingEmail] = useState(false);
-  const [cart, setCart] = useState<{ menu: Menu, quantity: number, sugarLevel?: string, iceLevel?: string }[]>([]);
+  const [cart, setCart] = useState<CartItem[]>([]);
   const [activeOrders, setActiveOrders] = useState<any[]>([]);
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
@@ -464,6 +471,7 @@ export default function App() {
   const [showCustomerOrderSuccess, setShowCustomerOrderSuccess] = useState(false);
   const [showSuccessAnimation, setShowSuccessAnimation] = useState(false);
   const [showQRISModal, setShowQRISModal] = useState(false);
+  const [cartPulse, setCartPulse] = useState(false);
   const [qrisAmount, setQrisAmount] = useState(0);
   const [isQRISLoading, setIsQRISLoading] = useState(false);
   const [customerOrderId, setCustomerOrderId] = useState('');
@@ -1439,6 +1447,16 @@ export default function App() {
           image: menu.image_url
         }]);
         
+        // Pulse effect
+        setCartPulse(true);
+        setTimeout(() => setCartPulse(false), 300);
+        
+        toast.success(`${menu.name} ditambahkan`, {
+          icon: <ShoppingCart size={16} className="text-emerald-500" />,
+          duration: 1500,
+          position: 'bottom-right'
+        });
+        
         // Remove item after animation completes
         setTimeout(() => {
           setFlyingItems(prevFlying => prevFlying.filter(item => item.id !== id));
@@ -1882,8 +1900,11 @@ export default function App() {
           {/* Header */}
           <header className="bg-white border-b border-coffee-100 sticky top-0 z-30 px-4 py-4 md:px-8 flex items-center justify-between shrink-0">
             <div className="flex items-center gap-4">
-              <div className="bg-coffee-900 p-2.5 rounded-2xl text-white shadow-lg shadow-coffee-200">
-                <Coffee size={24} />
+              <div className={cn(
+                "p-2.5 rounded-2xl shadow-lg shadow-coffee-200 flex items-center justify-center",
+                appSettings.app_logo_url ? "bg-white" : "bg-coffee-900 text-white"
+              )}>
+                <IconComponent size={24} />
               </div>
               <div>
                 <h1 className="text-xl font-serif font-bold text-coffee-950">{appSettings.customer_page_title || appSettings.app_name}</h1>
@@ -1907,8 +1928,10 @@ export default function App() {
                 <ClipboardList size={20} />
               </button>
 
-              <button 
+              <motion.button 
                 id="mobile-cart-icon"
+                animate={cartPulse ? { scale: [1, 1.2, 1] } : {}}
+                transition={{ duration: 0.3 }}
                 onClick={() => setShowMobileCart(true)}
                 className="relative p-3 bg-coffee-900 text-white rounded-2xl shadow-lg shadow-coffee-200"
               >
@@ -1918,7 +1941,7 @@ export default function App() {
                     {cart.reduce((sum, item) => sum + item.quantity, 0)}
                   </span>
                 )}
-              </button>
+              </motion.button>
             </div>
           </header>
 
@@ -4523,8 +4546,24 @@ export default function App() {
                   {/* Desktop Sidebar Summary - Hidden on Mobile */}
                   <div className="hidden lg:block space-y-6">
                     {/* Desktop Cart Section - Moved to Right Column */}
-                    <div id="desktop-cart-icon" className="space-y-4">
-                      <h3 className="text-xl font-serif font-bold text-coffee-950">Daftar Orderan</h3>
+                    <motion.div 
+                      id="desktop-cart-icon" 
+                      animate={cartPulse ? { scale: [1, 1.02, 1] } : {}}
+                      transition={{ duration: 0.3 }}
+                      className="space-y-4"
+                    >
+                      <div className="flex justify-between items-center">
+                        <h3 className="text-xl font-serif font-bold text-coffee-950">Daftar Orderan</h3>
+                        {cart.length > 0 && (
+                          <button 
+                            onClick={() => setCart([])}
+                            className="text-[10px] font-black uppercase text-rose-500 hover:text-rose-600 transition-colors tracking-widest flex items-center gap-1"
+                          >
+                            <Trash2 size={12} />
+                            Hapus Semua
+                          </button>
+                        )}
+                      </div>
                       {cart.length === 0 ? (
                         <div className="glass-card p-8 flex flex-col items-center justify-center text-center bg-white/50 border-dashed border-2">
                           <div className="bg-coffee-50 p-4 rounded-full mb-3">
@@ -4545,83 +4584,99 @@ export default function App() {
                                 </tr>
                               </thead>
                               <tbody className="divide-y divide-coffee-50">
-                                {cart.map((item) => (
-                                  <tr key={item.menu.id} className="hover:bg-coffee-50/30 transition-colors">
-                                    <td className="px-4 py-3">
-                                      <div>
-                                        <p className="font-bold text-coffee-950 text-xs">{item.menu.name}</p>
-                                        <p className="text-[10px] text-coffee-500">{formatIDR(item.menu.price)}</p>
-                                        
-                                        {/* Sugar and Ice Options */}
-                                        {(item.menu.category?.toLowerCase().includes('kopi') || 
-                                          item.menu.category?.toLowerCase().includes('teh') || 
-                                          item.menu.category?.toLowerCase().includes('coffee') || 
-                                          item.menu.category?.toLowerCase().includes('tea') || 
-                                          item.menu.category?.toLowerCase().includes('drink') || 
-                                          item.menu.category?.toLowerCase().includes('minuman')) && (
-                                          <div className="mt-2 flex gap-2">
-                                            <select 
-                                              value={item.sugarLevel || 'Normal'}
-                                              onChange={(e) => handleUpdateCartOptions(item.menu.id, { sugarLevel: e.target.value })}
-                                              className="bg-coffee-50 border border-coffee-100 rounded text-[9px] py-0.5 px-1 focus:outline-none"
-                                              title="Sugar Level"
-                                            >
-                                              <option value="No Sugar">No Sugar</option>
-                                              <option value="Less Sugar">Less Sugar</option>
-                                              <option value="Normal">Normal</option>
-                                              <option value="Extra Sugar">Extra</option>
-                                            </select>
-                                            <select 
-                                              value={item.iceLevel || 'Normal'}
-                                              onChange={(e) => handleUpdateCartOptions(item.menu.id, { iceLevel: e.target.value })}
-                                              className="bg-coffee-50 border border-coffee-100 rounded text-[9px] py-0.5 px-1 focus:outline-none"
-                                              title="Ice Level"
-                                            >
-                                              <option value="No Ice">No Ice</option>
-                                              <option value="Less Ice">Less Ice</option>
-                                              <option value="Normal">Normal</option>
-                                              <option value="Extra Ice">Extra</option>
-                                            </select>
+                                {(Object.entries(
+                                  cart.reduce((acc, item) => {
+                                    const category = item.menu.category || 'Lainnya';
+                                    if (!acc[category]) acc[category] = [];
+                                    acc[category].push(item);
+                                    return acc;
+                                  }, {} as Record<string, CartItem[]>)
+                                ) as [string, CartItem[]][]).map(([category, items]) => (
+                                  <React.Fragment key={category}>
+                                    <tr className="bg-coffee-50/50">
+                                      <td colSpan={4} className="px-4 py-1.5 text-[9px] font-black text-coffee-400 uppercase tracking-widest border-y border-coffee-100/50">
+                                        {category}
+                                      </td>
+                                    </tr>
+                                    {items.map((item) => (
+                                      <tr key={item.menu.id} className="hover:bg-coffee-50/30 transition-colors">
+                                        <td className="px-4 py-3">
+                                          <div>
+                                            <p className="font-bold text-coffee-950 text-xs">{item.menu.name}</p>
+                                            <p className="text-[10px] text-coffee-500">{formatIDR(item.menu.price)}</p>
+                                            
+                                            {/* Sugar and Ice Options */}
+                                            {(item.menu.category?.toLowerCase().includes('kopi') || 
+                                              item.menu.category?.toLowerCase().includes('teh') || 
+                                              item.menu.category?.toLowerCase().includes('coffee') || 
+                                              item.menu.category?.toLowerCase().includes('tea') || 
+                                              item.menu.category?.toLowerCase().includes('drink') || 
+                                              item.menu.category?.toLowerCase().includes('minuman')) && (
+                                              <div className="mt-2 flex gap-2">
+                                                <select 
+                                                  value={item.sugarLevel || 'Normal'}
+                                                  onChange={(e) => handleUpdateCartOptions(item.menu.id, { sugarLevel: e.target.value })}
+                                                  className="bg-coffee-50 border border-coffee-100 rounded text-[9px] py-0.5 px-1 focus:outline-none"
+                                                  title="Sugar Level"
+                                                >
+                                                  <option value="No Sugar">No Sugar</option>
+                                                  <option value="Less Sugar">Less Sugar</option>
+                                                  <option value="Normal">Normal</option>
+                                                  <option value="Extra Sugar">Extra</option>
+                                                </select>
+                                                <select 
+                                                  value={item.iceLevel || 'Normal'}
+                                                  onChange={(e) => handleUpdateCartOptions(item.menu.id, { iceLevel: e.target.value })}
+                                                  className="bg-coffee-50 border border-coffee-100 rounded text-[9px] py-0.5 px-1 focus:outline-none"
+                                                  title="Ice Level"
+                                                >
+                                                  <option value="No Ice">No Ice</option>
+                                                  <option value="Less Ice">Less Ice</option>
+                                                  <option value="Normal">Normal</option>
+                                                  <option value="Extra Ice">Extra</option>
+                                                </select>
+                                              </div>
+                                            )}
                                           </div>
-                                        )}
-                                      </div>
-                                    </td>
-                                    <td className="px-4 py-3">
-                                      <div className="flex items-center justify-center gap-2">
-                                        <button 
-                                          onClick={() => handleUpdateCartQuantity(item.menu.id, -1)}
-                                          className="w-6 h-6 flex items-center justify-center rounded-md border border-coffee-200 text-coffee-600 hover:bg-coffee-50 text-xs"
-                                        >
-                                          -
-                                        </button>
-                                        <span className="font-bold text-coffee-900 text-xs w-4 text-center">{item.quantity}</span>
-                                        <button 
-                                          onClick={() => handleUpdateCartQuantity(item.menu.id, 1)}
-                                          className="w-6 h-6 flex items-center justify-center rounded-md border border-coffee-200 text-coffee-600 hover:bg-coffee-50 text-xs"
-                                        >
-                                          +
-                                        </button>
-                                      </div>
-                                    </td>
-                                    <td className="px-4 py-3 text-right font-bold text-coffee-950 text-xs">
-                                      {formatIDR(item.menu.price * item.quantity)}
-                                    </td>
-                                    <td className="px-4 py-3 text-right">
-                                      <button 
-                                        onClick={() => handleRemoveFromCart(item.menu.id)}
-                                        className="text-coffee-300 hover:text-rose-500 transition-colors"
-                                      >
-                                        <Trash2 size={14} />
-                                      </button>
-                                    </td>
-                                  </tr>
+                                        </td>
+                                        <td className="px-4 py-3">
+                                          <div className="flex items-center justify-center gap-2">
+                                            <button 
+                                              onClick={() => handleUpdateCartQuantity(item.menu.id, -1)}
+                                              className="w-8 h-8 flex items-center justify-center rounded-xl border border-coffee-200 text-coffee-600 hover:bg-coffee-50 text-sm active:scale-90 transition-all"
+                                            >
+                                              <Minus size={14} />
+                                            </button>
+                                            <span className="font-bold text-coffee-900 text-xs w-5 text-center">{item.quantity}</span>
+                                            <button 
+                                              onClick={() => handleUpdateCartQuantity(item.menu.id, 1)}
+                                              className="w-8 h-8 flex items-center justify-center rounded-xl border border-coffee-200 text-coffee-600 hover:bg-coffee-50 text-sm active:scale-90 transition-all"
+                                            >
+                                              <Plus size={14} />
+                                            </button>
+                                          </div>
+                                        </td>
+                                        <td className="px-4 py-3 text-right font-bold text-coffee-950 text-xs">
+                                          {formatIDR(item.menu.price * item.quantity)}
+                                        </td>
+                                        <td className="px-4 py-3 text-right">
+                                          <button 
+                                            onClick={() => handleRemoveFromCart(item.menu.id)}
+                                            className="text-coffee-300 hover:text-rose-500 transition-colors p-2"
+                                          >
+                                            <Trash2 size={16} />
+                                          </button>
+                                        </td>
+                                      </tr>
+                                    ))}
+                                  </React.Fragment>
                                 ))}
                               </tbody>
                             </table>
                           </div>
                         </div>
                       )}
-                    </div>
+                    </motion.div>
 
                     <div className="glass-card p-6 bg-coffee-950 text-white border-none sticky top-24 shadow-2xl shadow-coffee-900/20 max-h-[calc(100vh-120px)] overflow-y-auto custom-scrollbar">
                       <h3 className="text-lg font-serif font-bold mb-6">Ringkasan Order</h3>
@@ -4727,7 +4782,8 @@ export default function App() {
                     <motion.button
                       id="mobile-floating-cart"
                       initial={{ scale: 0, y: 20 }}
-                      animate={{ scale: 1, y: 0 }}
+                      animate={cartPulse ? { scale: [1, 1.1, 1], y: 0 } : { scale: 1, y: 0 }}
+                      transition={{ duration: 0.3 }}
                       onClick={() => setShowMobileCart(true)}
                       className="lg:hidden fixed bottom-24 right-6 z-40 bg-coffee-900 text-white p-4 rounded-full shadow-2xl flex items-center gap-3 border-4 border-white active:scale-90 transition-transform"
                     >
@@ -4768,76 +4824,101 @@ export default function App() {
                               </div>
                               <h3 className="text-xl font-serif font-bold text-coffee-950">Keranjang Saya</h3>
                             </div>
-                            <button 
-                              onClick={() => setShowMobileCart(false)}
-                              className="w-10 h-10 rounded-full bg-white border border-coffee-100 flex items-center justify-center text-coffee-400 hover:text-coffee-900"
-                            >
-                              <X size={20} />
-                            </button>
+                            <div className="flex items-center gap-2">
+                              {cart.length > 0 && (
+                                <button 
+                                  onClick={() => setCart([])}
+                                  className="p-2 text-rose-500 hover:bg-rose-50 rounded-full transition-colors"
+                                  title="Hapus Semua"
+                                >
+                                  <Trash2 size={20} />
+                                </button>
+                              )}
+                              <button 
+                                onClick={() => setShowMobileCart(false)}
+                                className="w-10 h-10 rounded-full bg-white border border-coffee-100 flex items-center justify-center text-coffee-400 hover:text-coffee-900"
+                              >
+                                <X size={20} />
+                              </button>
+                            </div>
                           </div>
 
                           <div className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar">
-                            <div className="space-y-4">
-                              {cart.map((item) => (
-                                <div key={item.menu.id} className="flex items-center gap-3 min-[400px]:gap-4 bg-slate-50 p-3 min-[400px]:p-4 rounded-2xl border border-slate-100">
-                                  <div className="w-12 h-12 min-[400px]:w-16 min-[400px]:h-16 rounded-xl overflow-hidden bg-white shrink-0 shadow-sm border border-slate-100">
-                                    {item.menu.image_url ? (
-                                      <img src={item.menu.image_url} alt={item.menu.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                                    ) : (
-                                      <div className="w-full h-full flex items-center justify-center text-coffee-200">
-                                        <Coffee size={20} />
+                            <div className="space-y-6">
+                              {(Object.entries(
+                                cart.reduce((acc, item) => {
+                                  const category = item.menu.category || 'Lainnya';
+                                  if (!acc[category]) acc[category] = [];
+                                  acc[category].push(item);
+                                  return acc;
+                                }, {} as Record<string, CartItem[]>)
+                              ) as [string, CartItem[]][]).map(([category, items]) => (
+                                <div key={category} className="space-y-3">
+                                  <h4 className="text-[10px] font-black uppercase text-coffee-400 tracking-widest px-1">{category}</h4>
+                                  <div className="space-y-3">
+                                    {items.map((item) => (
+                                      <div key={item.menu.id} className="flex items-center gap-3 min-[400px]:gap-4 bg-slate-50 p-3 min-[400px]:p-4 rounded-2xl border border-slate-100">
+                                        <div className="w-12 h-12 min-[400px]:w-16 min-[400px]:h-16 rounded-xl overflow-hidden bg-white shrink-0 shadow-sm border border-slate-100">
+                                          {item.menu.image_url ? (
+                                            <img src={item.menu.image_url} alt={item.menu.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                                          ) : (
+                                            <div className="w-full h-full flex items-center justify-center text-coffee-200">
+                                              <Coffee size={20} />
+                                            </div>
+                                          )}
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                          <h4 className="font-bold text-coffee-950 text-xs min-[400px]:text-sm truncate">{item.menu.name}</h4>
+                                          <p className="text-[10px] min-[400px]:text-xs text-coffee-500">{formatIDR(item.menu.price)}</p>
+                                          
+                                          {/* Sugar and Ice Options */}
+                                          {(item.menu.category?.toLowerCase().includes('kopi') || 
+                                            item.menu.category?.toLowerCase().includes('teh') || 
+                                            item.menu.category?.toLowerCase().includes('coffee') || 
+                                            item.menu.category?.toLowerCase().includes('tea') || 
+                                            item.menu.category?.toLowerCase().includes('drink') || 
+                                            item.menu.category?.toLowerCase().includes('minuman')) && (
+                                            <div className="mt-1.5 flex gap-1.5">
+                                              <select 
+                                                value={item.sugarLevel || 'Normal'}
+                                                onChange={(e) => handleUpdateCartOptions(item.menu.id, { sugarLevel: e.target.value })}
+                                                className="bg-white border border-slate-200 rounded-lg text-[9px] min-[400px]:text-[10px] py-0.5 min-[400px]:py-1 px-1.5 min-[400px]:px-2 focus:outline-none focus:ring-1 focus:ring-coffee-500"
+                                              >
+                                                <option value="No Sugar">No Sugar</option>
+                                                <option value="Less Sugar">Less Sugar</option>
+                                                <option value="Normal">Normal</option>
+                                                <option value="Extra Sugar">Extra</option>
+                                              </select>
+                                              <select 
+                                                value={item.iceLevel || 'Normal'}
+                                                onChange={(e) => handleUpdateCartOptions(item.menu.id, { iceLevel: e.target.value })}
+                                                className="bg-white border border-slate-200 rounded-lg text-[9px] min-[400px]:text-[10px] py-0.5 min-[400px]:py-1 px-1.5 min-[400px]:px-2 focus:outline-none focus:ring-1 focus:ring-coffee-500"
+                                              >
+                                                <option value="No Ice">No Ice</option>
+                                                <option value="Less Ice">Less Ice</option>
+                                                <option value="Normal">Normal</option>
+                                                <option value="Extra Ice">Extra</option>
+                                              </select>
+                                            </div>
+                                          )}
+                                        </div>
+                                        <div className="flex items-center gap-2 min-[400px]:gap-3 bg-white p-1 rounded-xl border border-slate-200">
+                                          <button 
+                                            onClick={() => handleUpdateCartQuantity(item.menu.id, -1)}
+                                            className="w-8 h-8 min-[400px]:w-10 min-[400px]:h-10 flex items-center justify-center rounded-xl text-coffee-600 hover:bg-coffee-50 active:bg-coffee-100 active:scale-90 transition-all"
+                                          >
+                                            <Minus size={16} />
+                                          </button>
+                                          <span className="font-bold text-coffee-900 text-xs min-[400px]:text-sm w-4 text-center">{item.quantity}</span>
+                                          <button 
+                                            onClick={() => handleUpdateCartQuantity(item.menu.id, 1)}
+                                            className="w-8 h-8 min-[400px]:w-10 min-[400px]:h-10 flex items-center justify-center rounded-xl text-coffee-600 hover:bg-coffee-50 active:bg-coffee-100 active:scale-90 transition-all"
+                                          >
+                                            <Plus size={16} />
+                                          </button>
+                                        </div>
                                       </div>
-                                    )}
-                                  </div>
-                                  <div className="flex-1 min-w-0">
-                                    <h4 className="font-bold text-coffee-950 text-xs min-[400px]:text-sm truncate">{item.menu.name}</h4>
-                                    <p className="text-[10px] min-[400px]:text-xs text-coffee-500">{formatIDR(item.menu.price)}</p>
-                                    
-                                    {/* Sugar and Ice Options */}
-                                    {(item.menu.category?.toLowerCase().includes('kopi') || 
-                                      item.menu.category?.toLowerCase().includes('teh') || 
-                                      item.menu.category?.toLowerCase().includes('coffee') || 
-                                      item.menu.category?.toLowerCase().includes('tea') || 
-                                      item.menu.category?.toLowerCase().includes('drink') || 
-                                      item.menu.category?.toLowerCase().includes('minuman')) && (
-                                      <div className="mt-1.5 flex gap-1.5">
-                                        <select 
-                                          value={item.sugarLevel || 'Normal'}
-                                          onChange={(e) => handleUpdateCartOptions(item.menu.id, { sugarLevel: e.target.value })}
-                                          className="bg-white border border-slate-200 rounded-lg text-[9px] min-[400px]:text-[10px] py-0.5 min-[400px]:py-1 px-1.5 min-[400px]:px-2 focus:outline-none focus:ring-1 focus:ring-coffee-500"
-                                        >
-                                          <option value="No Sugar">No Sugar</option>
-                                          <option value="Less Sugar">Less Sugar</option>
-                                          <option value="Normal">Normal</option>
-                                          <option value="Extra Sugar">Extra</option>
-                                        </select>
-                                        <select 
-                                          value={item.iceLevel || 'Normal'}
-                                          onChange={(e) => handleUpdateCartOptions(item.menu.id, { iceLevel: e.target.value })}
-                                          className="bg-white border border-slate-200 rounded-lg text-[9px] min-[400px]:text-[10px] py-0.5 min-[400px]:py-1 px-1.5 min-[400px]:px-2 focus:outline-none focus:ring-1 focus:ring-coffee-500"
-                                        >
-                                          <option value="No Ice">No Ice</option>
-                                          <option value="Less Ice">Less Ice</option>
-                                          <option value="Normal">Normal</option>
-                                          <option value="Extra Ice">Extra</option>
-                                        </select>
-                                      </div>
-                                    )}
-                                  </div>
-                                  <div className="flex items-center gap-2 min-[400px]:gap-3 bg-white p-1 rounded-xl border border-slate-200">
-                                    <button 
-                                      onClick={() => handleUpdateCartQuantity(item.menu.id, -1)}
-                                      className="w-6 h-6 min-[400px]:w-8 min-[400px]:h-8 flex items-center justify-center rounded-lg text-coffee-600 hover:bg-coffee-50 active:bg-coffee-100"
-                                    >
-                                      -
-                                    </button>
-                                    <span className="font-bold text-coffee-900 text-xs min-[400px]:text-sm w-4 text-center">{item.quantity}</span>
-                                    <button 
-                                      onClick={() => handleUpdateCartQuantity(item.menu.id, 1)}
-                                      className="w-6 h-6 min-[400px]:w-8 min-[400px]:h-8 flex items-center justify-center rounded-lg text-coffee-600 hover:bg-coffee-50 active:bg-coffee-100"
-                                    >
-                                      +
-                                    </button>
+                                    ))}
                                   </div>
                                 </div>
                               ))}

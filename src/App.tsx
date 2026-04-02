@@ -13,6 +13,7 @@ import {
   AlertTriangle,
   Coffee,
   TrendingUp,
+  Lightbulb,
   Wallet,
   Calendar,
   UtensilsCrossed,
@@ -454,6 +455,116 @@ export default function App() {
       }
     }
   }, [activeTab, reportSubTab, financialRange]);
+
+  const getDailyInsights = (summary: any) => {
+    if (!summary) return [];
+    const insights = [];
+    
+    if (summary.totalRevenue > 0) {
+      if (summary.topItems && summary.topItems.length > 0) {
+        insights.push({
+          type: 'success',
+          title: 'Produk Terlaris',
+          message: `${summary.topItems[0].name} adalah menu paling populer hari ini. Pastikan stok bahan baku untuk menu ini selalu tersedia.`
+        });
+      }
+      
+      const qrisSales = summary.salesByPayment?.find((s: any) => s.payment_method === 'QRIS')?.total || 0;
+      const cashSales = summary.salesByPayment?.find((s: any) => s.payment_method === 'Cash')?.total || 0;
+      
+      if (qrisSales > cashSales) {
+        insights.push({
+          type: 'info',
+          title: 'Tren Pembayaran Digital',
+          message: 'Pelanggan lebih banyak menggunakan QRIS hari ini. Pastikan koneksi internet stabil untuk kelancaran transaksi.'
+        });
+      }
+    } else {
+      insights.push({
+        type: 'warning',
+        title: 'Belum Ada Penjualan',
+        message: 'Belum ada transaksi yang tercatat hari ini. Coba tawarkan promo menarik atau update status menu di media sosial.'
+      });
+    }
+    
+    return insights;
+  };
+
+  const getFinancialInsights = (data: any) => {
+    if (!data) return [];
+    const insights = [];
+    
+    const monthlyIncome = data.summary?.monthly?.income || 0;
+    const monthlyExpense = data.summary?.monthly?.expense || 0;
+    
+    if (monthlyIncome > 0) {
+      const profitMargin = ((monthlyIncome - monthlyExpense) / monthlyIncome) * 100;
+      if (profitMargin < 20 && profitMargin > 0) {
+        insights.push({
+          type: 'warning',
+          title: 'Margin Keuntungan Rendah',
+          message: `Margin keuntungan bulan ini sekitar ${profitMargin.toFixed(1)}%. Pertimbangkan untuk meninjau kembali harga menu atau menekan biaya operasional.`
+        });
+      } else if (profitMargin > 50) {
+        insights.push({
+          type: 'success',
+          title: 'Performa Keuangan Luar Biasa',
+          message: `Margin keuntungan sangat sehat (${profitMargin.toFixed(1)}%). Ini waktu yang tepat untuk mempertimbangkan ekspansi atau investasi pada peralatan baru.`
+        });
+      }
+    }
+    
+    if (monthlyExpense > monthlyIncome && monthlyIncome > 0) {
+      insights.push({
+        type: 'danger',
+        title: 'Defisit Anggaran',
+        message: 'Pengeluaran bulan ini melebihi pemasukan. Segera lakukan audit pada biaya bahan baku dan operasional.'
+      });
+    }
+    
+    return insights;
+  };
+
+  const getTransactionInsights = (txs: any[], filter: string, date: string) => {
+    const filtered = txs.filter(tx => tx.type === 'income' && tx.category === 'Sales' && (
+      filter === 'daily' 
+        ? formatDate(new Date(tx.date), 'yyyy-MM-dd') === date
+        : formatDate(new Date(tx.date), 'yyyy-MM') === formatDate(new Date(date), 'yyyy-MM')
+    ));
+    
+    if (filtered.length === 0) return [];
+    
+    const insights = [];
+    
+    // Calculate peak hour
+    const hours: any = {};
+    filtered.forEach(tx => {
+      const hour = new Date(tx.date).getHours();
+      hours[hour] = (hours[hour] || 0) + 1;
+    });
+    
+    const peakHour = Object.entries(hours).sort((a: any, b: any) => b[1] - a[1])[0];
+    if (peakHour) {
+      insights.push({
+        type: 'info',
+        title: 'Jam Sibuk',
+        message: `Puncak transaksi terjadi pada pukul ${peakHour[0]}:00. Pastikan staf tambahan tersedia di jam-jam tersebut untuk menjaga kualitas layanan.`
+      });
+    }
+
+    // Average transaction value
+    const totalRevenue = filtered.reduce((sum, tx) => sum + tx.amount, 0);
+    const avgValue = totalRevenue / filtered.length;
+    if (avgValue > 0) {
+      insights.push({
+        type: 'success',
+        title: 'Rata-rata Transaksi',
+        message: `Rata-rata nilai per transaksi adalah ${formatIDR(avgValue)}. Gunakan teknik upselling untuk meningkatkan nilai ini.`
+      });
+    }
+    
+    return insights;
+  };
 
   const [isCustomerMode, setIsCustomerMode] = useState(true);
   const [ads, setAds] = useState<any[]>([]);
@@ -3948,6 +4059,42 @@ export default function App() {
                       </table>
                     </div>
                   </div>
+
+                  {/* Transaction Insights */}
+                  <div className="glass-card p-8 bg-gradient-to-br from-coffee-50/50 to-white border-coffee-100">
+                    <h3 className="text-xl font-serif font-bold mb-6 flex items-center gap-2">
+                      <Lightbulb size={20} className="text-amber-500" />
+                      Saran & Insight Transaksi
+                    </h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {getTransactionInsights(transactions, reportFilter, reportDate).map((insight: any, idx: number) => (
+                        <div key={idx} className={cn(
+                          "p-4 rounded-2xl border flex gap-4",
+                          insight.type === 'success' ? "bg-emerald-50 border-emerald-100 text-emerald-900" :
+                          insight.type === 'info' ? "bg-blue-50 border-blue-100 text-blue-900" :
+                          "bg-amber-50 border-amber-100 text-amber-900"
+                        )}>
+                          <div className={cn(
+                            "w-10 h-10 rounded-xl flex items-center justify-center shrink-0",
+                            insight.type === 'success' ? "bg-emerald-100 text-emerald-600" :
+                            insight.type === 'info' ? "bg-blue-100 text-blue-600" :
+                            "bg-amber-100 text-amber-600"
+                          )}>
+                            {insight.type === 'success' ? <TrendingUp size={20} /> :
+                             insight.type === 'info' ? <Info size={20} /> :
+                             <AlertCircle size={20} />}
+                          </div>
+                          <div>
+                            <p className="font-bold text-sm mb-1">{insight.title}</p>
+                            <p className="text-xs opacity-80 leading-relaxed">{insight.message}</p>
+                          </div>
+                        </div>
+                      ))}
+                      {getTransactionInsights(transactions, reportFilter, reportDate).length === 0 && (
+                        <p className="col-span-full text-center text-coffee-400 italic py-4">Belum ada insight tambahan untuk periode ini.</p>
+                      )}
+                    </div>
+                  </div>
                 </div>
               ) : reportSubTab === 'daily-summary' ? (
                 <div className="space-y-8">
@@ -4024,6 +4171,42 @@ export default function App() {
                               <p className="text-center text-coffee-400 italic py-8">Belum ada data pembayaran hari ini</p>
                             )}
                           </div>
+                        </div>
+                      </div>
+
+                      {/* Insights Section */}
+                      <div className="glass-card p-8 bg-gradient-to-br from-coffee-50 to-white border-coffee-100">
+                        <h3 className="text-xl font-serif font-bold mb-6 flex items-center gap-2">
+                          <Lightbulb size={20} className="text-amber-500" />
+                          Saran & Insight Bisnis
+                        </h3>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          {getDailyInsights(dailySummary).map((insight: any, idx: number) => (
+                            <div key={idx} className={cn(
+                              "p-4 rounded-2xl border flex gap-4",
+                              insight.type === 'success' ? "bg-emerald-50 border-emerald-100 text-emerald-900" :
+                              insight.type === 'warning' ? "bg-amber-50 border-amber-100 text-amber-900" :
+                              insight.type === 'info' ? "bg-blue-50 border-blue-100 text-blue-900" :
+                              "bg-rose-50 border-rose-100 text-rose-900"
+                            )}>
+                              <div className={cn(
+                                "w-10 h-10 rounded-xl flex items-center justify-center shrink-0",
+                                insight.type === 'success' ? "bg-emerald-100 text-emerald-600" :
+                                insight.type === 'warning' ? "bg-amber-100 text-amber-600" :
+                                insight.type === 'info' ? "bg-blue-100 text-blue-600" :
+                                "bg-rose-100 text-rose-600"
+                              )}>
+                                {insight.type === 'success' ? <TrendingUp size={20} /> :
+                                 insight.type === 'warning' ? <AlertCircle size={20} /> :
+                                 insight.type === 'info' ? <Info size={20} /> :
+                                 <AlertTriangle size={20} />}
+                              </div>
+                              <div>
+                                <p className="font-bold text-sm mb-1">{insight.title}</p>
+                                <p className="text-xs opacity-80 leading-relaxed">{insight.message}</p>
+                              </div>
+                            </div>
+                          ))}
                         </div>
                       </div>
                     </div>
@@ -4252,6 +4435,47 @@ export default function App() {
                               <p className="text-center text-slate-400 py-8 italic">Belum ada data pengeluaran</p>
                             )}
                           </div>
+                        </div>
+                      </div>
+
+                      {/* Financial Insights */}
+                      <div className="glass-card p-8 bg-gradient-to-br from-blue-50/30 to-white border-blue-100 mt-8">
+                        <h3 className="text-xl font-serif font-bold mb-6 flex items-center gap-2">
+                          <Lightbulb size={20} className="text-amber-500" />
+                          Analisis & Rekomendasi Keuangan
+                        </h3>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                          {getFinancialInsights(financialData).map((insight: any, idx: number) => (
+                            <div key={idx} className={cn(
+                              "p-5 rounded-2xl border flex gap-5 transition-all hover:shadow-md",
+                              insight.type === 'success' ? "bg-emerald-50 border-emerald-100 text-emerald-900" :
+                              insight.type === 'warning' ? "bg-amber-50 border-amber-100 text-amber-900" :
+                              insight.type === 'info' ? "bg-blue-50 border-blue-100 text-blue-900" :
+                              "bg-rose-50 border-rose-100 text-rose-900"
+                            )}>
+                              <div className={cn(
+                                "w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 shadow-sm",
+                                insight.type === 'success' ? "bg-white text-emerald-600" :
+                                insight.type === 'warning' ? "bg-white text-amber-600" :
+                                insight.type === 'info' ? "bg-white text-blue-600" :
+                                "bg-white text-rose-600"
+                              )}>
+                                {insight.type === 'success' ? <TrendingUp size={24} /> :
+                                 insight.type === 'warning' ? <AlertCircle size={24} /> :
+                                 insight.type === 'info' ? <Info size={24} /> :
+                                 <AlertTriangle size={24} />}
+                              </div>
+                              <div>
+                                <p className="font-bold text-base mb-1.5">{insight.title}</p>
+                                <p className="text-sm opacity-80 leading-relaxed">{insight.message}</p>
+                              </div>
+                            </div>
+                          ))}
+                          {getFinancialInsights(financialData).length === 0 && (
+                            <div className="col-span-full p-8 text-center bg-coffee-50/30 rounded-3xl border border-dashed border-coffee-200">
+                              <p className="text-coffee-500 italic">Belum ada insight tambahan untuk periode ini. Terus pantau performa keuangan Anda.</p>
+                            </div>
+                          )}
                         </div>
                       </div>
                     </div>

@@ -2074,22 +2074,33 @@ export default function App() {
   if (loading) return (
     <div className="h-screen flex items-center justify-center bg-coffee-50">
       <div className="flex flex-col items-center gap-6">
-        <motion.div 
-          initial={{ scale: 0.9, opacity: 0.5 }}
-          animate={{ scale: 1, opacity: 1 }}
-          transition={{ 
-            duration: 1.5,
-            repeat: Infinity,
-            repeatType: "reverse",
-            ease: "easeInOut"
-          }}
-          className={cn(
-            "rounded-[2.5rem] shadow-2xl flex items-center justify-center",
-            appSettings.app_logo_url ? "" : "bg-coffee-900 p-10 shadow-coffee-900/20"
-          )}
-        >
-          <IconComponent className={appSettings.app_logo_url ? "" : "text-white"} size={appSettings.app_logo_url ? 180 : 100} />
-        </motion.div>
+        {appSettings.payment_loading_gif_url ? (
+          <motion.img 
+            initial={{ opacity: 0, scale: 0.8 }}
+            animate={{ opacity: 1, scale: 1 }}
+            src={appSettings.payment_loading_gif_url}
+            alt="Loading..."
+            className="w-48 h-48 object-contain"
+            referrerPolicy="no-referrer"
+          />
+        ) : (
+          <motion.div 
+            initial={{ scale: 0.9, opacity: 0.5 }}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={{ 
+              duration: 1.5,
+              repeat: Infinity,
+              repeatType: "reverse",
+              ease: "easeInOut"
+            }}
+            className={cn(
+              "rounded-[2.5rem] shadow-2xl flex items-center justify-center",
+              appSettings.app_logo_url ? "" : "bg-coffee-900 p-10 shadow-coffee-900/20"
+            )}
+          >
+            <IconComponent className={appSettings.app_logo_url ? "" : "text-white"} size={appSettings.app_logo_url ? 180 : 100} />
+          </motion.div>
+        )}
         <div className="text-center">
           <p className="text-coffee-500 font-medium mt-2">Menyiapkan Bisnis Anda...</p>
         </div>
@@ -2802,7 +2813,11 @@ export default function App() {
               <div className="bg-white p-4 sm:p-6 rounded-[2.5rem] border-2 border-coffee-50 shadow-2xl shadow-coffee-100/50 space-y-4 mb-6 relative group">
                 {isQRISLoading ? (
                   <div className="flex flex-col items-center justify-center py-12 gap-4">
-                    <div className="w-12 h-12 border-4 border-coffee-100 border-t-coffee-600 rounded-full animate-spin" />
+                    {appSettings.payment_loading_gif_url ? (
+                      <img src={appSettings.payment_loading_gif_url} alt="Loading..." className="w-24 h-24 object-contain" referrerPolicy="no-referrer" />
+                    ) : (
+                      <div className="w-12 h-12 border-4 border-coffee-100 border-t-coffee-600 rounded-full animate-spin" />
+                    )}
                     <p className="text-coffee-400 font-medium animate-pulse text-[10px] tracking-widest uppercase">Menyiapkan Barcode...</p>
                   </div>
                 ) : (
@@ -2811,7 +2826,7 @@ export default function App() {
                       <motion.img 
                         initial={{ opacity: 0, scale: 0.9 }}
                         animate={{ opacity: 1, scale: 1 }}
-                        src={appSettings.payment_qris_url || 'https://picsum.photos/seed/qris/500/500'} 
+                        src={appSettings.payment_qris_url || 'https://api.qrserver.com/v1/create-qr-code/?size=500x500&data=QRIS_NOT_SET'} 
                         alt="QRIS" 
                         className="w-full aspect-square mx-auto object-contain rounded-3xl"
                         referrerPolicy="no-referrer"
@@ -2820,8 +2835,9 @@ export default function App() {
                     </div>
                     
                     <button 
-                      onClick={() => window.open(appSettings.payment_qris_url || 'https://picsum.photos/seed/qris/500/500', '_blank')}
+                      onClick={() => window.open(appSettings.payment_qris_url || '#', '_blank')}
                       className="flex items-center justify-center gap-2 w-full py-3 bg-coffee-50 text-coffee-600 rounded-2xl text-xs font-bold hover:bg-coffee-100 transition-all"
+                      disabled={!appSettings.payment_qris_url}
                     >
                       <Download size={16} />
                       Simpan QR ke Galeri

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import chroma from 'chroma-js';
 import { io } from 'socket.io-client';
 import { 
+  MessageSquare,
   LayoutDashboard, 
   Package, 
   ArrowUpRight, 
@@ -896,6 +897,12 @@ export default function App() {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (activeTab === 'reports' || activeTab === 'orders' || activeTab === 'inventory') {
+      fetchData();
+    }
+  }, [activeTab]);
 
   const handleUpdatePassword = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -2953,7 +2960,7 @@ export default function App() {
                 }}
                 exit={{ opacity: 0 }}
                 transition={{ duration: 0.8, ease: "easeInOut" }}
-                className="fixed z-[9999] pointer-events-none"
+                className="fixed top-0 left-0 z-[9999] pointer-events-none"
               >
                 <div className="w-10 h-10 rounded-full bg-coffee-500 border-2 border-white shadow-lg overflow-hidden flex items-center justify-center">
                   {item.image ? (
@@ -6237,7 +6244,15 @@ export default function App() {
                                 <td className="py-4">
                                   <span className="text-sm font-bold text-coffee-900">{tx.category}</span>
                                 </td>
-                                <td className="py-4 text-sm text-coffee-600 italic">{tx.description || '-'}</td>
+                                <td className="py-4 text-sm text-coffee-600">
+                                  <div className="italic">{tx.description || '-'}</div>
+                                  {tx.notes && (
+                                    <div className="text-[10px] text-coffee-400 mt-1 flex items-center gap-1">
+                                      <MessageSquare size={10} />
+                                      {tx.notes}
+                                    </div>
+                                  )}
+                                </td>
                                 <td className={cn(
                                   "py-4 text-sm font-bold text-right",
                                   tx.type === 'income' ? "text-emerald-600" : "text-rose-600"
@@ -6247,7 +6262,7 @@ export default function App() {
                                     {tx.order_id && (
                                       <button 
                                         onClick={() => handleReprint(tx.order_id)}
-                                        className="p-1.5 text-coffee-300 hover:text-coffee-600 hover:bg-coffee-50 rounded-lg transition-all opacity-0 group-hover:opacity-100"
+                                        className="p-1.5 text-coffee-400 hover:text-coffee-600 hover:bg-coffee-100 rounded-lg transition-all shadow-sm bg-white border border-coffee-100"
                                         title="Cetak Ulang Struk"
                                       >
                                         <Printer size={14} />

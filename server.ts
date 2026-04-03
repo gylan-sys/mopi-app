@@ -958,8 +958,16 @@ async function startServer() {
       let sequence = 1;
       for (const item of processedItems) {
         const { menu, ingredients, quantity, sugarLevel, iceLevel } = item;
+        const itemDetails = [
+          sugarLevel ? `Gula: ${sugarLevel}` : null,
+          iceLevel ? `Es: ${iceLevel}` : null,
+          tableNumber ? `Meja: ${tableNumber}` : null
+        ].filter(Boolean).join(', ');
+        
+        const description = `Order: ${menu.name} (x${quantity})${itemDetails ? ` [${itemDetails}]` : ''}`;
+
         insertTx.run(
-          'income', 'Sales', menu.price * quantity, `Order: ${menu.name} (x${quantity})`, 
+          'income', 'Sales', menu.price * quantity, description, 
           menu.id, quantity, paymentMethod || 'Cash', orderId, source || 'POS', 
           customerName || 'Umum', status, tableNumber || null, customerId || null, 
           notes || null, sugarLevel || null, iceLevel || null, sequence++, now, null

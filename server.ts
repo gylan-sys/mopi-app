@@ -14,6 +14,7 @@ import cookieParser from "cookie-parser";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
 import ExcelJS from "exceljs";
+import { toZonedTime } from 'date-fns-tz';
 
 import { z } from "zod";
 
@@ -540,7 +541,7 @@ async function startServer() {
           // Insert into transactions as pending
           db.prepare(`
             INSERT INTO transactions (type, category, amount, description, customer_name, table_number, order_id, display_id, source, status, menu_id, quantity, sugar_level, ice_level, date, promo_code, payment_method, notes, order_sequence)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           `).run(
             'income',
             menu.category,
@@ -556,6 +557,7 @@ async function startServer() {
             item.quantity,
             item.sugarLevel || null,
             item.iceLevel || null,
+            new Date().toISOString(),
             promoCode || null,
             paymentMethod || 'Cash',
             notes || null,
@@ -567,7 +569,7 @@ async function startServer() {
         if (promoCode && discountAmount > 0) {
           db.prepare(`
             INSERT INTO transactions (type, category, amount, description, customer_name, table_number, order_id, display_id, source, status, date, promo_code, payment_method, order_sequence)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           `).run(
             'income',
             'Discount',
@@ -579,6 +581,7 @@ async function startServer() {
             displayId,
             'Customer',
             'pending',
+            new Date().toISOString(),
             promoCode,
             paymentMethod || 'Cash',
             sequence++
@@ -596,7 +599,7 @@ async function startServer() {
         if (tax > 0) {
           db.prepare(`
             INSERT INTO transactions (type, category, amount, description, customer_name, table_number, order_id, display_id, source, status, date, payment_method, order_sequence)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           `).run(
             'income',
             'Tax',
@@ -608,6 +611,7 @@ async function startServer() {
             displayId,
             'Customer',
             'pending',
+            new Date().toISOString(),
             paymentMethod || 'Cash',
             sequence++
           );
@@ -939,19 +943,54 @@ async function startServer() {
 
       // All orders should go to processing to enter the queue
       const status = 'processing';
+      const now = new Date().toISOString();
       
-      const insertTx = db.prepare("INSERT INTO transactions (type, category, amount, description, menu_id, quantity, payment_method, order_id, source, customer_name, status, table_number, customer_id, notes, sugar_level, ice_level, order_sequence) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+      const insertTx = db.prepare(`
+        INSERT INTO transactions (
+          type, category, amount, description, menu_id, quantity, 
+          payment_method, order_id, source, customer_name, status, 
+          table_number, customer_id, notes, sugar_level, ice_level, 
+          order_sequence, date, promo_code
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `);
       const updateInv = db.prepare("UPDATE inventory SET quantity = quantity - ? WHERE id = ?");
 
       let sequence = 1;
       for (const item of processedItems) {
         const { menu, ingredients, quantity, sugarLevel, iceLevel } = item;
-        insertTx.run('income', 'Sales', menu.price * quantity, `Order: ${menu.name} (x${quantity})`, menu.id, quantity, paymentMethod || 'Cash', orderId, source || 'POS', customerName || 'Umum', status, tableNumber || null, customerId || null, notes || null, sugarLevel || null, iceLevel || null, sequence++);
+        insertTx.run(
+          'income', 'Sales', menu.price * quantity, `Order: ${menu.name} (x${quantity})`, 
+          menu.id, quantity, paymentMethod || 'Cash', orderId, source || 'POS', 
+          customerName || 'Umum', status, tableNumber || null, customerId || null, 
+          notes || null, sugarLevel || null, iceLevel || null, sequence++, now, null
+        );
 
         for (const ing of ingredients) {
           updateInv.run(ing.quantity * quantity, ing.inventory_id);
           checkLowStockAndNotify(ing.inventory_id);
         }
+      }
+
+      // Insert Discount row if any
+      const { discountAmount, promoCode } = req.body;
+      if (discountAmount > 0) {
+        insertTx.run(
+          'income', 'Discount', -discountAmount, `Promo: ${promoCode || 'Discount'}`,
+          null, null, paymentMethod || 'Cash', orderId, source || 'POS',
+          customerName || 'Umum', status, tableNumber || null, customerId || null,
+          null, null, null, sequence++, now, promoCode || null
+        );
+      }
+
+      // Insert Tax row if any
+      const { tax } = req.body;
+      if (tax > 0) {
+        insertTx.run(
+          'income', 'Tax', tax, 'Tax',
+          null, null, paymentMethod || 'Cash', orderId, source || 'POS',
+          customerName || 'Umum', status, tableNumber || null, customerId || null,
+          null, null, null, sequence++, now, null
+        );
       }
 
       // Award points if customerId is provided
@@ -1103,10 +1142,12 @@ async function startServer() {
         };
       }
       orders[item.order_id].items.push({
+        id: item.id,
         name: item.menu_name,
         quantity: item.quantity,
         sugarLevel: item.sugar_level,
-        iceLevel: item.ice_level
+        iceLevel: item.ice_level,
+        notes: item.notes
       });
     });
 
@@ -1157,6 +1198,120 @@ async function startServer() {
       });
 
       const result = transaction();
+      io.emit("ORDER_UPDATED");
+      res.json(result);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Delete entire order
+  app.delete("/api/orders/:orderId", authenticateToken, (req, res) => {
+    const { orderId } = req.params;
+    try {
+      const transaction = db.transaction(() => {
+        const items = db.prepare("SELECT menu_id, quantity, status FROM transactions WHERE order_id = ?").all(orderId) as any[];
+        if (items.length === 0) return { error: "Order tidak ditemukan" };
+
+        const status = items[0].status;
+        // Restore inventory if status was processing or completed
+        if (status === 'processing' || status === 'completed') {
+          for (const item of items) {
+            if (!item.menu_id) continue;
+            const ingredients = db.prepare("SELECT inventory_id, quantity FROM menu_ingredients WHERE menu_id = ?").all(item.menu_id) as any[];
+            for (const ing of ingredients) {
+              db.prepare("UPDATE inventory SET quantity = quantity + ? WHERE id = ?").run(ing.quantity * item.quantity, ing.inventory_id);
+            }
+          }
+        }
+
+        db.prepare("DELETE FROM transactions WHERE order_id = ?").run(orderId);
+        return { success: true };
+      });
+
+      const result = transaction();
+      if (result.error) return res.status(404).json(result);
+      io.emit("ORDER_UPDATED");
+      res.json(result);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Update single transaction item
+  app.put("/api/transactions/:id", authenticateToken, (req, res) => {
+    const { id } = req.params;
+    const { quantity, sugar_level, ice_level, notes } = req.body;
+    
+    try {
+      const transaction = db.transaction(() => {
+        const tx = db.prepare("SELECT * FROM transactions WHERE id = ?").get(id) as any;
+        if (!tx) return { error: "Item tidak ditemukan" };
+
+        // If quantity changed, adjust inventory
+        if (quantity !== undefined && quantity !== tx.quantity && (tx.status === 'processing' || tx.status === 'completed')) {
+          const ingredients = db.prepare("SELECT inventory_id, quantity FROM menu_ingredients WHERE menu_id = ?").all(tx.menu_id) as any[];
+          const diff = quantity - tx.quantity;
+          for (const ing of ingredients) {
+            db.prepare("UPDATE inventory SET quantity = quantity - ? WHERE id = ?").run(ing.quantity * diff, ing.inventory_id);
+          }
+        }
+
+        // Update amount if quantity changed
+        let amount = tx.amount;
+        if (quantity !== undefined && tx.menu_id) {
+          const menu = db.prepare("SELECT price FROM menus WHERE id = ?").get(tx.menu_id) as any;
+          if (menu) {
+            amount = menu.price * quantity;
+          }
+        }
+
+        db.prepare(`
+          UPDATE transactions 
+          SET quantity = COALESCE(?, quantity),
+              sugar_level = COALESCE(?, sugar_level),
+              ice_level = COALESCE(?, ice_level),
+              notes = COALESCE(?, notes),
+              amount = ?
+          WHERE id = ?
+        `).run(quantity, sugar_level, ice_level, notes, amount, id);
+
+        return { success: true };
+      });
+
+      const result = transaction();
+      if (result.error) return res.status(404).json(result);
+      io.emit("ORDER_UPDATED");
+      res.json(result);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Delete single transaction item
+  app.delete("/api/transactions/:id", authenticateToken, (req, res) => {
+    const { id } = req.params;
+    try {
+      const transaction = db.transaction(() => {
+        const tx = db.prepare("SELECT * FROM transactions WHERE id = ?").get(id) as any;
+        if (!tx) return { error: "Item tidak ditemukan" };
+
+        // Restore inventory if status was processing or completed
+        if (tx.status === 'processing' || tx.status === 'completed') {
+          if (tx.menu_id) {
+            const ingredients = db.prepare("SELECT inventory_id, quantity FROM menu_ingredients WHERE menu_id = ?").all(tx.menu_id) as any[];
+            for (const ing of ingredients) {
+              db.prepare("UPDATE inventory SET quantity = quantity + ? WHERE id = ?").run(ing.quantity * tx.quantity, ing.inventory_id);
+            }
+          }
+        }
+
+        db.prepare("DELETE FROM transactions WHERE id = ?").run(id);
+        return { success: true };
+      });
+
+      const result = transaction();
+      if (result.error) return res.status(404).json(result);
       io.emit("ORDER_UPDATED");
       res.json(result);
     } catch (error: any) {
@@ -1232,28 +1387,9 @@ async function startServer() {
   });
 
   // Transactions API
-  app.get("/api/transactions", authenticateToken, isAdmin, (req, res) => {
-    const { type, category } = req.query;
-    let sql = "SELECT * FROM transactions";
-    const params: any[] = [];
-    const conditions: string[] = [];
-
-    if (type) {
-      conditions.push("type = ?");
-      params.push(type);
-    }
-    if (category) {
-      conditions.push("category = ?");
-      params.push(category);
-    }
-
-    if (conditions.length > 0) {
-      sql += " WHERE " + conditions.join(" AND ");
-    }
-
-    sql += " ORDER BY date DESC";
-    
-    const rows = db.prepare(sql).all(...params);
+  app.get("/api/transactions", authenticateToken, (req, res) => {
+    // Fetch all transactions for local filtering in the frontend
+    const rows = db.prepare("SELECT * FROM transactions ORDER BY date DESC").all();
     res.json(rows);
   });
 
@@ -1263,16 +1399,27 @@ async function startServer() {
     res.json({ id: result.lastInsertRowid });
   });
 
-  app.get("/api/stats", authenticateToken, isAdmin, (req, res) => {
+  app.get("/api/stats", authenticateToken, (req, res) => {
     const income = db.prepare("SELECT SUM(amount) as total FROM transactions WHERE type = 'income' AND status != 'pending'").get() as any;
     const expense = db.prepare("SELECT SUM(amount) as total FROM transactions WHERE type = 'expense'").get() as any;
     const recentTransactions = db.prepare("SELECT * FROM transactions ORDER BY date DESC LIMIT 5").all();
     const lowStock = db.prepare("SELECT * FROM inventory WHERE quantity <= min_stock").all();
     
-    const today = new Date().toISOString().split('T')[0];
+    // Get timezone from settings
+    const settings = db.prepare("SELECT * FROM settings").all() as any[];
+    const settingsObj = settings.reduce((acc, curr) => {
+      acc[curr.key] = curr.value;
+      return acc;
+    }, {} as any);
+    const timezone = settingsObj.timezone || 'Asia/Jakarta';
+    
+    const now = new Date();
+    const zonedNow = toZonedTime(now, timezone);
+    const today = zonedNow.toISOString().split('T')[0];
+    
     const dailySales = db.prepare("SELECT SUM(quantity) as total, SUM(amount) as income FROM transactions WHERE type = 'income' AND category = 'Sales' AND status != 'pending' AND date >= ?").get(today) as any;
 
-    const monthStart = new Date();
+    const monthStart = new Date(zonedNow);
     monthStart.setDate(1);
     const monthStartStr = monthStart.toISOString().split('T')[0];
     const monthlySales = db.prepare("SELECT SUM(quantity) as total FROM transactions WHERE type = 'income' AND category = 'Sales' AND status != 'pending' AND date >= ?").get(monthStartStr) as any;

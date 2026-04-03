@@ -23,6 +23,7 @@ import {
   User,
   Lock,
   Check,
+  X,
   Copy,
   ArrowRight,
   Printer,
@@ -50,7 +51,6 @@ import {
   BarChart3,
   PieChart as PieChartIcon,
   TrendingDown,
-  X,
   Camera,
   Maximize,
   Minimize,
@@ -92,6 +92,7 @@ import {
   Legend
 } from 'recharts';
 import { format } from 'date-fns';
+import { toZonedTime } from 'date-fns-tz';
 import { id } from 'date-fns/locale';
 import { Toaster, toast } from 'sonner';
 import { cn } from './types';
@@ -109,8 +110,28 @@ const formatIDR = (amount: number) => {
 
 const CHART_COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
 
-const formatDate = (date: Date | string | number, formatStr: string) => {
-  return format(new Date(date), formatStr, { locale: id });
+const formatDate = (date: Date | string | number, formatStr: string, timezone: string = 'Asia/Jakarta') => {
+  try {
+    let d: Date;
+    if (typeof date === 'string') {
+      // If it's a SQLite timestamp (YYYY-MM-DD HH:MM:SS), treat as UTC
+      if (date.match(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/)) {
+        d = new Date(date.replace(' ', 'T') + 'Z');
+      } else {
+        d = new Date(date);
+      }
+    } else {
+      d = new Date(date);
+    }
+    
+    if (isNaN(d.getTime())) return '-';
+    
+    const zonedDate = toZonedTime(d, timezone);
+    return format(zonedDate, formatStr, { locale: id });
+  } catch (error) {
+    console.error('Error formatting date:', error);
+    return '-';
+  }
 };
 
 const isMenuAvailable = (menu: Menu) => {
@@ -626,6 +647,8 @@ export default function App() {
   const [txFilter, setTxFilter] = useState({ type: '', category: '' });
   const [txSearch, setTxSearch] = useState('');
   const [calcPurchase, setCalcPurchase] = useState({ qty: 1, content: 0, totalPrice: 0 });
+  const [showEditItemModal, setShowEditItemModal] = useState(false);
+  const [editingItem, setEditingItem] = useState<{ id: number, name: string, quantity: number, sugarLevel: string, iceLevel: string, notes: string } | null>(null);
   const [showCalculator, setShowCalculator] = useState(false);
   const [reportFilter, setReportFilter] = useState<'daily' | 'monthly'>('daily');
   const [menuSearch, setMenuSearch] = useState('');
@@ -739,7 +762,7 @@ export default function App() {
   const [editingUserId, setEditingUserId] = useState<number | null>(null);
   const [newUserData, setNewUserData] = useState({ username: '', password: '', email: '', role: 'cashier' as 'admin' | 'cashier' });
   const [passwordData, setPasswordData] = useState({ oldPassword: '', newPassword: '', confirmPassword: '' });
-  const [reportDate, setReportDate] = useState(formatDate(new Date(), 'yyyy-MM-dd'));
+  const [reportDate, setReportDate] = useState(formatDate(new Date(), 'yyyy-MM-dd', appSettings.timezone));
 
   const fetchPublicSettings = async () => {
     try {
@@ -831,20 +854,16 @@ export default function App() {
     }
   }, [showCustomerOrderStatus]);
 
-  const fetchData = async (filters = txFilter) => {
+  const fetchData = async () => {
     if (!user) return;
     setLoading(true);
     try {
-      const txParams = new URLSearchParams();
-      if (filters.type) txParams.append('type', filters.type);
-      if (filters.category) txParams.append('category', filters.category);
-
       const isAdmin = user.role === 'admin';
 
       const [statsRes, invRes, txRes, menuRes, usersRes, settingsRes, custRes] = await Promise.all([
-        isAdmin ? fetch('/api/stats') : Promise.resolve({ ok: false, status: 403, json: () => Promise.resolve(null) } as any),
+        fetch('/api/stats'),
         fetch('/api/inventory'),
-        isAdmin ? fetch(`/api/transactions?${txParams.toString()}`) : Promise.resolve({ ok: false, status: 403, json: () => Promise.resolve([]) } as any),
+        fetch('/api/transactions'), // No filters here
         fetch('/api/menus'),
         isAdmin ? fetch('/api/users') : Promise.resolve({ ok: false, status: 403, json: () => Promise.resolve([]) } as any),
         fetch('/api/settings'),
@@ -1268,10 +1287,10 @@ export default function App() {
   }, [isCustomerMode, user]);
 
   useEffect(() => {
-    if (user && activeTab === 'transactions') {
+    if (user && (activeTab === 'transactions' || activeTab === 'reports')) {
       fetchData();
     }
-  }, [txFilter, user]);
+  }, [user, activeTab, reportSubTab]);
 
   const calculateCartTotal = () => {
     const subtotal = cart.reduce((sum, item) => sum + (item.menu.price * item.quantity), 0);
@@ -1410,6 +1429,91 @@ export default function App() {
       }
     } catch (error) {
       console.error('Error confirming payment:', error);
+      toast.error('Gagal memproses status pesanan');
+    }
+  };
+
+  const handleDeleteOrder = async (orderId: string) => {
+    setConfirmDialog({
+      show: true,
+      title: 'Hapus Pesanan',
+      message: 'Apakah Anda yakin ingin menghapus seluruh pesanan ini? Stok bahan akan dikembalikan.',
+      confirmText: 'Hapus',
+      cancelText: 'Batal',
+      isDestructive: true,
+      onConfirm: async () => {
+        try {
+          const res = await fetch(`/api/orders/${orderId}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+          });
+          if (res.ok) {
+            toast.success('Pesanan berhasil dihapus');
+            fetchActiveOrders();
+          } else {
+            const data = await res.json();
+            toast.error(data.error || 'Gagal menghapus pesanan');
+          }
+        } catch (error) {
+          toast.error('Terjadi kesalahan saat menghapus pesanan');
+        }
+        setConfirmDialog(null);
+      }
+    });
+  };
+
+  const handleDeleteItem = async (txId: number) => {
+    setConfirmDialog({
+      show: true,
+      title: 'Hapus Menu',
+      message: 'Apakah Anda yakin ingin menghapus menu ini dari pesanan? Stok bahan akan dikembalikan.',
+      confirmText: 'Hapus',
+      cancelText: 'Batal',
+      isDestructive: true,
+      onConfirm: async () => {
+        try {
+          const res = await fetch(`/api/transactions/${txId}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+          });
+          if (res.ok) {
+            toast.success('Menu berhasil dihapus');
+            fetchActiveOrders();
+          } else {
+            const data = await res.json();
+            toast.error(data.error || 'Gagal menghapus menu');
+          }
+        } catch (error) {
+          toast.error('Terjadi kesalahan saat menghapus menu');
+        }
+        setConfirmDialog(null);
+      }
+    });
+  };
+
+  const handleUpdateItem = async () => {
+    if (!editingItem) return;
+    try {
+      const res = await fetch(`/api/transactions/${editingItem.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
+        body: JSON.stringify({
+          quantity: editingItem.quantity,
+          sugar_level: editingItem.sugarLevel,
+          ice_level: editingItem.iceLevel,
+          notes: editingItem.notes
+        })
+      });
+      if (res.ok) {
+        toast.success('Menu berhasil diperbarui');
+        setShowEditItemModal(false);
+        fetchActiveOrders();
+      } else {
+        const data = await res.json();
+        toast.error(data.error || 'Gagal memperbarui menu');
+      }
+    } catch (error) {
+      toast.error('Terjadi kesalahan saat memperbarui menu');
     }
   };
 
@@ -3509,7 +3613,7 @@ export default function App() {
                 </div>
                 <div className="flex items-center gap-2 bg-white p-1.5 rounded-2xl border border-coffee-100 shadow-sm w-full md:w-auto">
                   <Calendar size={16} className="text-coffee-400 ml-2" />
-                  <span className="text-xs font-bold text-coffee-900 pr-4">{formatDate(new Date(), 'EEEE, d MMMM yyyy')}</span>
+                  <span className="text-xs font-bold text-coffee-900 pr-4">{formatDate(new Date(), 'EEEE, d MMMM yyyy', appSettings.timezone)}</span>
                 </div>
               </header>
 
@@ -3826,7 +3930,7 @@ export default function App() {
                     <tbody className="divide-y divide-coffee-50">
                       {stats?.recentTransactions.map(tx => (
                         <tr key={tx.id} className="group">
-                          <td className="py-4 text-sm text-coffee-600">{formatDate(new Date(tx.date), 'dd MMM yyyy')}</td>
+                          <td className="py-4 text-sm text-coffee-600">{formatDate(tx.date, 'dd MMM yyyy', appSettings.timezone)}</td>
                           <td className="py-4">
                             <span className={cn(
                               "px-3 py-1 rounded-full text-xs font-bold",
@@ -3976,8 +4080,8 @@ export default function App() {
                         {formatIDR(transactions
                           .filter(tx => tx.type === 'income' && tx.category === 'Sales' && (
                             reportFilter === 'daily' 
-                              ? formatDate(new Date(tx.date), 'yyyy-MM-dd') === reportDate
-                              : formatDate(new Date(tx.date), 'yyyy-MM') === formatDate(new Date(reportDate), 'yyyy-MM')
+                              ? formatDate(tx.date, 'yyyy-MM-dd', appSettings.timezone) === reportDate
+                              : formatDate(tx.date, 'yyyy-MM', appSettings.timezone) === formatDate(reportDate, 'yyyy-MM', appSettings.timezone)
                           ))
                           .reduce((sum, tx) => sum + tx.amount, 0)
                         )}
@@ -3989,8 +4093,8 @@ export default function App() {
                         {transactions
                           .filter(tx => tx.type === 'income' && tx.category === 'Sales' && (
                             reportFilter === 'daily' 
-                              ? formatDate(new Date(tx.date), 'yyyy-MM-dd') === reportDate
-                              : formatDate(new Date(tx.date), 'yyyy-MM') === formatDate(new Date(reportDate), 'yyyy-MM')
+                              ? formatDate(tx.date, 'yyyy-MM-dd', appSettings.timezone) === reportDate
+                              : formatDate(tx.date, 'yyyy-MM', appSettings.timezone) === formatDate(reportDate, 'yyyy-MM', appSettings.timezone)
                           )).length
                         } <span className="text-sm font-medium text-coffee-400">Order</span>
                       </p>
@@ -4001,8 +4105,8 @@ export default function App() {
                         {(() => {
                           const sales = transactions.filter(tx => tx.type === 'income' && tx.category === 'Sales' && (
                             reportFilter === 'daily' 
-                              ? formatDate(new Date(tx.date), 'yyyy-MM-dd') === reportDate
-                              : formatDate(new Date(tx.date), 'yyyy-MM') === formatDate(new Date(reportDate), 'yyyy-MM')
+                              ? formatDate(tx.date, 'yyyy-MM-dd', appSettings.timezone) === reportDate
+                              : formatDate(tx.date, 'yyyy-MM', appSettings.timezone) === formatDate(reportDate, 'yyyy-MM', appSettings.timezone)
                           ));
                           const counts: any = {};
                           sales.forEach((s: any) => counts[s.payment_method || 'Cash'] = (counts[s.payment_method || 'Cash'] || 0) + 1);
@@ -4013,8 +4117,128 @@ export default function App() {
                     </div>
                   </div>
 
+                  {/* Visualizations */}
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
+                    <div className="glass-card p-8">
+                      <h3 className="text-lg font-serif font-bold mb-6 text-coffee-900">Tren Pendapatan vs Pengeluaran</h3>
+                      <div className="h-[300px] w-full">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart
+                            data={(() => {
+                              const filtered = transactions.filter(tx => (
+                                reportFilter === 'daily' 
+                                  ? formatDate(tx.date, 'yyyy-MM-dd', appSettings.timezone) === reportDate
+                                  : formatDate(tx.date, 'yyyy-MM', appSettings.timezone) === formatDate(reportDate, 'yyyy-MM', appSettings.timezone)
+                              ));
+                              
+                              if (reportFilter === 'daily') {
+                                // Hourly trend for daily
+                                const hours = Array.from({ length: 24 }, (_, i) => ({
+                                  name: `${String(i).padStart(2, '0')}:00`,
+                                  income: 0,
+                                  expense: 0
+                                }));
+                                filtered.forEach(tx => {
+                                  const hour = new Date(tx.date).getHours();
+                                  if (tx.type === 'income') hours[hour].income += tx.amount;
+                                  else hours[hour].expense += tx.amount;
+                                });
+                                return hours.filter(h => h.income > 0 || h.expense > 0);
+                              } else {
+                                // Daily trend for monthly
+                                const daysInMonth = new Date(new Date(reportDate).getFullYear(), new Date(reportDate).getMonth() + 1, 0).getDate();
+                                const days = Array.from({ length: daysInMonth }, (_, i) => ({
+                                  name: String(i + 1),
+                                  income: 0,
+                                  expense: 0
+                                }));
+                                filtered.forEach(tx => {
+                                  const day = new Date(tx.date).getDate();
+                                  if (tx.type === 'income') days[day - 1].income += tx.amount;
+                                  else days[day - 1].expense += tx.amount;
+                                });
+                                return days;
+                              }
+                            })()}
+                          >
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
+                            <XAxis 
+                              dataKey="name" 
+                              axisLine={false} 
+                              tickLine={false} 
+                              tick={{ fill: '#6B7280', fontSize: 10 }}
+                            />
+                            <YAxis 
+                              axisLine={false} 
+                              tickLine={false} 
+                              tick={{ fill: '#6B7280', fontSize: 10 }}
+                              tickFormatter={(value) => `Rp ${value / 1000}k`}
+                            />
+                            <Tooltip 
+                              contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
+                              formatter={(value: number) => [formatIDR(value), '']}
+                            />
+                            <Legend verticalAlign="top" align="right" iconType="circle" wrapperStyle={{ paddingBottom: '20px' }} />
+                            <Bar dataKey="income" name="Pendapatan" fill="#10B981" radius={[4, 4, 0, 0]} barSize={20} />
+                            <Bar dataKey="expense" name="Pengeluaran" fill="#EF4444" radius={[4, 4, 0, 0]} barSize={20} />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </div>
+
+                    <div className="glass-card p-8">
+                      <h3 className="text-lg font-serif font-bold mb-6 text-coffee-900">Komposisi Penjualan</h3>
+                      <div className="h-[300px] w-full">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <PieChart>
+                            <Pie
+                              data={(() => {
+                                const sales = transactions.filter(tx => tx.type === 'income' && tx.category === 'Sales' && (
+                                  reportFilter === 'daily' 
+                                    ? formatDate(tx.date, 'yyyy-MM-dd', appSettings.timezone) === reportDate
+                                    : formatDate(tx.date, 'yyyy-MM', appSettings.timezone) === formatDate(reportDate, 'yyyy-MM', appSettings.timezone)
+                                ));
+                                const categories: any = {};
+                                sales.forEach(s => {
+                                  // Extract menu name from description if possible
+                                  const name = s.description?.replace('Order: ', '').split(' (x')[0] || 'Lainnya';
+                                  categories[name] = (categories[name] || 0) + s.amount;
+                                });
+                                return Object.entries(categories)
+                                  .map(([name, value]) => ({ name, value }))
+                                  .sort((a: any, b: any) => b.value - a.value)
+                                  .slice(0, 5);
+                              })()}
+                              cx="50%"
+                              cy="50%"
+                              innerRadius={60}
+                              outerRadius={100}
+                              paddingAngle={5}
+                              dataKey="value"
+                            >
+                              {[
+                                '#8B4513', // SaddleBrown
+                                '#A0522D', // Sienna
+                                '#D2691E', // Chocolate
+                                '#CD853F', // Peru
+                                '#F4A460'  // SandyBrown
+                              ].map((color, index) => (
+                                <Cell key={`cell-${index}`} fill={color} />
+                              ))}
+                            </Pie>
+                            <Tooltip 
+                              contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
+                              formatter={(value: number) => [formatIDR(value), '']}
+                            />
+                            <Legend verticalAlign="bottom" align="center" iconType="circle" />
+                          </PieChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </div>
+                  </div>
+
                   <div className="glass-card p-8">
-                    <h3 className="text-xl font-serif font-bold mb-6">Detail Penjualan ({reportFilter === 'daily' ? formatDate(new Date(reportDate), 'dd MMM yyyy') : formatDate(new Date(reportDate), 'MMMM yyyy')})</h3>
+                    <h3 className="text-xl font-serif font-bold mb-6">Detail Penjualan ({reportFilter === 'daily' ? formatDate(reportDate, 'dd MMM yyyy', appSettings.timezone) : formatDate(reportDate, 'MMMM yyyy', appSettings.timezone)})</h3>
                     <div className="overflow-x-auto">
                       <table className="w-full">
                         <thead>
@@ -4027,19 +4251,19 @@ export default function App() {
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-coffee-50">
-                          {transactions
-                            .filter(tx => tx.type === 'income' && tx.category === 'Sales' && (
-                              reportFilter === 'daily' 
-                                ? formatDate(new Date(tx.date), 'yyyy-MM-dd') === reportDate
-                                : formatDate(new Date(tx.date), 'yyyy-MM') === formatDate(new Date(reportDate), 'yyyy-MM')
-                            ))
-                            .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-                            .map((tx) => (
-                              <tr key={tx.id} className="hover:bg-coffee-50/50 transition-colors">
-                                <td className="py-4 text-sm text-coffee-600">
-                                  {formatDate(new Date(tx.date), 'HH:mm')}
-                                  <span className="text-[10px] block text-coffee-400">{formatDate(new Date(tx.date), 'dd MMM yyyy')}</span>
-                                </td>
+                            {transactions
+                              .filter(tx => tx.type === 'income' && tx.category === 'Sales' && (
+                                reportFilter === 'daily' 
+                                  ? formatDate(tx.date, 'yyyy-MM-dd', appSettings.timezone) === reportDate
+                                  : formatDate(tx.date, 'yyyy-MM', appSettings.timezone) === formatDate(reportDate, 'yyyy-MM', appSettings.timezone)
+                              ))
+                              .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+                              .map((tx) => (
+                                <tr key={tx.id} className="hover:bg-coffee-50/50 transition-colors">
+                                  <td className="py-4 text-sm text-coffee-600">
+                                    {formatDate(tx.date, 'HH:mm', appSettings.timezone)}
+                                    <span className="text-[10px] block text-coffee-400">{formatDate(tx.date, 'dd MMM yyyy', appSettings.timezone)}</span>
+                                  </td>
                                 <td className="py-4">
                                   <p className="text-sm font-bold text-coffee-900">{tx.description?.replace('Order: ', '')}</p>
                                   <p className="text-[10px] text-coffee-400">ID: {tx.order_id || tx.id}</p>
@@ -4051,7 +4275,52 @@ export default function App() {
                                   </span>
                                 </td>
                                 <td className="py-4 text-sm font-bold text-right text-emerald-600">
-                                  {formatIDR(tx.amount)}
+                                  <div className="flex items-center justify-end gap-2 group">
+                                    {formatIDR(tx.amount)}
+                                    {tx.order_id && (
+                                      <button 
+                                        onClick={() => handleReprint(tx.order_id)}
+                                        className="p-2 text-coffee-400 hover:text-coffee-600 hover:bg-coffee-100 rounded-lg transition-all opacity-0 group-hover:opacity-100"
+                                        title="Cetak Ulang Struk"
+                                      >
+                                        <Printer size={14} />
+                                      </button>
+                                    )}
+                                    <button 
+                                      onClick={() => {
+                                        setConfirmDialog({
+                                          show: true,
+                                          title: 'Hapus Transaksi',
+                                          message: 'Apakah Anda yakin ingin menghapus catatan transaksi ini? Stok bahan akan dikembalikan jika ini adalah pesanan.',
+                                          confirmText: 'Hapus',
+                                          cancelText: 'Batal',
+                                          isDestructive: true,
+                                          onConfirm: async () => {
+                                            try {
+                                              const res = await fetch(`/api/transactions/${tx.id}`, {
+                                                method: 'DELETE',
+                                                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+                                              });
+                                              if (res.ok) {
+                                                toast.success('Transaksi berhasil dihapus');
+                                                fetchData();
+                                              } else {
+                                                const data = await res.json();
+                                                toast.error(data.error || 'Gagal menghapus transaksi');
+                                              }
+                                            } catch (error) {
+                                              toast.error('Terjadi kesalahan saat menghapus transaksi');
+                                            }
+                                            setConfirmDialog(null);
+                                          }
+                                        });
+                                      }}
+                                      className="p-2 text-coffee-400 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-all opacity-0 group-hover:opacity-100"
+                                      title="Hapus Transaksi"
+                                    >
+                                      <Trash2 size={14} />
+                                    </button>
+                                  </div>
                                 </td>
                               </tr>
                             ))}
@@ -5488,7 +5757,16 @@ export default function App() {
                           </div>
                           <div>
                             <p className="text-[10px] font-bold uppercase tracking-widest text-coffee-400">Order ID</p>
-                            <h4 className="font-mono font-bold text-coffee-950">{order.displayId || order.orderId}</h4>
+                            <div className="flex items-center gap-2">
+                              <h4 className="font-mono font-bold text-coffee-950">{order.displayId || order.orderId}</h4>
+                              <button 
+                                onClick={() => handleDeleteOrder(order.orderId)}
+                                className="text-rose-400 hover:text-rose-600 transition-colors"
+                                title="Batalkan Pesanan"
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            </div>
                           </div>
                         </div>
                           <div className="text-right">
@@ -5519,9 +5797,44 @@ export default function App() {
                       <div className="p-6 space-y-4">
                         <div className="space-y-2">
                           {order.items.map((item: any, idx: number) => (
-                            <div key={idx} className="flex justify-between items-center py-2 border-b border-coffee-50 last:border-0">
-                              <span className="text-coffee-900 font-medium">{item.name}</span>
-                              <span className="bg-coffee-100 text-coffee-700 px-2 py-1 rounded-lg text-xs font-bold">x{item.quantity}</span>
+                            <div key={idx} className="flex justify-between items-center py-2 border-b border-coffee-50 last:border-0 group/item">
+                              <div className="flex flex-col">
+                                <span className="text-coffee-900 font-medium">{item.name}</span>
+                                {(item.sugarLevel || item.iceLevel) && (
+                                  <span className="text-[10px] text-coffee-400 font-bold uppercase">
+                                    {item.sugarLevel && `${item.sugarLevel} Sugar`}
+                                    {item.sugarLevel && item.iceLevel && ' • '}
+                                    {item.iceLevel && `${item.iceLevel} Ice`}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-3">
+                                <div className="flex items-center gap-1 opacity-0 group-hover/item:opacity-100 transition-opacity">
+                                  <button 
+                                    onClick={() => {
+                                      setEditingItem({
+                                        id: item.id,
+                                        name: item.name,
+                                        quantity: item.quantity,
+                                        sugarLevel: item.sugarLevel || 'Normal',
+                                        iceLevel: item.iceLevel || 'Normal',
+                                        notes: item.notes || ''
+                                      });
+                                      setShowEditItemModal(true);
+                                    }}
+                                    className="p-1 text-coffee-400 hover:text-coffee-600 transition-colors"
+                                  >
+                                    <Edit size={14} />
+                                  </button>
+                                  <button 
+                                    onClick={() => handleDeleteItem(item.id)}
+                                    className="p-1 text-rose-300 hover:text-rose-500 transition-colors"
+                                  >
+                                    <X size={14} />
+                                  </button>
+                                </div>
+                                <span className="bg-coffee-100 text-coffee-700 px-2 py-1 rounded-lg text-xs font-bold">x{item.quantity}</span>
+                              </div>
                             </div>
                           ))}
                         </div>
@@ -5887,6 +6200,10 @@ export default function App() {
                     <tbody className="divide-y divide-coffee-50">
                       {(() => {
                         const filtered = transactions.filter(tx => {
+                          // Filter by txFilter (type and category)
+                          if (txFilter.type && tx.type !== txFilter.type) return false;
+                          if (txFilter.category && tx.category !== txFilter.category) return false;
+                          
                           if (!txSearch) return true;
                           const search = txSearch.toLowerCase();
                           return (
@@ -5903,7 +6220,7 @@ export default function App() {
                                 <td className="py-4 text-sm text-coffee-600">
                                   <div className="flex items-center gap-2">
                                     <Calendar size={14} />
-                                    {formatDate(new Date(tx.date), 'dd/MM/yy HH:mm')}
+                                    {formatDate(tx.date, 'dd/MM/yy HH:mm', appSettings.timezone)}
                                   </div>
                                 </td>
                                 <td className="py-4">
@@ -5925,7 +6242,52 @@ export default function App() {
                                   "py-4 text-sm font-bold text-right",
                                   tx.type === 'income' ? "text-emerald-600" : "text-rose-600"
                                 )}>
-                                  {tx.type === 'income' ? '+' : '-'} {formatIDR(tx.amount)}
+                                  <div className="flex items-center justify-end gap-3 group">
+                                    <span>{tx.type === 'income' ? '+' : '-'} {formatIDR(tx.amount)}</span>
+                                    {tx.order_id && (
+                                      <button 
+                                        onClick={() => handleReprint(tx.order_id)}
+                                        className="p-1.5 text-coffee-300 hover:text-coffee-600 hover:bg-coffee-50 rounded-lg transition-all opacity-0 group-hover:opacity-100"
+                                        title="Cetak Ulang Struk"
+                                      >
+                                        <Printer size={14} />
+                                      </button>
+                                    )}
+                                    <button 
+                                      onClick={() => {
+                                        setConfirmDialog({
+                                          show: true,
+                                          title: 'Hapus Transaksi',
+                                          message: 'Apakah Anda yakin ingin menghapus catatan transaksi ini? Stok bahan akan dikembalikan jika ini adalah pesanan.',
+                                          confirmText: 'Hapus',
+                                          cancelText: 'Batal',
+                                          isDestructive: true,
+                                          onConfirm: async () => {
+                                            try {
+                                              const res = await fetch(`/api/transactions/${tx.id}`, {
+                                                method: 'DELETE',
+                                                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+                                              });
+                                              if (res.ok) {
+                                                toast.success('Transaksi berhasil dihapus');
+                                                fetchData();
+                                              } else {
+                                                const data = await res.json();
+                                                toast.error(data.error || 'Gagal menghapus transaksi');
+                                              }
+                                            } catch (error) {
+                                              toast.error('Terjadi kesalahan saat menghapus transaksi');
+                                            }
+                                            setConfirmDialog(null);
+                                          }
+                                        });
+                                      }}
+                                      className="p-1.5 text-coffee-300 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-all opacity-0 group-hover:opacity-100"
+                                      title="Hapus Transaksi"
+                                    >
+                                      <Trash2 size={14} />
+                                    </button>
+                                  </div>
                                 </td>
                               </tr>
                             ))}
@@ -7578,6 +7940,97 @@ export default function App() {
                 className="flex-1 bg-coffee-900 text-white px-6 py-3 rounded-xl font-bold hover:bg-coffee-800 transition-all"
               >
                 Lanjutkan
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
+
+      {showEditItemModal && editingItem && (
+        <div className="fixed inset-0 bg-coffee-950/60 backdrop-blur-md flex items-center justify-center z-[110] p-4">
+          <motion.div 
+            initial={{ scale: 0.9, opacity: 0, y: 20 }}
+            animate={{ scale: 1, opacity: 1, y: 0 }}
+            className="bg-white rounded-3xl p-0 w-full max-w-md shadow-2xl overflow-hidden"
+          >
+            <div className="p-8 bg-coffee-50 border-b border-coffee-100 text-center">
+              <div className="w-16 h-16 bg-coffee-100 text-coffee-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Edit size={32} />
+              </div>
+              <h3 className="text-2xl font-serif font-bold text-coffee-950">Edit Menu</h3>
+              <p className="text-coffee-500 text-sm font-bold uppercase tracking-widest">{editingItem.name}</p>
+            </div>
+
+            <div className="p-8 bg-white space-y-6">
+              <div>
+                <label className="block text-xs font-bold uppercase text-coffee-500 mb-2">Jumlah</label>
+                <div className="flex items-center gap-4">
+                  <button 
+                    onClick={() => setEditingItem(prev => prev ? ({ ...prev, quantity: Math.max(1, prev.quantity - 1) }) : null)}
+                    className="w-12 h-12 rounded-xl bg-coffee-50 text-coffee-600 flex items-center justify-center hover:bg-coffee-100 transition-colors"
+                  >
+                    <Minus size={20} />
+                  </button>
+                  <span className="flex-1 text-center text-2xl font-black text-coffee-950">{editingItem.quantity}</span>
+                  <button 
+                    onClick={() => setEditingItem(prev => prev ? ({ ...prev, quantity: prev.quantity + 1 }) : null)}
+                    className="w-12 h-12 rounded-xl bg-coffee-900 text-white flex items-center justify-center hover:bg-coffee-800 transition-colors"
+                  >
+                    <Plus size={20} />
+                  </button>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold uppercase text-coffee-500 mb-2">Sugar Level</label>
+                  <select 
+                    value={editingItem.sugarLevel}
+                    onChange={e => setEditingItem(prev => prev ? ({ ...prev, sugarLevel: e.target.value }) : null)}
+                    className="w-full bg-coffee-50 border border-coffee-100 rounded-xl px-4 py-3 text-sm font-bold text-coffee-900 focus:outline-none focus:ring-2 focus:ring-coffee-500"
+                  >
+                    {['No Sugar', 'Less Sugar', 'Normal', 'Extra Sugar'].map(level => (
+                      <option key={level} value={level}>{level}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold uppercase text-coffee-500 mb-2">Ice Level</label>
+                  <select 
+                    value={editingItem.iceLevel}
+                    onChange={e => setEditingItem(prev => prev ? ({ ...prev, iceLevel: e.target.value }) : null)}
+                    className="w-full bg-coffee-50 border border-coffee-100 rounded-xl px-4 py-3 text-sm font-bold text-coffee-900 focus:outline-none focus:ring-2 focus:ring-coffee-500"
+                  >
+                    {['No Ice', 'Less Ice', 'Normal', 'Extra Ice'].map(level => (
+                      <option key={level} value={level}>{level}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold uppercase text-coffee-500 mb-2">Catatan</label>
+                <textarea 
+                  value={editingItem.notes}
+                  onChange={e => setEditingItem(prev => prev ? ({ ...prev, notes: e.target.value }) : null)}
+                  className="w-full bg-coffee-50 border border-coffee-100 rounded-xl px-4 py-3 text-sm font-medium text-coffee-900 focus:outline-none focus:ring-2 focus:ring-coffee-500 min-h-[80px]"
+                  placeholder="Contoh: Tanpa sedotan, dll..."
+                />
+              </div>
+            </div>
+
+            <div className="p-6 bg-coffee-50 flex gap-3">
+              <button 
+                onClick={() => setShowEditItemModal(false)}
+                className="flex-1 px-6 py-3 rounded-xl font-bold text-coffee-600 hover:bg-coffee-100 transition-colors"
+              >
+                Batal
+              </button>
+              <button 
+                onClick={handleUpdateItem}
+                className="flex-1 bg-coffee-900 text-white px-6 py-3 rounded-xl font-bold hover:bg-coffee-800 transition-all shadow-lg shadow-coffee-200"
+              >
+                Simpan Perubahan
               </button>
             </div>
           </motion.div>

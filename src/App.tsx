@@ -502,7 +502,25 @@ export default function App() {
       document.getElementsByTagName('head')[0].appendChild(link);
     }
     link.href = appSettings.app_logo_url || '/favicon.ico';
-  }, [appSettings.app_name, appSettings.app_logo_url]);
+
+    // Update apple-touch-icon
+    let appleIcon = document.querySelector("link[rel='apple-touch-icon']") as HTMLLinkElement;
+    if (!appleIcon) {
+      appleIcon = document.createElement('link');
+      appleIcon.rel = 'apple-touch-icon';
+      document.getElementsByTagName('head')[0].appendChild(appleIcon);
+    }
+    appleIcon.href = appSettings.app_logo_url || 'https://cdn-icons-png.flaticon.com/512/924/924514.png';
+
+    // Update theme-color
+    let themeColor = document.querySelector("meta[name='theme-color']") as HTMLMetaElement;
+    if (!themeColor) {
+      themeColor = document.createElement('meta');
+      themeColor.name = 'theme-color';
+      document.getElementsByTagName('head')[0].appendChild(themeColor);
+    }
+    themeColor.content = appSettings.primary_color || '#9a684a';
+  }, [appSettings.app_name, appSettings.app_logo_url, appSettings.primary_color]);
 
   const [financialData, setFinancialData] = useState<any>(null);
   const [financialRange, setFinancialRange] = useState({
@@ -893,7 +911,12 @@ export default function App() {
       const res = await fetch('/api/settings/public');
       if (res.ok) {
         const settingsData = await res.json();
-        if (settingsData) setAppSettings(prev => ({ ...prev, ...settingsData }));
+        if (settingsData) {
+          if (settingsData.tax_rate !== undefined) {
+            settingsData.tax_rate = Number(settingsData.tax_rate);
+          }
+          setAppSettings(prev => ({ ...prev, ...settingsData }));
+        }
       }
     } catch (error) {
       console.error('Error fetching public settings:', error);
@@ -1016,7 +1039,12 @@ export default function App() {
       if (driversRes && driversRes.ok) setDrivers(await driversRes.json());
       if (settingsRes.ok) {
         const settingsData = await settingsRes.json();
-        if (settingsData) setAppSettings(prev => ({ ...prev, ...settingsData }));
+        if (settingsData) {
+          if (settingsData.tax_rate !== undefined) {
+            settingsData.tax_rate = Number(settingsData.tax_rate);
+          }
+          setAppSettings(prev => ({ ...prev, ...settingsData }));
+        }
       }
       fetchActiveOrders();
     } catch (error) {
@@ -4545,6 +4573,55 @@ export default function App() {
                   </div>
                 </motion.div>
               </div>
+
+              {/* Active Orders Summary */}
+              {activeOrders.length > 0 && (
+                <motion.div 
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="glass-card p-6 bg-white/80 backdrop-blur-xl border border-white/20 shadow-xl"
+                >
+                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+                    <div className="flex items-center gap-3">
+                      <div className="bg-violet-100 p-2 rounded-xl text-violet-600">
+                        <Clock size={20} />
+                      </div>
+                      <div>
+                        <h3 className="text-lg font-serif font-bold text-coffee-950">Antrian Pesanan Aktif</h3>
+                        <p className="text-xs text-coffee-500 font-medium">Menampilkan {Math.min(activeOrders.length, 5)} pesanan terbaru dari total {activeOrders.length}</p>
+                      </div>
+                    </div>
+                    <button 
+                      onClick={() => setActiveTab('queue')}
+                      className="text-xs font-bold text-violet-600 hover:text-violet-700 transition-colors flex items-center gap-1 bg-violet-50 px-3 py-1.5 rounded-full"
+                    >
+                      Lihat Semua <ArrowRight size={14} />
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+                    {activeOrders.slice(0, 5).map((order) => (
+                      <div 
+                        key={order.orderId}
+                        className="p-3 bg-white border border-coffee-50 rounded-2xl shadow-sm hover:shadow-md transition-all cursor-pointer group"
+                        onClick={() => setActiveTab('queue')}
+                      >
+                        <div className="flex justify-between items-start mb-2">
+                          <span className="text-[10px] font-black text-coffee-400 uppercase tracking-wider">#{order.displayId || order.orderId.slice(-4)}</span>
+                          <span className={`text-[8px] px-2 py-0.5 rounded-full font-bold uppercase ${
+                            order.status === 'processing' ? 'bg-blue-100 text-blue-600' :
+                            order.status === 'pending' ? 'bg-amber-100 text-amber-600' :
+                            'bg-violet-100 text-violet-600'
+                          }`}>
+                            {order.status === 'processing' ? 'Proses' : order.status === 'pending' ? 'Menunggu' : 'Konfirmasi'}
+                          </span>
+                        </div>
+                        <p className="text-sm font-bold text-coffee-950 truncate group-hover:text-violet-600 transition-colors">{order.customerName || 'Pelanggan'}</p>
+                        <p className="text-[10px] text-coffee-400 mt-1">{formatDate(order.date, 'HH:mm', appSettings.timezone)}</p>
+                      </div>
+                    ))}
+                  </div>
+                </motion.div>
+              )}
 
               {/* Charts and Lists */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">

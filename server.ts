@@ -353,6 +353,12 @@ async function startServer() {
         icons: [
           {
             src: appSettings.app_logo_url || "https://cdn-icons-png.flaticon.com/512/924/924514.png",
+            sizes: "192x192",
+            type: "image/png",
+            purpose: "any maskable"
+          },
+          {
+            src: appSettings.app_logo_url || "https://cdn-icons-png.flaticon.com/512/924/924514.png",
             sizes: "512x512",
             type: "image/png",
             purpose: "any maskable"
@@ -2021,7 +2027,15 @@ async function startServer() {
       "customer_bg_color",
       "customer_bg_image",
       "customer_page_title",
-      "customer_page_subtitle"
+      "customer_page_subtitle",
+      "tax_rate",
+      "timezone",
+      "payment_qris_url",
+      "payment_dana_url",
+      "payment_ovo_url",
+      "payment_shopeepay_url",
+      "payment_instructions",
+      "enable_delivery"
     ];
     const settings = db.prepare("SELECT * FROM settings WHERE key IN (" + publicKeys.map(() => "?").join(",") + ")").all(publicKeys) as any[];
     const settingsObj = settings.reduce((acc: any, curr: any) => {
@@ -2320,6 +2334,8 @@ async function startServer() {
     }
     res.json({ success: true });
   });
+
+  app.use(express.static(path.join(process.cwd(), "public")));
 
   // --- Vite Middleware ---
   if (process.env.NODE_ENV !== "production") {

@@ -1241,6 +1241,35 @@ export default function App() {
     });
   };
 
+  const handleResetTransactions = async () => {
+    setConfirmDialog({
+      show: true,
+      title: appSettings.language === 'id' ? 'Reset Transaksi' : 'Reset Transactions',
+      message: appSettings.language === 'id' ? 'PERINGATAN: Ini akan menghapus SEMUA data transaksi. Data menu dan inventory tetap aman. Lanjutkan?' : 'WARNING: This will delete ALL transaction data. Menu and inventory data will remain safe. Continue?',
+      isDestructive: true,
+      onConfirm: async () => {
+        try {
+          const res = await fetch('/api/admin/reset-transactions', {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${localStorage.getItem('token')}`
+            }
+          });
+          const data = await res.json();
+          if (res.ok) {
+            toast.success(data.message);
+            fetchData();
+          } else {
+            toast.error(data.error);
+          }
+        } catch (error) {
+          toast.error('Gagal mereset transaksi');
+        }
+        setConfirmDialog(null);
+      }
+    });
+  };
+
   const handleResetDatabase = async () => {
     setConfirmDialog({
       show: true,
@@ -7763,7 +7792,14 @@ export default function App() {
                           ? 'Gunakan fitur ini untuk mereset database atau memuat data demo untuk uji coba.' 
                           : 'Use these features to reset the database or load demo data for testing.'}
                       </p>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        <button 
+                          onClick={handleResetTransactions}
+                          className="bg-amber-600 text-white py-4 rounded-2xl font-bold hover:bg-amber-700 transition-all flex items-center justify-center gap-3 shadow-lg shadow-amber-200"
+                        >
+                          <History size={20} />
+                          {appSettings.language === 'id' ? 'Reset Transaksi Saja' : 'Reset Transactions Only'}
+                        </button>
                         <button 
                           onClick={handleResetDatabase}
                           className="bg-rose-600 text-white py-4 rounded-2xl font-bold hover:bg-rose-700 transition-all flex items-center justify-center gap-3 shadow-lg shadow-rose-200"

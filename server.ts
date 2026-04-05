@@ -956,6 +956,20 @@ async function startServer() {
 
   // --- Database Management APIs ---
 
+  app.post("/api/admin/reset-transactions", authenticateToken, isAdmin, (req, res) => {
+    try {
+      const transaction = db.transaction(() => {
+        db.prepare("DELETE FROM transactions").run();
+        db.prepare("UPDATE settings SET value = '1' WHERE key = 'order_counter'").run();
+      });
+      transaction();
+      io.emit("ORDER_UPDATED");
+      res.json({ success: true, message: "Semua data transaksi berhasil dihapus." });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   app.post("/api/admin/reset-database", authenticateToken, isAdmin, (req, res) => {
     try {
       const transaction = db.transaction(() => {

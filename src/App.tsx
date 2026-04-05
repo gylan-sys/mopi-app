@@ -74,6 +74,7 @@ import {
   Users,
   Sun,
   Moon,
+  MapPin,
   FileDown,
   QrCode,
   History
@@ -122,25 +123,79 @@ const DriverMap = ({ drivers, selectedDriverId }: { drivers: any[], selectedDriv
     ? [activeDrivers[0].latitude, activeDrivers[0].longitude] 
     : [-6.200000, 106.816666]; // Jakarta default
 
+  const getStatusColor = (status: string, lastOnline: string) => {
+    const isOnline = lastOnline && (new Date().getTime() - new Date(lastOnline).getTime()) < 5 * 60 * 1000;
+    if (!isOnline) return '#94a3b8'; // Offline
+    if (status === 'delivering') return '#f59e0b'; // Delivering
+    return '#10b981'; // Available
+  };
+
   return (
-    <div className="h-[400px] w-full rounded-2xl overflow-hidden border border-coffee-100 shadow-inner">
+    <div className="h-[500px] w-full rounded-2xl overflow-hidden border border-coffee-100 shadow-inner relative">
       <MapContainer center={center} zoom={13} style={{ height: '100%', width: '100%' }}>
         <TileLayer
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
         />
-        {activeDrivers.map(d => (
-          <Marker key={d.id} position={[d.latitude, d.longitude]}>
-            <Popup>
-              <div className="text-xs">
-                <p className="font-bold">{d.full_name}</p>
-                <p className="text-coffee-500">{d.vehicle_info}</p>
-                <p className="text-[10px] text-coffee-400">Status: {d.status}</p>
-              </div>
-            </Popup>
-          </Marker>
-        ))}
+        {activeDrivers.map(d => {
+          const isOnline = d.work_status === 'online' && d.last_online && (new Date().getTime() - new Date(d.last_online + 'Z').getTime()) < 5 * 60 * 1000;
+          const status = d.active_deliveries > 0 ? 'delivering' : (isOnline ? 'available' : 'offline');
+          const color = getStatusColor(status, d.last_online);
+          
+          const icon = L.divIcon({
+            className: 'custom-div-icon',
+            html: `<div style="background-color: ${color}; width: 32px; height: 32px; border-radius: 50% 50% 50% 0; transform: rotate(-45deg); border: 3px solid white; box-shadow: 0 0 15px rgba(0,0,0,0.3); display: flex; items-center; justify-center;"><div style="transform: rotate(45deg); color: white;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/><path d="M15 18H9"/><path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-2.035-2.544A1 1 0 0 0 17.015 10H15v8"/><circle cx="7" cy="18" r="2"/><circle cx="17" cy="18" r="2"/></svg></div></div>`,
+            iconSize: [32, 32],
+            iconAnchor: [16, 32]
+          });
+
+          return (
+            <Marker key={d.id} position={[d.latitude, d.longitude]} icon={icon}>
+              <Popup>
+                <div className="p-2 min-w-[150px]">
+                  <p className="font-black text-coffee-950 text-sm mb-1">{d.full_name}</p>
+                  <p className="text-[10px] font-bold text-coffee-500 uppercase tracking-widest mb-2">{d.vehicle_info}</p>
+                  <div className="space-y-1">
+                    <div className="flex justify-between items-center">
+                      <span className="text-[10px] text-coffee-400 font-bold uppercase">Status</span>
+                      <span className={cn(
+                        "text-[10px] font-black uppercase px-1.5 py-0.5 rounded",
+                        status === 'available' ? "bg-emerald-100 text-emerald-700" :
+                        status === 'delivering' ? "bg-amber-100 text-amber-700" :
+                        "bg-slate-100 text-slate-700"
+                      )}>
+                        {status}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-[10px] text-coffee-400 font-bold uppercase">Terakhir</span>
+                      <span className="text-[10px] font-bold text-coffee-700">
+                        {d.last_online ? format(new Date(d.last_online), 'HH:mm') : 'N/A'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </Popup>
+            </Marker>
+          );
+        })}
       </MapContainer>
+      
+      {/* Legend */}
+      <div className="absolute bottom-4 right-4 bg-white/90 backdrop-blur-sm p-3 rounded-2xl shadow-lg border border-coffee-100 z-[1000] space-y-2">
+        <div className="flex items-center gap-2">
+          <div className="w-3 h-3 rounded-full bg-emerald-500" />
+          <span className="text-[10px] font-bold text-coffee-600 uppercase tracking-widest">Tersedia</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="w-3 h-3 rounded-full bg-amber-500" />
+          <span className="text-[10px] font-bold text-coffee-600 uppercase tracking-widest">Mengantar</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="w-3 h-3 rounded-full bg-slate-400" />
+          <span className="text-[10px] font-bold text-coffee-600 uppercase tracking-widest">Offline</span>
+        </div>
+      </div>
     </div>
   );
 };
@@ -310,6 +365,7 @@ interface CartItem {
 export default function App() {
   const [user, setUser] = useState<{ id: number, username: string, role: 'admin' | 'cashier' } | null>(null);
   const [driver, setDriver] = useState<{ id: number, username: string, full_name: string } | null>(null);
+  const [driverProfile, setDriverProfile] = useState<any>(null);
   const [isDriverMode, setIsDriverMode] = useState(false);
   const [driverView, setDriverView] = useState<'login' | 'register' | 'dashboard'>('login');
   const [driverLoginData, setDriverLoginData] = useState({ username: '', password: '' });
@@ -660,7 +716,7 @@ export default function App() {
   const [editingPromo, setEditingPromo] = useState<any>(null);
   const [newAd, setNewAd] = useState({ type: 'image', url: '', title: '', subtitle: '', active: true });
   const [newPromo, setNewPromo] = useState({ code: '', discount_type: 'percentage', discount_value: 0, target_type: 'all', target_ids: [], active: true });
-  const [customerOrder, setCustomerOrder] = useState({ name: '', table: '', paymentMethod: 'Cash', notes: '' });
+  const [customerOrder, setCustomerOrder] = useState({ name: '', table: '', paymentMethod: 'Cash', notes: '', deliveryMethod: 'dine_in' as 'dine_in' | 'takeaway' | 'delivery', deliveryAddress: '' });
   const [lastCustomerOrder, setLastCustomerOrder] = useState<any>(null);
   const [showCustomerOrderSuccess, setShowCustomerOrderSuccess] = useState(false);
   const [showSuccessAnimation, setShowSuccessAnimation] = useState(false);
@@ -1455,7 +1511,9 @@ export default function App() {
           promoCode: activePromo?.code,
           discountAmount: discount,
           paymentMethod: customerOrder.paymentMethod,
-          notes: customerOrder.notes
+          notes: customerOrder.notes,
+          deliveryMethod: customerOrder.deliveryMethod,
+          deliveryAddress: customerOrder.deliveryMethod === 'delivery' ? customerOrder.deliveryAddress : null
         })
       });
 
@@ -1488,7 +1546,7 @@ export default function App() {
         }
         
         setCart([]);
-        setCustomerOrder({ name: '', table: '', paymentMethod: 'Cash', notes: '' });
+        setCustomerOrder({ name: '', table: '', paymentMethod: 'Cash', notes: '', deliveryMethod: 'dine_in', deliveryAddress: '' });
         setActivePromo(null);
         setPromoCode('');
         toast.success('Pesanan berhasil dikirim!');
@@ -1621,6 +1679,25 @@ export default function App() {
       if (res.ok) setCustomerOrderHistory(await res.json());
     } catch (error) {
       console.error('Error fetching customer history:', error);
+    }
+  };
+
+  const handleUpdateOrderStatus = async (orderId: string, status: string) => {
+    try {
+      const res = await fetch(`/api/orders/${orderId}/status`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status })
+      });
+      if (res.ok) {
+        toast.success(`Status pesanan diperbarui ke ${status}`);
+        fetchActiveOrders();
+      } else {
+        const data = await res.json();
+        toast.error(data.error || 'Gagal memperbarui status');
+      }
+    } catch (error) {
+      toast.error('Terjadi kesalahan koneksi');
     }
   };
 
@@ -2060,12 +2137,14 @@ export default function App() {
   const fetchDriverData = async () => {
     if (!driver) return;
     try {
-      const [availableRes, myRes] = await Promise.all([
+      const [availableRes, myRes, profileRes] = await Promise.all([
         fetch('/api/driver/available-orders'),
-        fetch('/api/driver/my-orders')
+        fetch('/api/driver/my-orders'),
+        fetch('/api/driver/profile')
       ]);
       if (availableRes.ok) setAvailableOrders(await availableRes.json());
       if (myRes.ok) setMyDeliveries(await myRes.json());
+      if (profileRes.ok) setDriverProfile(await profileRes.json());
     } catch (error) {
       console.error('Error fetching driver data:', error);
     }
@@ -2761,6 +2840,48 @@ export default function App() {
                       )}
                     </div>
 
+                    {/* Delivery Method Selection */}
+                    {appSettings.enable_delivery && (
+                      <div className="space-y-3 pt-6 border-t border-coffee-100">
+                        <label className="text-[10px] font-black uppercase text-coffee-400 tracking-widest">Metode Pengantaran</label>
+                        <div className="grid grid-cols-3 gap-3">
+                          {(['dine_in', 'takeaway', 'delivery'] as const).map((method) => (
+                            <button
+                              key={method}
+                              onClick={() => setCustomerOrder({ ...customerOrder, deliveryMethod: method })}
+                              className={cn(
+                                "flex flex-col items-center gap-2 p-3 rounded-2xl border transition-all",
+                                customerOrder.deliveryMethod === method 
+                                  ? "bg-coffee-900 border-coffee-900 text-white shadow-lg" 
+                                  : "bg-white border-coffee-100 text-coffee-600 hover:bg-coffee-50"
+                              )}
+                            >
+                              {method === 'dine_in' && <Coffee size={18} />}
+                              {method === 'takeaway' && <ShoppingBag size={18} />}
+                              {method === 'delivery' && <Truck size={18} />}
+                              <span className="text-[10px] font-bold uppercase">{t(method)}</span>
+                            </button>
+                          ))}
+                        </div>
+                        
+                        {customerOrder.deliveryMethod === 'delivery' && (
+                          <motion.div 
+                            initial={{ opacity: 0, height: 0 }}
+                            animate={{ opacity: 1, height: 'auto' }}
+                            className="space-y-3 pt-2"
+                          >
+                            <label className="block text-[10px] font-bold uppercase text-coffee-500 mb-1.5 tracking-widest">Alamat Pengiriman</label>
+                            <textarea 
+                              value={customerOrder.deliveryAddress}
+                              onChange={e => setCustomerOrder({...customerOrder, deliveryAddress: e.target.value})}
+                              className="w-full bg-white border border-coffee-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-coffee-500 min-h-[80px] resize-none"
+                              placeholder="Jl. Merdeka No. 123..."
+                            />
+                          </motion.div>
+                        )}
+                      </div>
+                    )}
+
                     {/* Payment Method Selection */}
                     <div className="space-y-3 pt-6 border-t border-coffee-100">
                       <label className="text-[10px] font-black uppercase text-coffee-400 tracking-widest">Metode Pembayaran</label>
@@ -3391,12 +3512,61 @@ export default function App() {
               <p className="text-[10px] text-coffee-500 uppercase font-bold tracking-widest">{t('driver')}</p>
             </div>
           </div>
-          <button onClick={handleDriverLogout} className="p-2 text-coffee-400 hover:text-rose-500 transition-colors">
-            <LogOut size={20} />
-          </button>
+          <div className="flex items-center gap-2">
+            <button 
+              onClick={() => fetchDriverData()}
+              className="p-2 text-coffee-400 hover:text-coffee-600 transition-colors"
+              title="Refresh"
+            >
+              <RefreshCw size={20} />
+            </button>
+            <button onClick={handleDriverLogout} className="p-2 text-coffee-400 hover:text-rose-500 transition-colors">
+              <LogOut size={20} />
+            </button>
+          </div>
         </header>
 
         <main className="p-4 space-y-6 max-w-lg mx-auto">
+          {/* Status Toggle */}
+          <section className="bg-white p-5 rounded-3xl border border-coffee-100 shadow-sm flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className={cn(
+                "w-10 h-10 rounded-xl flex items-center justify-center",
+                driverProfile?.work_status === 'online' ? "bg-emerald-100 text-emerald-600" : "bg-slate-100 text-slate-400"
+              )}>
+                {driverProfile?.work_status === 'online' ? <Sun size={20} /> : <Moon size={20} />}
+              </div>
+              <div>
+                <p className="text-sm font-bold text-coffee-900">
+                  {driverProfile?.work_status === 'online' ? 'Anda Sedang Online' : 'Anda Sedang Offline'}
+                </p>
+                <p className="text-[10px] text-coffee-500 font-bold uppercase tracking-widest">
+                  {driverProfile?.work_status === 'online' ? 'Siap menerima orderan' : 'Istirahat sejenak'}
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={async () => {
+                const newStatus = driverProfile?.work_status === 'online' ? 'offline' : 'online';
+                const res = await fetch('/api/driver/status', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ status: newStatus })
+                });
+                if (res.ok) fetchDriverData();
+              }}
+              className={cn(
+                "w-14 h-7 rounded-full transition-all relative",
+                driverProfile?.work_status === 'online' ? "bg-emerald-500" : "bg-slate-200"
+              )}
+            >
+              <div className={cn(
+                "absolute top-1 w-5 h-5 rounded-full bg-white transition-all shadow-sm",
+                driverProfile?.work_status === 'online' ? "left-8" : "left-1"
+              )} />
+            </button>
+          </section>
+
           {/* My Active Deliveries */}
           <section className="space-y-4">
             <h2 className="text-xs font-black uppercase text-coffee-400 tracking-widest flex items-center gap-2">
@@ -6329,9 +6499,18 @@ export default function App() {
                   <p className="text-coffee-500 font-medium uppercase tracking-widest text-xs mb-1">Antrian Pesanan</p>
                   <h2 className="text-4xl font-serif font-bold text-coffee-950">Pesanan Diproses</h2>
                 </div>
-                <div className="bg-amber-100 text-amber-700 px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2">
-                  <Clock size={16} />
-                  {activeOrders.length} Pesanan Menunggu
+                <div className="flex items-center gap-3">
+                  <button 
+                    onClick={fetchActiveOrders}
+                    className="p-2 text-coffee-400 hover:text-coffee-600 transition-colors"
+                    title="Refresh Antrian"
+                  >
+                    <RefreshCw size={20} />
+                  </button>
+                  <div className="bg-amber-100 text-amber-700 px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2">
+                    <Clock size={16} />
+                    {activeOrders.length} Pesanan Menunggu
+                  </div>
                 </div>
               </header>
 
@@ -6397,10 +6576,29 @@ export default function App() {
                               <span className="inline-block bg-coffee-50 text-coffee-600 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider">
                                 {order.paymentMethod || 'Tunai'}
                               </span>
+                              {order.deliveryMethod === 'delivery' && (
+                                <span className={cn(
+                                  "inline-block px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider",
+                                  order.deliveryStatus === 'ready_for_pickup' ? "bg-blue-100 text-blue-700" :
+                                  order.deliveryStatus === 'out_for_delivery' ? "bg-purple-100 text-purple-700" :
+                                  order.deliveryStatus === 'delivered' ? "bg-emerald-100 text-emerald-700" :
+                                  "bg-amber-100 text-amber-700"
+                                )}>
+                                  Delivery: {t(order.deliveryStatus || 'pending')}
+                                </span>
+                              )}
                             </div>
                           </div>
                       </div>
                       <div className="p-6 space-y-4">
+                        {order.deliveryMethod === 'delivery' && order.deliveryAddress && (
+                          <div className="bg-coffee-50 p-3 rounded-xl border border-coffee-100">
+                            <p className="text-[10px] font-bold uppercase tracking-widest text-coffee-400 mb-1 flex items-center gap-1">
+                              <MapPin size={10} /> Alamat Pengiriman
+                            </p>
+                            <p className="text-xs text-coffee-900 font-medium">{order.deliveryAddress}</p>
+                          </div>
+                        )}
                         <div className="space-y-2">
                           {order.items.map((item: any, idx: number) => (
                             <div key={idx} className="flex justify-between items-center py-2 border-b border-coffee-50 last:border-0 group/item">
@@ -6467,7 +6665,7 @@ export default function App() {
                           <Clock size={12} />
                           Dipesan pada {formatDate(new Date(order.date), 'HH:mm')}
                         </div>
-                        {(order.status === 'pending' || order.status === 'awaiting_confirmation') ? (
+                        {(order.status === 'pending' || order.status === 'awaiting_confirmation') && (
                           <div className="flex flex-col gap-2">
                             {order.status === 'pending' && (
                               <button 
@@ -6503,14 +6701,40 @@ export default function App() {
                               {order.status === 'awaiting_confirmation' ? 'Konfirmasi Pembayaran' : 'Konfirmasi & Selesaikan'}
                             </button>
                           </div>
-                        ) : (
-                          <button 
-                            onClick={() => handleCompleteOrder(order.orderId)}
-                            className="w-full bg-emerald-600 text-white py-3 rounded-xl font-bold hover:bg-emerald-700 transition-all flex items-center justify-center gap-2 shadow-lg shadow-emerald-100"
-                          >
-                            <CheckCircle2 size={18} />
-                            Selesaikan
-                          </button>
+                        )}
+                        {order.status === 'processing' && (
+                          <div className="space-y-2">
+                            <button 
+                              onClick={() => {
+                                if (order.deliveryMethod === 'delivery' && order.deliveryStatus !== 'ready_for_pickup') {
+                                  handleUpdateOrderStatus(order.orderId, 'ready_for_pickup');
+                                } else {
+                                  handleCompleteOrder(order.orderId);
+                                }
+                              }}
+                              className={cn(
+                                "w-full py-3 rounded-xl font-bold transition-all flex items-center justify-center gap-2 shadow-lg",
+                                order.deliveryMethod === 'delivery' && order.deliveryStatus !== 'ready_for_pickup'
+                                  ? "bg-amber-600 text-white hover:bg-amber-700 shadow-amber-100"
+                                  : "bg-emerald-600 text-white hover:bg-emerald-700 shadow-emerald-100"
+                              )}
+                            >
+                              <CheckCircle2 size={18} />
+                              {order.deliveryMethod === 'delivery' && order.deliveryStatus !== 'ready_for_pickup' ? 'Siap Dijemput' : 'Selesaikan'}
+                            </button>
+                            
+                            {order.deliveryMethod === 'delivery' && order.deliveryStatus === 'ready_for_pickup' && (
+                              <div className="w-full bg-blue-50 text-blue-700 py-3 rounded-xl font-bold text-center text-xs flex items-center justify-center gap-2 border border-blue-100">
+                                <Clock size={16} className="animate-pulse" /> Menunggu Driver
+                              </div>
+                            )}
+                            
+                            {order.deliveryMethod === 'delivery' && order.deliveryStatus === 'out_for_delivery' && (
+                              <div className="w-full bg-purple-50 text-purple-700 py-3 rounded-xl font-bold text-center text-xs flex items-center justify-center gap-2 border border-purple-100">
+                                <Truck size={16} className="animate-bounce" /> Sedang Diantar
+                              </div>
+                            )}
+                          </div>
                         )}
                       </div>
                     </div>
@@ -8320,18 +8544,21 @@ export default function App() {
                                         </span>
                                       </td>
                                       <td className="px-6 py-4">
-                                        {d.status === 'active' ? (
+                                        <div className="flex flex-col gap-1">
                                           <span className={cn(
-                                            "px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest",
+                                            "px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest w-fit",
                                             d.active_deliveries > 0 ? "bg-blue-100 text-blue-700" :
                                             (d.last_online && (new Date().getTime() - new Date(d.last_online + 'Z').getTime()) < 300000) ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-700"
                                           )}>
                                             {d.active_deliveries > 0 ? t('delivering') :
                                             (d.last_online && (new Date().getTime() - new Date(d.last_online + 'Z').getTime()) < 300000) ? t('available') : t('offline')}
                                           </span>
-                                        ) : (
-                                          <span className="text-[10px] text-coffee-300 italic">-</span>
-                                        )}
+                                          {d.last_online && (
+                                            <span className="text-[9px] text-coffee-400 font-bold uppercase">
+                                              Aktif: {formatDate(new Date(d.last_online + 'Z'), 'HH:mm')}
+                                            </span>
+                                          )}
+                                        </div>
                                       </td>
                                       <td className="px-6 py-4">
                                         {d.latitude && d.longitude ? (
@@ -8374,6 +8601,21 @@ export default function App() {
                                               Aktifkan
                                             </button>
                                           ) : null}
+                                          <button 
+                                            onClick={async () => {
+                                              if (window.confirm('Hapus driver ini?')) {
+                                                await fetch(`/api/admin/drivers/${d.id}`, { 
+                                                  method: 'DELETE',
+                                                  headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+                                                });
+                                                fetchData();
+                                              }
+                                            }}
+                                            className="p-1.5 text-rose-300 hover:text-rose-600 transition-colors"
+                                            title="Hapus Driver"
+                                          >
+                                            <Trash2 size={14} />
+                                          </button>
                                         </div>
                                       </td>
                                     </tr>

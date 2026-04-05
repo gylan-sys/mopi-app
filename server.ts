@@ -199,7 +199,8 @@ function initDb() {
     { table: 'transactions', column: 'delivery_status', type: 'TEXT' },
     { table: 'drivers', column: 'latitude', type: 'REAL' },
     { table: 'drivers', column: 'longitude', type: 'REAL' },
-    { table: 'drivers', column: 'last_online', type: 'DATETIME' }
+    { table: 'drivers', column: 'last_online', type: 'DATETIME' },
+    { table: 'drivers', column: 'work_status', type: 'TEXT DEFAULT \'offline\'' }
   ];
 
   for (const col of columnsToAdd) {
@@ -333,6 +334,37 @@ async function startServer() {
   });
   const PORT = 3000;
 
+  app.get("/manifest.json", (req, res) => {
+    try {
+      const settings = db.prepare("SELECT * FROM settings").all();
+      const appSettings: any = {};
+      settings.forEach((s: any) => {
+        appSettings[s.key] = s.value;
+      });
+
+      const manifest = {
+        name: appSettings.app_name || "CoffeePOS - Management System",
+        short_name: appSettings.app_name || "CoffeePOS",
+        description: "Point of Sale System for Coffee Shop",
+        start_url: "/",
+        display: "standalone",
+        background_color: appSettings.main_bg || "#fdfaf7",
+        theme_color: appSettings.primary_color || "#9a684a",
+        icons: [
+          {
+            src: appSettings.app_logo_url || "https://cdn-icons-png.flaticon.com/512/924/924514.png",
+            sizes: "512x512",
+            type: "image/png",
+            purpose: "any maskable"
+          }
+        ]
+      };
+      res.json(manifest);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to generate manifest" });
+    }
+  });
+
   app.get("/api/health", (req, res) => {
     res.json({ status: "ok", timestamp: new Date().toISOString() });
   });
@@ -438,6 +470,13 @@ async function startServer() {
 
   app.post("/api/driver/take-order", authenticateDriver, (req: any, res) => {
     const { order_id } = req.body;
+    
+    // Check if driver is online
+    const driver = db.prepare("SELECT work_status FROM drivers WHERE id = ?").get(req.driver.id);
+    if (driver.work_status !== 'online') {
+      return res.status(400).json({ error: "Anda harus Online untuk mengambil pesanan." });
+    }
+
     const result = db.prepare(`
       UPDATE transactions 
       SET driver_id = ?, delivery_status = 'out_for_delivery' 
@@ -458,7 +497,7 @@ async function startServer() {
     if (typeof latitude !== 'number' || typeof longitude !== 'number') {
       return res.status(400).json({ error: "Invalid coordinates" });
     }
-    db.prepare("UPDATE drivers SET latitude = ?, longitude = ?, last_online = CURRENT_TIMESTAMP WHERE id = ?").run(latitude, longitude, req.driver.id);
+    db.prepare("UPDATE drivers SET latitude = ?, longitude = ?, last_online = CURRENT_TIMESTAMP, work_status = 'online' WHERE id = ?").run(latitude, longitude, req.driver.id);
     
     // Broadcast to all clients (admin/customers)
     io.emit("DRIVER_LOCATION_UPDATED", { 
@@ -467,6 +506,12 @@ async function startServer() {
       longitude 
     });
     
+    res.json({ success: true });
+  });
+
+  app.post("/api/driver/status", authenticateDriver, (req: any, res) => {
+    const { status } = req.body;
+    db.prepare("UPDATE drivers SET work_status = ? WHERE id = ?").run(status, req.driver.id);
     res.json({ success: true });
   });
 
@@ -488,17 +533,23 @@ async function startServer() {
   app.get("/api/admin/drivers", authenticateToken, isAdmin, (req, res) => {
     const drivers = db.prepare(`
       SELECT 
-        d.id, d.username, d.full_name, d.phone, d.vehicle_info, d.status, d.created_at, d.last_online, d.latitude, d.longitude,
+        d.id, d.username, d.full_name, d.phone, d.vehicle_info, d.status, d.work_status, d.created_at, d.last_online, d.latitude, d.longitude,
         (SELECT COUNT(*) FROM transactions t WHERE t.driver_id = d.id AND t.delivery_status = 'out_for_delivery') as active_deliveries
       FROM drivers d
     `).all();
     res.json(drivers);
   });
 
-  app.post("/api/admin/drivers/:id/status", authenticateToken, isAdmin, (req, res) => {
+  app.put("/api/admin/drivers/:id/status", authenticateToken, isAdmin, (req, res) => {
     const { id } = req.params;
     const { status } = req.body;
     db.prepare("UPDATE drivers SET status = ? WHERE id = ?").run(status, id);
+    res.json({ success: true });
+  });
+
+  app.delete("/api/admin/drivers/:id", authenticateToken, isAdmin, (req, res) => {
+    const { id } = req.params;
+    db.prepare("DELETE FROM drivers WHERE id = ?").run(id);
     res.json({ success: true });
   });
 
@@ -1317,6 +1368,7 @@ async function startServer() {
       FROM transactions t
       LEFT JOIN menus m ON t.menu_id = m.id
       WHERE t.status IN ('processing', 'pending', 'awaiting_confirmation')
+      OR (t.delivery_method = 'delivery' AND t.delivery_status != 'delivered')
       ORDER BY t.date ASC
     `).all() as any[];
 
@@ -1396,6 +1448,11 @@ async function startServer() {
         // If completing a delivery order, set delivery_status to ready_for_pickup
         if (status === 'completed' && currentOrder?.delivery_method === 'delivery') {
           db.prepare("UPDATE transactions SET delivery_status = 'ready_for_pickup' WHERE order_id = ?").run(orderId);
+        } else if (status === 'ready_for_pickup') {
+          db.prepare("UPDATE transactions SET delivery_status = 'ready_for_pickup' WHERE order_id = ?").run(orderId);
+          // Keep status as processing so it stays in queue if needed, or set to completed
+          db.prepare("UPDATE transactions SET status = 'completed' WHERE order_id = ?").run(orderId);
+          return { success: true };
         }
         
         db.prepare("UPDATE transactions SET status = ? WHERE order_id = ?").run(status, orderId);

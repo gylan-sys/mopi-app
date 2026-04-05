@@ -3215,7 +3215,7 @@ export default function App() {
                 <span>Selesaikan dalam <span className="font-bold text-coffee-600">15:00</span></span>
               </div>
               
-              <div className="bg-white p-4 sm:p-6 rounded-[2.5rem] border-2 border-coffee-50 shadow-2xl shadow-coffee-100/50 space-y-4 mb-6 relative group">
+              <div className="bg-white p-2 sm:p-4 rounded-[2.5rem] border border-coffee-100 shadow-2xl shadow-coffee-100/50 space-y-4 mb-6 relative group">
                 {isQRISLoading ? (
                   <div className="flex flex-col items-center justify-center py-12 gap-4">
                     {appSettings.payment_loading_gif_url ? (
@@ -3227,24 +3227,32 @@ export default function App() {
                   </div>
                 ) : (
                   <>
-                    <div className="relative">
+                    <div className="relative bg-white p-4 rounded-3xl overflow-hidden">
                       <motion.img 
                         initial={{ opacity: 0, scale: 0.9 }}
                         animate={{ opacity: 1, scale: 1 }}
                         src={appSettings.payment_qris_url || 'https://api.qrserver.com/v1/create-qr-code/?size=500x500&data=QRIS_NOT_SET'} 
                         alt="QRIS" 
-                        className="w-full aspect-square mx-auto object-contain rounded-3xl"
+                        className="w-full aspect-square mx-auto object-contain rounded-xl"
+                        style={{ imageRendering: 'pixelated' }}
                         referrerPolicy="no-referrer"
                       />
-                      <div className="absolute inset-0 border-[12px] border-white rounded-3xl pointer-events-none" />
                     </div>
                     
                     <button 
-                      onClick={() => window.open(appSettings.payment_qris_url || '#', '_blank')}
-                      className="flex items-center justify-center gap-2 w-full py-3 bg-coffee-50 text-coffee-600 rounded-2xl text-xs font-bold hover:bg-coffee-100 transition-all"
+                      onClick={() => {
+                        const link = document.createElement('a');
+                        link.href = appSettings.payment_qris_url || '#';
+                        link.download = `QRIS-${qrisAmount}.png`;
+                        document.body.appendChild(link);
+                        link.click();
+                        document.body.removeChild(link);
+                        toast.success('QR disimpan ke galeri!');
+                      }}
+                      className="flex items-center justify-center gap-2 w-full py-4 bg-coffee-900 text-white rounded-2xl text-sm font-bold hover:bg-coffee-800 transition-all shadow-lg shadow-coffee-200"
                       disabled={!appSettings.payment_qris_url}
                     >
-                      <Download size={16} />
+                      <Download size={18} />
                       Simpan QR ke Galeri
                     </button>
                   </>
@@ -3980,7 +3988,7 @@ export default function App() {
                   value={loginData.username}
                   onChange={e => setLoginData({...loginData, username: e.target.value})}
                   className="w-full bg-coffee-50 border border-coffee-200 rounded-2xl pl-12 pr-4 py-4 focus:outline-none focus:ring-2 focus:ring-coffee-500 transition-all"
-                  placeholder="admin / kasir"
+                  placeholder="Username"
                 />
               </div>
             </div>
@@ -3994,7 +4002,7 @@ export default function App() {
                   value={loginData.password}
                   onChange={e => setLoginData({...loginData, password: e.target.value})}
                   className="w-full bg-coffee-50 border border-coffee-200 rounded-2xl pl-12 pr-4 py-4 focus:outline-none focus:ring-2 focus:ring-coffee-500 transition-all"
-                  placeholder="••••••••"
+                  placeholder="Password"
                 />
               </div>
             </div>
@@ -4056,8 +4064,7 @@ export default function App() {
           
           <div className="mt-8 pt-8 border-t border-coffee-50 text-center">
             <p className="text-xs text-coffee-400 font-medium">
-              Admin: admin / admin123<br/>
-              Kasir: kasir / kasir123
+              Silakan hubungi admin jika lupa password
             </p>
           </div>
         </motion.div>
@@ -10570,16 +10577,16 @@ export default function App() {
                   <p className="text-[10px] font-bold uppercase text-coffee-400 mb-3 tracking-widest">Scan untuk Bayar</p>
                   <div className="bg-white p-4 rounded-2xl border border-coffee-100 inline-block">
                     {paymentMethod === 'QRIS' && appSettings.payment_qris_url && (
-                      <img src={appSettings.payment_qris_url} alt="QRIS" className="w-48 h-48 object-contain mx-auto" referrerPolicy="no-referrer" />
+                      <img src={appSettings.payment_qris_url} alt="QRIS" className="w-64 h-64 object-contain mx-auto" style={{ imageRendering: 'pixelated' }} referrerPolicy="no-referrer" />
                     )}
                     {paymentMethod === 'DANA' && appSettings.payment_dana_url && (
-                      <img src={appSettings.payment_dana_url} alt="DANA" className="w-48 h-48 object-contain mx-auto" referrerPolicy="no-referrer" />
+                      <img src={appSettings.payment_dana_url} alt="DANA" className="w-64 h-64 object-contain mx-auto" style={{ imageRendering: 'pixelated' }} referrerPolicy="no-referrer" />
                     )}
                     {paymentMethod === 'OVO' && appSettings.payment_ovo_url && (
-                      <img src={appSettings.payment_ovo_url} alt="OVO" className="w-48 h-48 object-contain mx-auto" referrerPolicy="no-referrer" />
+                      <img src={appSettings.payment_ovo_url} alt="OVO" className="w-64 h-64 object-contain mx-auto" style={{ imageRendering: 'pixelated' }} referrerPolicy="no-referrer" />
                     )}
                     {paymentMethod === 'ShopeePay' && appSettings.payment_shopeepay_url && (
-                      <img src={appSettings.payment_shopeepay_url} alt="ShopeePay" className="w-48 h-48 object-contain mx-auto" referrerPolicy="no-referrer" />
+                      <img src={appSettings.payment_shopeepay_url} alt="ShopeePay" className="w-64 h-64 object-contain mx-auto" style={{ imageRendering: 'pixelated' }} referrerPolicy="no-referrer" />
                     )}
                     {(!appSettings.payment_qris_url && paymentMethod === 'QRIS') || 
                      (!appSettings.payment_dana_url && paymentMethod === 'DANA') || 

@@ -149,6 +149,19 @@ function initDb() {
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
+    CREATE TABLE IF NOT EXISTS drivers (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      username TEXT UNIQUE NOT NULL,
+      password TEXT NOT NULL,
+      full_name TEXT NOT NULL,
+      phone TEXT NOT NULL,
+      vehicle_info TEXT,
+      status TEXT DEFAULT 'pending',
+      latitude REAL,
+      longitude REAL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
     CREATE INDEX IF NOT EXISTS idx_transactions_order_id ON transactions(order_id);
     CREATE INDEX IF NOT EXISTS idx_transactions_status ON transactions(status);
     CREATE INDEX IF NOT EXISTS idx_transactions_date ON transactions(date);
@@ -178,7 +191,15 @@ function initDb() {
     { table: 'transactions', column: 'quantity', type: 'INTEGER DEFAULT 1' },
     { table: 'transactions', column: 'sugar_level', type: 'TEXT' },
     { table: 'transactions', column: 'ice_level', type: 'TEXT' },
-    { table: 'transactions', column: 'order_sequence', type: 'INTEGER DEFAULT 0' }
+    { table: 'transactions', column: 'order_sequence', type: 'INTEGER DEFAULT 0' },
+    { table: 'transactions', column: 'delivery_method', type: 'TEXT DEFAULT \'takeaway\'' },
+    { table: 'transactions', column: 'delivery_address', type: 'TEXT' },
+    { table: 'transactions', column: 'delivery_fee', type: 'REAL DEFAULT 0' },
+    { table: 'transactions', column: 'driver_id', type: 'INTEGER' },
+    { table: 'transactions', column: 'delivery_status', type: 'TEXT' },
+    { table: 'drivers', column: 'latitude', type: 'REAL' },
+    { table: 'drivers', column: 'longitude', type: 'REAL' },
+    { table: 'drivers', column: 'last_online', type: 'DATETIME' }
   ];
 
   for (const col of columnsToAdd) {
@@ -220,7 +241,8 @@ function initDb() {
     ['receipt_footer', 'Terima kasih atas kunjungan Anda!'],
     ['timezone', 'Asia/Jakarta'],
     ['language', 'id'],
-    ['order_counter', '1']
+    ['order_counter', '1'],
+    ['enable_delivery', 'false']
   ];
 
   const insertSetting = db.prepare("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)");
@@ -254,6 +276,17 @@ function authenticateToken(req: any, res: any, next: any) {
   jwt.verify(token, JWT_SECRET, (err: any, user: any) => {
     if (err) return res.status(403).json({ error: "Forbidden" });
     req.user = user;
+    next();
+  });
+}
+
+function authenticateDriver(req: any, res: any, next: any) {
+  const token = req.cookies.driver_token;
+  if (!token) return res.status(401).json({ error: "Unauthorized Driver" });
+
+  jwt.verify(token, JWT_SECRET, (err: any, driver: any) => {
+    if (err) return res.status(403).json({ error: "Forbidden" });
+    req.driver = driver;
     next();
   });
 }
@@ -332,6 +365,141 @@ async function startServer() {
     socket.on("join_order", (orderId) => {
       socket.join(orderId);
     });
+  });
+
+  // --- Driver API ---
+
+  app.post("/api/driver/register", async (req, res) => {
+    const { username, password, full_name, phone, vehicle_info } = req.body;
+    try {
+      const hashedPassword = bcrypt.hashSync(password, 10);
+      db.prepare("INSERT INTO drivers (username, password, full_name, phone, vehicle_info) VALUES (?, ?, ?, ?, ?)").run(
+        username, hashedPassword, full_name, phone, vehicle_info
+      );
+      res.json({ success: true, message: "Pendaftaran berhasil, silakan tunggu verifikasi admin." });
+    } catch (error: any) {
+      if (error.message.includes("UNIQUE constraint failed")) {
+        return res.status(400).json({ error: "Username sudah digunakan" });
+      }
+      res.status(500).json({ error: "Gagal mendaftar" });
+    }
+  });
+
+  app.post("/api/driver/login", (req, res) => {
+    const { username, password } = req.body;
+    const driver = db.prepare("SELECT * FROM drivers WHERE username = ?").get(username) as any;
+    
+    if (!driver || !bcrypt.compareSync(password, driver.password)) {
+      return res.status(401).json({ error: "Username atau password salah" });
+    }
+
+    if (driver.status !== 'active') {
+      return res.status(403).json({ error: "Akun Anda belum aktif atau ditangguhkan. Silakan hubungi admin." });
+    }
+
+    const token = jwt.sign({ id: driver.id, username: driver.username, role: 'driver' }, JWT_SECRET, { expiresIn: '7d' });
+    db.prepare("UPDATE drivers SET last_online = CURRENT_TIMESTAMP WHERE id = ?").run(driver.id);
+    res.cookie('driver_token', token, { httpOnly: true, secure: process.env.NODE_ENV === 'production', maxAge: 7 * 24 * 60 * 60 * 1000 });
+    res.json({ success: true, driver: { id: driver.id, username: driver.username, full_name: driver.full_name } });
+  });
+
+  app.post("/api/driver/logout", (req, res) => {
+    res.clearCookie('driver_token');
+    res.json({ success: true });
+  });
+
+  app.get("/api/driver/profile", authenticateDriver, (req: any, res) => {
+    const driver = db.prepare("SELECT id, username, full_name, phone, vehicle_info, status FROM drivers WHERE id = ?").get(req.driver.id);
+    res.json(driver);
+  });
+
+  app.get("/api/driver/available-orders", authenticateDriver, (req, res) => {
+    const orders = db.prepare(`
+      SELECT DISTINCT order_id, display_id, customer_name, delivery_address, delivery_fee, date, status
+      FROM transactions 
+      WHERE delivery_method = 'delivery' 
+      AND delivery_status = 'ready_for_pickup'
+      AND driver_id IS NULL
+      ORDER BY date DESC
+    `).all();
+    res.json(orders);
+  });
+
+  app.get("/api/driver/my-orders", authenticateDriver, (req: any, res) => {
+    const orders = db.prepare(`
+      SELECT DISTINCT order_id, display_id, customer_name, delivery_address, delivery_fee, date, delivery_status
+      FROM transactions 
+      WHERE driver_id = ? 
+      AND delivery_status IN ('out_for_delivery')
+      ORDER BY date DESC
+    `).all(req.driver.id);
+    res.json(orders);
+  });
+
+  app.post("/api/driver/take-order", authenticateDriver, (req: any, res) => {
+    const { order_id } = req.body;
+    const result = db.prepare(`
+      UPDATE transactions 
+      SET driver_id = ?, delivery_status = 'out_for_delivery' 
+      WHERE order_id = ? AND delivery_status = 'ready_for_pickup' AND driver_id IS NULL
+    `).run(req.driver.id, order_id);
+
+    if (result.changes > 0) {
+      io.to(order_id).emit("ORDER_STATUS_UPDATED", { order_id, status: 'out_for_delivery' });
+      io.emit("ORDER_UPDATED");
+      res.json({ success: true });
+    } else {
+      res.status(400).json({ error: "Gagal mengambil orderan. Mungkin sudah diambil driver lain." });
+    }
+  });
+
+  app.post("/api/driver/location", authenticateDriver, (req: any, res) => {
+    const { latitude, longitude } = req.body;
+    if (typeof latitude !== 'number' || typeof longitude !== 'number') {
+      return res.status(400).json({ error: "Invalid coordinates" });
+    }
+    db.prepare("UPDATE drivers SET latitude = ?, longitude = ?, last_online = CURRENT_TIMESTAMP WHERE id = ?").run(latitude, longitude, req.driver.id);
+    
+    // Broadcast to all clients (admin/customers)
+    io.emit("DRIVER_LOCATION_UPDATED", { 
+      driver_id: req.driver.id, 
+      latitude, 
+      longitude 
+    });
+    
+    res.json({ success: true });
+  });
+
+  app.post("/api/driver/complete-delivery", authenticateDriver, (req: any, res) => {
+    const { order_id } = req.body;
+    db.prepare(`
+      UPDATE transactions 
+      SET delivery_status = 'delivered', status = 'completed' 
+      WHERE order_id = ? AND driver_id = ?
+    `).run(order_id, req.driver.id);
+    
+    io.to(order_id).emit("ORDER_STATUS_UPDATED", { order_id, status: 'delivered' });
+    io.emit("ORDER_UPDATED");
+    res.json({ success: true });
+  });
+
+  // --- Admin Driver Management ---
+
+  app.get("/api/admin/drivers", authenticateToken, isAdmin, (req, res) => {
+    const drivers = db.prepare(`
+      SELECT 
+        d.id, d.username, d.full_name, d.phone, d.vehicle_info, d.status, d.created_at, d.last_online, d.latitude, d.longitude,
+        (SELECT COUNT(*) FROM transactions t WHERE t.driver_id = d.id AND t.delivery_status = 'out_for_delivery') as active_deliveries
+      FROM drivers d
+    `).all();
+    res.json(drivers);
+  });
+
+  app.post("/api/admin/drivers/:id/status", authenticateToken, isAdmin, (req, res) => {
+    const { id } = req.params;
+    const { status } = req.body;
+    db.prepare("UPDATE drivers SET status = ? WHERE id = ?").run(status, id);
+    res.json({ success: true });
   });
 
   // --- API Routes ---
@@ -881,7 +1049,11 @@ async function startServer() {
 
   // Orders API
   app.post("/api/orders", authenticateToken, (req, res) => {
-    const { items, paymentMethod, customerName, orderId: providedOrderId, source, tableNumber, customerId, notes } = req.body;
+    const { 
+      items, paymentMethod, customerName, orderId: providedOrderId, 
+      source, tableNumber, customerId, notes,
+      deliveryMethod, deliveryAddress, deliveryFee
+    } = req.body;
     
     if (!items || !Array.isArray(items) || items.length === 0) {
       return res.status(400).json({ error: "Orderan kosong" });
@@ -944,14 +1116,16 @@ async function startServer() {
       // All orders should go to processing to enter the queue
       const status = 'processing';
       const now = new Date().toISOString();
+      const deliveryStatus = deliveryMethod === 'delivery' ? 'pending' : null;
       
       const insertTx = db.prepare(`
         INSERT INTO transactions (
           type, category, amount, description, menu_id, quantity, 
           payment_method, order_id, source, customer_name, status, 
           table_number, customer_id, notes, sugar_level, ice_level, 
-          order_sequence, date, promo_code
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          order_sequence, date, promo_code,
+          delivery_method, delivery_address, delivery_fee, delivery_status
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
       const updateInv = db.prepare("UPDATE inventory SET quantity = quantity - ? WHERE id = ?");
 
@@ -970,7 +1144,8 @@ async function startServer() {
           'income', 'Sales', menu.price * quantity, description, 
           menu.id, quantity, paymentMethod || 'Cash', orderId, source || 'POS', 
           customerName || 'Umum', status, tableNumber || null, customerId || null, 
-          notes || null, sugarLevel || null, iceLevel || null, sequence++, now, null
+          notes || null, sugarLevel || null, iceLevel || null, sequence++, now, null,
+          deliveryMethod || 'takeaway', deliveryAddress || null, deliveryFee || 0, deliveryStatus
         );
 
         for (const ing of ingredients) {
@@ -986,7 +1161,8 @@ async function startServer() {
           'income', 'Discount', -discountAmount, `Promo: ${promoCode || 'Discount'}`,
           null, null, paymentMethod || 'Cash', orderId, source || 'POS',
           customerName || 'Umum', status, tableNumber || null, customerId || null,
-          null, null, null, sequence++, now, promoCode || null
+          null, null, null, sequence++, now, promoCode || null,
+          deliveryMethod || 'takeaway', deliveryAddress || null, deliveryFee || 0, deliveryStatus
         );
       }
 
@@ -997,7 +1173,19 @@ async function startServer() {
           'income', 'Tax', tax, 'Tax',
           null, null, paymentMethod || 'Cash', orderId, source || 'POS',
           customerName || 'Umum', status, tableNumber || null, customerId || null,
-          null, null, null, sequence++, now, null
+          null, null, null, sequence++, now, null,
+          deliveryMethod || 'takeaway', deliveryAddress || null, deliveryFee || 0, deliveryStatus
+        );
+      }
+
+      // Insert Delivery Fee row if any
+      if (deliveryFee > 0) {
+        insertTx.run(
+          'income', 'Delivery Fee', deliveryFee, 'Delivery Fee',
+          null, null, paymentMethod || 'Cash', orderId, source || 'POS',
+          customerName || 'Umum', status, tableNumber || null, customerId || null,
+          null, null, null, sequence++, now, null,
+          deliveryMethod || 'takeaway', deliveryAddress || null, deliveryFee || 0, deliveryStatus
         );
       }
 
@@ -1146,6 +1334,10 @@ async function startServer() {
           tableNumber: item.table_number,
           notes: item.notes,
           proofOfPaymentUrl: item.proof_of_payment_url,
+          deliveryMethod: item.delivery_method,
+          deliveryAddress: item.delivery_address,
+          deliveryFee: item.delivery_fee,
+          deliveryStatus: item.delivery_status,
           items: []
         };
       }
@@ -1180,10 +1372,10 @@ async function startServer() {
     try {
       const transaction = db.transaction(() => {
         // Get current status
-        const currentStatus = db.prepare("SELECT status FROM transactions WHERE order_id = ? LIMIT 1").get(orderId) as any;
+        const currentOrder = db.prepare("SELECT status, delivery_method FROM transactions WHERE order_id = ? LIMIT 1").get(orderId) as any;
         
         // If moving from pending/awaiting_confirmation to processing/completed, update inventory
-        if (currentStatus && (currentStatus.status === 'pending' || currentStatus.status === 'awaiting_confirmation') && (status === 'processing' || status === 'completed')) {
+        if (currentOrder && (currentOrder.status === 'pending' || currentOrder.status === 'awaiting_confirmation') && (status === 'processing' || status === 'completed')) {
           const items = db.prepare("SELECT menu_id, quantity FROM transactions WHERE order_id = ? AND menu_id IS NOT NULL").all(orderId) as any[];
           
           for (const item of items) {
@@ -1199,6 +1391,11 @@ async function startServer() {
               checkLowStockAndNotify(ing.inventory_id);
             }
           }
+        }
+
+        // If completing a delivery order, set delivery_status to ready_for_pickup
+        if (status === 'completed' && currentOrder?.delivery_method === 'delivery') {
+          db.prepare("UPDATE transactions SET delivery_status = 'ready_for_pickup' WHERE order_id = ?").run(orderId);
         }
         
         db.prepare("UPDATE transactions SET status = ? WHERE order_id = ?").run(status, orderId);

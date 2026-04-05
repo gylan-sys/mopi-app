@@ -96,6 +96,55 @@ import { format } from 'date-fns';
 import { toZonedTime } from 'date-fns-tz';
 import { id } from 'date-fns/locale';
 import { Toaster, toast } from 'sonner';
+import { 
+  MapContainer, 
+  TileLayer, 
+  Marker, 
+  Popup, 
+  useMap 
+} from 'react-leaflet';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
+
+// Fix Leaflet marker icons
+const DefaultIcon = L.divIcon({
+  className: 'custom-div-icon',
+  html: `<div style="background-color: #9a684a; width: 24px; height: 24px; border-radius: 50% 50% 50% 0; transform: rotate(-45deg); border: 2px solid white; box-shadow: 0 0 10px rgba(0,0,0,0.2);"></div>`,
+  iconSize: [24, 24],
+  iconAnchor: [12, 24]
+});
+
+L.Marker.prototype.options.icon = DefaultIcon;
+
+const DriverMap = ({ drivers, selectedDriverId }: { drivers: any[], selectedDriverId?: number }) => {
+  const activeDrivers = drivers.filter(d => d.latitude && d.longitude);
+  const center: [number, number] = activeDrivers.length > 0 
+    ? [activeDrivers[0].latitude, activeDrivers[0].longitude] 
+    : [-6.200000, 106.816666]; // Jakarta default
+
+  return (
+    <div className="h-[400px] w-full rounded-2xl overflow-hidden border border-coffee-100 shadow-inner">
+      <MapContainer center={center} zoom={13} style={{ height: '100%', width: '100%' }}>
+        <TileLayer
+          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        />
+        {activeDrivers.map(d => (
+          <Marker key={d.id} position={[d.latitude, d.longitude]}>
+            <Popup>
+              <div className="text-xs">
+                <p className="font-bold">{d.full_name}</p>
+                <p className="text-coffee-500">{d.vehicle_info}</p>
+                <p className="text-[10px] text-coffee-400">Status: {d.status}</p>
+              </div>
+            </Popup>
+          </Marker>
+        ))}
+      </MapContainer>
+    </div>
+  );
+};
+
 import { cn } from './types';
 import type { InventoryItem, Transaction, DashboardStats, Menu, UserAccount, Customer } from './types';
 import Sidebar from './components/Sidebar';
@@ -260,6 +309,14 @@ interface CartItem {
 
 export default function App() {
   const [user, setUser] = useState<{ id: number, username: string, role: 'admin' | 'cashier' } | null>(null);
+  const [driver, setDriver] = useState<{ id: number, username: string, full_name: string } | null>(null);
+  const [isDriverMode, setIsDriverMode] = useState(false);
+  const [driverView, setDriverView] = useState<'login' | 'register' | 'dashboard'>('login');
+  const [driverLoginData, setDriverLoginData] = useState({ username: '', password: '' });
+  const [driverRegisterData, setDriverRegisterData] = useState({ username: '', password: '', full_name: '', phone: '', vehicle_info: '' });
+  const [availableOrders, setAvailableOrders] = useState<any[]>([]);
+  const [myDeliveries, setMyDeliveries] = useState<any[]>([]);
+  const [drivers, setDrivers] = useState<any[]>([]); // For admin
   const [darkMode, setDarkMode] = useState(() => {
     if (typeof window !== 'undefined') {
       return localStorage.getItem('darkMode') === 'true';
@@ -321,6 +378,9 @@ export default function App() {
   const [isReportsOpen, setIsReportsOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<'Cash' | 'QRIS'>('Cash');
+  const [deliveryMethod, setDeliveryMethod] = useState<'dine_in' | 'takeaway' | 'delivery'>('takeaway');
+  const [deliveryAddress, setDeliveryAddress] = useState('');
+  const [deliveryFee, setDeliveryFee] = useState(0);
   const [customerName, setCustomerName] = useState('');
   const [posNotes, setPosNotes] = useState('');
   const [cashReceived, setCashReceived] = useState<number | string>('');
@@ -362,7 +422,8 @@ export default function App() {
     receipt_contact: 'Kritik & Saran: coffee@example.com / WA: 0812-3456-7890',
     tax_rate: 10,
     timezone: 'Asia/Jakarta',
-    language: 'id'
+    language: 'id',
+    enable_delivery: false
   });
   const [settingsSubTab, setSettingsSubTab] = useState<'general' | 'theme' | 'email' | 'payment' | 'delivery' | 'webhook' | 'receipt' | 'shortcuts' | 'backup'>('general');
   const [testEmailTo, setTestEmailTo] = useState('');
@@ -730,15 +791,21 @@ export default function App() {
       }
     };
 
+    const handleDriverLocationUpdated = (data: { driver_id: number, latitude: number, longitude: number }) => {
+      setDrivers(prev => prev.map(d => d.id === data.driver_id ? { ...d, latitude: data.latitude, longitude: data.longitude } : d));
+    };
+
     socketRef.current.on('PAYMENT_SUCCESS', handlePaymentSuccess);
     socketRef.current.on('LOW_STOCK_ALERT', handleLowStockAlert);
     socketRef.current.on('ORDER_UPDATED', handleOrderUpdate);
+    socketRef.current.on('DRIVER_LOCATION_UPDATED', handleDriverLocationUpdated);
 
     return () => {
       if (socketRef.current) {
         socketRef.current.off('PAYMENT_SUCCESS', handlePaymentSuccess);
         socketRef.current.off('LOW_STOCK_ALERT', handleLowStockAlert);
         socketRef.current.off('ORDER_UPDATED', handleOrderUpdate);
+        socketRef.current.off('DRIVER_LOCATION_UPDATED', handleDriverLocationUpdated);
         socketRef.current.disconnect();
       }
     };
@@ -855,20 +922,24 @@ export default function App() {
     }
   }, [showCustomerOrderStatus]);
 
+  const [showDriverMapModal, setShowDriverMapModal] = useState(false);
+  const [selectedDriverForMap, setSelectedDriverForMap] = useState<number | null>(null);
+
   const fetchData = async () => {
     if (!user) return;
     setLoading(true);
     try {
       const isAdmin = user.role === 'admin';
 
-      const [statsRes, invRes, txRes, menuRes, usersRes, settingsRes, custRes] = await Promise.all([
+      const [statsRes, invRes, txRes, menuRes, usersRes, settingsRes, custRes, driversRes] = await Promise.all([
         fetch('/api/stats'),
         fetch('/api/inventory'),
         fetch('/api/transactions'), // No filters here
         fetch('/api/menus'),
         isAdmin ? fetch('/api/users') : Promise.resolve({ ok: false, status: 403, json: () => Promise.resolve([]) } as any),
         fetch('/api/settings'),
-        fetch('/api/customers')
+        fetch('/api/customers'),
+        isAdmin ? fetch('/api/admin/drivers') : Promise.resolve({ ok: false, status: 403, json: () => Promise.resolve([]) } as any)
       ]);
 
       // Also fetch active orders to keep queue updated
@@ -886,6 +957,7 @@ export default function App() {
       if (menuRes.ok) setMenus(await menuRes.json());
       if (usersRes.ok) setUsers(await usersRes.json());
       if (custRes.ok) setCustomers(await custRes.json());
+      if (driversRes && driversRes.ok) setDrivers(await driversRes.json());
       if (settingsRes.ok) {
         const settingsData = await settingsRes.json();
         if (settingsData) setAppSettings(prev => ({ ...prev, ...settingsData }));
@@ -895,6 +967,24 @@ export default function App() {
       console.error('Error fetching data:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleUpdateDriverStatus = async (driverId: number, status: string) => {
+    try {
+      const res = await fetch(`/api/admin/drivers/${driverId}/status`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status })
+      });
+      if (res.ok) {
+        toast.success('Status driver diperbarui');
+        fetchData();
+      } else {
+        toast.error('Gagal memperbarui status driver');
+      }
+    } catch (error) {
+      toast.error('Terjadi kesalahan koneksi');
     }
   };
 
@@ -1767,7 +1857,8 @@ export default function App() {
     
     const subtotal = cart.reduce((sum, item) => sum + (item.menu.price * item.quantity), 0);
     const tax = Math.round(subtotal * (appSettings.tax_rate / 100));
-    const total = subtotal + tax;
+    const delivery_fee = deliveryMethod === 'delivery' ? deliveryFee : 0;
+    const total = subtotal + tax + delivery_fee;
     
     setLoading(true);
     try {
@@ -1788,7 +1879,10 @@ export default function App() {
         tableNumber,
         customerId: selectedCustomerId,
         notes: posNotes,
-        source: 'POS'
+        source: 'POS',
+        deliveryMethod,
+        deliveryAddress: deliveryMethod === 'delivery' ? deliveryAddress : null,
+        deliveryFee: delivery_fee
       };
       
       const res = await fetch('/api/orders', {
@@ -1911,6 +2005,139 @@ export default function App() {
       }
     } catch (error) {
       console.error('Gagal memproses pembelian:', error);
+    }
+  };
+
+  const handleDriverLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoginError('');
+    try {
+      const res = await fetch('/api/driver/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(driverLoginData)
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setDriver(data.driver);
+        setDriverView('dashboard');
+        toast.success(`Selamat datang Driver, ${data.driver.full_name}!`);
+      } else {
+        setLoginError(data.error || 'Gagal masuk');
+      }
+    } catch (error) {
+      setLoginError('Terjadi kesalahan koneksi');
+    }
+  };
+
+  const handleDriverRegister = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoginError('');
+    try {
+      const res = await fetch('/api/driver/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(driverRegisterData)
+      });
+      const data = await res.json();
+      if (res.ok) {
+        toast.success(data.message);
+        setDriverView('login');
+      } else {
+        setLoginError(data.error || 'Gagal mendaftar');
+      }
+    } catch (error) {
+      setLoginError('Terjadi kesalahan koneksi');
+    }
+  };
+
+  const handleDriverLogout = async () => {
+    await fetch('/api/driver/logout', { method: 'POST' });
+    setDriver(null);
+    setDriverView('login');
+  };
+
+  const fetchDriverData = async () => {
+    if (!driver) return;
+    try {
+      const [availableRes, myRes] = await Promise.all([
+        fetch('/api/driver/available-orders'),
+        fetch('/api/driver/my-orders')
+      ]);
+      if (availableRes.ok) setAvailableOrders(await availableRes.json());
+      if (myRes.ok) setMyDeliveries(await myRes.json());
+    } catch (error) {
+      console.error('Error fetching driver data:', error);
+    }
+  };
+
+  useEffect(() => {
+    if (driver) {
+      fetchDriverData();
+      const interval = setInterval(fetchDriverData, 10000);
+
+      // Real-time location tracking
+      let watchId: number;
+      if ("geolocation" in navigator) {
+        watchId = navigator.geolocation.watchPosition(
+          async (position) => {
+            const { latitude, longitude } = position.coords;
+            try {
+              await fetch('/api/driver/location', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ latitude, longitude })
+              });
+            } catch (err) {
+              console.error('Error sending location:', err);
+            }
+          },
+          (err) => console.error('Geolocation error:', err),
+          { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+        );
+      }
+
+      return () => {
+        clearInterval(interval);
+        if (watchId) navigator.geolocation.clearWatch(watchId);
+      };
+    }
+  }, [driver]);
+
+  const handleTakeOrder = async (orderId: string) => {
+    try {
+      const res = await fetch('/api/driver/take-order', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ order_id: orderId })
+      });
+      if (res.ok) {
+        toast.success('Orderan berhasil diambil!');
+        fetchDriverData();
+      } else {
+        const data = await res.json();
+        toast.error(data.error);
+      }
+    } catch (error) {
+      toast.error('Gagal mengambil orderan');
+    }
+  };
+
+  const handleCompleteDelivery = async (orderId: string) => {
+    try {
+      const res = await fetch('/api/driver/complete-delivery', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ order_id: orderId })
+      });
+      if (res.ok) {
+        toast.success('Pengiriman selesai!');
+        fetchDriverData();
+      } else {
+        toast.error('Gagal menyelesaikan pengiriman');
+      }
+    } catch (error) {
+      toast.error('Gagal menyelesaikan pengiriman');
     }
   };
 
@@ -3151,6 +3378,345 @@ export default function App() {
     );
   }
 
+  if (driver && driverView === 'dashboard') {
+    return (
+      <div className="min-h-screen bg-coffee-50 pb-20">
+        <header className="bg-white p-4 shadow-sm sticky top-0 z-10 flex justify-between items-center">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-coffee-900 rounded-xl flex items-center justify-center text-white">
+              <Truck size={20} />
+            </div>
+            <div>
+              <h1 className="font-bold text-coffee-900 leading-tight">{driver.full_name}</h1>
+              <p className="text-[10px] text-coffee-500 uppercase font-bold tracking-widest">{t('driver')}</p>
+            </div>
+          </div>
+          <button onClick={handleDriverLogout} className="p-2 text-coffee-400 hover:text-rose-500 transition-colors">
+            <LogOut size={20} />
+          </button>
+        </header>
+
+        <main className="p-4 space-y-6 max-w-lg mx-auto">
+          {/* My Active Deliveries */}
+          <section className="space-y-4">
+            <h2 className="text-xs font-black uppercase text-coffee-400 tracking-widest flex items-center gap-2">
+              <Package size={14} />
+              {t('my_deliveries')}
+            </h2>
+            {myDeliveries.length === 0 ? (
+              <div className="bg-white p-8 rounded-3xl border border-dashed border-coffee-200 text-center">
+                <p className="text-sm text-coffee-400 italic">Belum ada pengiriman aktif</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {myDeliveries.map(order => (
+                  <motion.div 
+                    key={order.order_id}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="bg-white p-5 rounded-3xl border border-coffee-100 shadow-sm space-y-4"
+                  >
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <span className="text-[10px] font-black text-coffee-300 uppercase tracking-widest">Order ID</span>
+                        <h3 className="text-lg font-bold text-coffee-900">#{order.display_id}</h3>
+                      </div>
+                      <span className="px-3 py-1 bg-amber-100 text-amber-700 rounded-full text-[10px] font-bold uppercase tracking-widest">
+                        {t('out_for_delivery')}
+                      </span>
+                    </div>
+                    
+                    <div className="space-y-3">
+                      <div className="flex gap-3">
+                        <div className="w-8 h-8 bg-coffee-50 rounded-lg flex items-center justify-center text-coffee-400 flex-shrink-0">
+                          <User size={16} />
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-bold text-coffee-400 uppercase tracking-widest">Pelanggan</p>
+                          <p className="text-sm font-bold text-coffee-900">{order.customer_name}</p>
+                        </div>
+                      </div>
+                      <div className="flex gap-3">
+                        <div className="w-8 h-8 bg-coffee-50 rounded-lg flex items-center justify-center text-coffee-400 flex-shrink-0">
+                          <ArrowUpRight size={16} />
+                        </div>
+                        <div className="flex-1">
+                          <p className="text-[10px] font-bold text-coffee-400 uppercase tracking-widest">Alamat</p>
+                          <p className="text-sm text-coffee-700 leading-relaxed">{order.delivery_address}</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex gap-2 pt-2">
+                      <button 
+                        onClick={() => window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(order.delivery_address)}`, '_blank')}
+                        className="flex-1 bg-coffee-100 text-coffee-700 py-3 rounded-2xl font-bold text-xs flex items-center justify-center gap-2"
+                      >
+                        <Globe size={14} />
+                        Navigasi
+                      </button>
+                      <button 
+                        onClick={() => handleCompleteDelivery(order.order_id)}
+                        className="flex-[2] bg-emerald-600 text-white py-3 rounded-2xl font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-emerald-100"
+                      >
+                        <CheckCircle2 size={14} />
+                        {t('complete_delivery')}
+                      </button>
+                    </div>
+                  </motion.div>
+                ))}
+              </div>
+            )}
+          </section>
+
+          {/* Available Orders */}
+          <section className="space-y-4">
+            <h2 className="text-xs font-black uppercase text-coffee-400 tracking-widest flex items-center gap-2">
+              <ShoppingCart size={14} />
+              {t('available_orders')}
+            </h2>
+            {availableOrders.length === 0 ? (
+              <div className="bg-white p-8 rounded-3xl border border-dashed border-coffee-200 text-center">
+                <p className="text-sm text-coffee-400 italic">Tidak ada orderan tersedia saat ini</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {availableOrders.map(order => (
+                  <motion.div 
+                    key={order.order_id}
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    className="bg-white p-5 rounded-3xl border border-coffee-100 shadow-sm flex items-center justify-between gap-4"
+                  >
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-[10px] font-black text-coffee-900 uppercase tracking-widest">#{order.display_id}</span>
+                        <span className="text-[10px] text-coffee-400">• {formatDate(order.date, 'HH:mm')}</span>
+                      </div>
+                      <p className="text-sm font-bold text-coffee-900 truncate">{order.customer_name}</p>
+                      <p className="text-[10px] text-coffee-500 truncate mt-1">{order.delivery_address}</p>
+                    </div>
+                    <button 
+                      onClick={() => handleTakeOrder(order.order_id)}
+                      className="bg-coffee-900 text-white px-4 py-3 rounded-2xl font-bold text-xs whitespace-nowrap"
+                    >
+                      {t('take_order')}
+                    </button>
+                  </motion.div>
+                ))}
+              </div>
+            )}
+          </section>
+        </main>
+
+        <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-coffee-100 p-2 flex justify-around items-center z-20">
+          <button className="flex flex-col items-center gap-1 p-2 text-coffee-900">
+            <LayoutDashboard size={20} />
+            <span className="text-[8px] font-bold uppercase tracking-widest">Beranda</span>
+          </button>
+          <button className="flex flex-col items-center gap-1 p-2 text-coffee-300">
+            <History size={20} />
+            <span className="text-[8px] font-bold uppercase tracking-widest">Riwayat</span>
+          </button>
+          <button className="flex flex-col items-center gap-1 p-2 text-coffee-300">
+            <User size={20} />
+            <span className="text-[8px] font-bold uppercase tracking-widest">Profil</span>
+          </button>
+        </nav>
+      </div>
+    );
+  }
+
+  if (isDriverMode && !driver && !user && !isCustomerMode) {
+    if (driverView === 'login') {
+      return (
+        <div 
+          className="min-h-screen flex items-center justify-center p-4 bg-cover bg-center bg-no-repeat" 
+          style={{ 
+            backgroundColor: appSettings.login_bg,
+            backgroundImage: appSettings.login_bg_image ? `url(${appSettings.login_bg_image})` : 'none'
+          }}
+        >
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-white p-8 rounded-3xl shadow-2xl w-full max-w-md border border-coffee-100"
+          >
+            <div className="text-center mb-8">
+              <div className="w-20 h-20 bg-coffee-900 rounded-2xl flex items-center justify-center text-white mx-auto mb-4 shadow-xl shadow-coffee-100">
+                <Truck size={40} />
+              </div>
+              <h2 className="text-2xl font-serif font-bold text-coffee-950 mb-1">{t('driver_login')}</h2>
+              <p className="text-coffee-500 text-sm">{t('driver_login_desc')}</p>
+            </div>
+
+            <form onSubmit={handleDriverLogin} className="space-y-5">
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold uppercase text-coffee-400 tracking-widest ml-1">Username</label>
+                <div className="relative">
+                  <User className="absolute left-4 top-1/2 -translate-y-1/2 text-coffee-400" size={18} />
+                  <input 
+                    required
+                    type="text"
+                    value={driverLoginData.username}
+                    onChange={e => setDriverLoginData({...driverLoginData, username: e.target.value})}
+                    className="w-full bg-coffee-50 border border-coffee-200 rounded-2xl pl-12 pr-4 py-4 focus:outline-none focus:ring-2 focus:ring-coffee-500 transition-all"
+                    placeholder="Username driver"
+                  />
+                </div>
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold uppercase text-coffee-400 tracking-widest ml-1">Password</label>
+                <div className="relative">
+                  <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-coffee-400" size={18} />
+                  <input 
+                    required
+                    type="password"
+                    value={driverLoginData.password}
+                    onChange={e => setDriverLoginData({...driverLoginData, password: e.target.value})}
+                    className="w-full bg-coffee-50 border border-coffee-200 rounded-2xl pl-12 pr-4 py-4 focus:outline-none focus:ring-2 focus:ring-coffee-500 transition-all"
+                    placeholder="••••••••"
+                  />
+                </div>
+              </div>
+
+              {loginError && (
+                <div className="bg-rose-50 text-rose-600 p-4 rounded-2xl text-xs font-bold border border-rose-100 flex items-center gap-2">
+                  <AlertCircle size={14} />
+                  {loginError}
+                </div>
+              )}
+
+              <button 
+                type="submit"
+                className="w-full bg-coffee-900 text-white py-4 rounded-2xl font-bold hover:bg-coffee-800 transition-all shadow-lg shadow-coffee-200"
+              >
+                {t('login')}
+              </button>
+
+              <div className="flex flex-col gap-3 pt-4 border-t border-coffee-50">
+                <button 
+                  type="button"
+                  onClick={() => setDriverView('register')}
+                  className="text-sm font-bold text-coffee-600 hover:text-coffee-900 transition-colors"
+                >
+                  {t('no_account')} {t('register_here')}
+                </button>
+                <button 
+                  type="button"
+                  onClick={() => setIsDriverMode(false)}
+                  className="text-sm font-bold text-coffee-400 hover:text-coffee-600 transition-colors"
+                >
+                  Kembali ke Login Kasir
+                </button>
+              </div>
+            </form>
+          </motion.div>
+        </div>
+      );
+    }
+
+    if (driverView === 'register') {
+      return (
+        <div 
+          className="min-h-screen flex items-center justify-center p-4 bg-cover bg-center bg-no-repeat" 
+          style={{ 
+            backgroundColor: appSettings.login_bg,
+            backgroundImage: appSettings.login_bg_image ? `url(${appSettings.login_bg_image})` : 'none'
+          }}
+        >
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-white p-8 rounded-3xl shadow-2xl w-full max-w-md border border-coffee-100"
+          >
+            <div className="text-center mb-8">
+              <h2 className="text-2xl font-serif font-bold text-coffee-950 mb-1">{t('driver_registration')}</h2>
+              <p className="text-coffee-500 text-sm">{t('driver_registration_desc')}</p>
+            </div>
+
+            <form onSubmit={handleDriverRegister} className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold uppercase text-coffee-400 tracking-widest ml-1">Username</label>
+                  <input 
+                    required
+                    type="text"
+                    value={driverRegisterData.username}
+                    onChange={e => setDriverRegisterData({...driverRegisterData, username: e.target.value})}
+                    className="w-full bg-coffee-50 border border-coffee-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-coffee-500"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold uppercase text-coffee-400 tracking-widest ml-1">Password</label>
+                  <input 
+                    required
+                    type="password"
+                    value={driverRegisterData.password}
+                    onChange={e => setDriverRegisterData({...driverRegisterData, password: e.target.value})}
+                    className="w-full bg-coffee-50 border border-coffee-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-coffee-500"
+                  />
+                </div>
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold uppercase text-coffee-400 tracking-widest ml-1">Nama Lengkap</label>
+                <input 
+                  required
+                  type="text"
+                  value={driverRegisterData.full_name}
+                  onChange={e => setDriverRegisterData({...driverRegisterData, full_name: e.target.value})}
+                  className="w-full bg-coffee-50 border border-coffee-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-coffee-500"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold uppercase text-coffee-400 tracking-widest ml-1">Nomor HP</label>
+                <input 
+                  required
+                  type="tel"
+                  value={driverRegisterData.phone}
+                  onChange={e => setDriverRegisterData({...driverRegisterData, phone: e.target.value})}
+                  className="w-full bg-coffee-50 border border-coffee-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-coffee-500"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold uppercase text-coffee-400 tracking-widest ml-1">Info Kendaraan (Plat/Model)</label>
+                <input 
+                  required
+                  type="text"
+                  value={driverRegisterData.vehicle_info}
+                  onChange={e => setDriverRegisterData({...driverRegisterData, vehicle_info: e.target.value})}
+                  className="w-full bg-coffee-50 border border-coffee-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-coffee-500"
+                  placeholder="B 1234 ABC - Honda Vario"
+                />
+              </div>
+
+              {loginError && (
+                <div className="bg-rose-50 text-rose-600 p-4 rounded-2xl text-xs font-bold border border-rose-100">
+                  {loginError}
+                </div>
+              )}
+
+              <button 
+                type="submit"
+                className="w-full bg-coffee-900 text-white py-4 rounded-2xl font-bold hover:bg-coffee-800 transition-all shadow-lg shadow-coffee-200 mt-4"
+              >
+                {t('register')}
+              </button>
+
+              <button 
+                type="button"
+                onClick={() => setDriverView('login')}
+                className="w-full text-sm font-bold text-coffee-400 hover:text-coffee-600 transition-colors pt-2"
+              >
+                Sudah punya akun? Login
+              </button>
+            </form>
+          </motion.div>
+        </div>
+      );
+    }
+  }
+
   if (!user) {
     return (
       <div 
@@ -3233,6 +3799,23 @@ export default function App() {
             >
               {t('login')}
             </button>
+
+            {appSettings.enable_delivery && (
+              <div className="pt-4 border-t border-coffee-50 space-y-4">
+                <p className="text-center text-[10px] font-bold text-coffee-300 uppercase tracking-widest">Atau Masuk Sebagai</p>
+                <button 
+                  type="button"
+                  onClick={() => {
+                    setIsDriverMode(true);
+                    setDriverView('login');
+                  }}
+                  className="w-full bg-white border-2 border-coffee-100 text-coffee-600 py-3 rounded-2xl font-bold text-sm hover:bg-coffee-50 transition-all flex items-center justify-center gap-2"
+                >
+                  <Truck size={18} />
+                  {t('driver_login')}
+                </button>
+              </div>
+            )}
 
             <button 
               type="button"
@@ -7657,6 +8240,152 @@ export default function App() {
                       </div>
                     </div>
 
+                    <div className="glass-card p-8 border-l-4 border-l-coffee-900">
+                      <div className="flex items-center justify-between mb-6">
+                        <div className="flex items-center gap-4">
+                          <div className="w-12 h-12 bg-coffee-100 text-coffee-900 rounded-2xl flex items-center justify-center">
+                            <Truck size={24} />
+                          </div>
+                          <div>
+                            <h3 className="text-xl font-serif font-bold">{t('enable_delivery_feature')}</h3>
+                            <p className="text-sm text-coffee-500">{t('delivery_feature_desc')}</p>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => setAppSettings(prev => ({ ...prev, enable_delivery: !prev.enable_delivery }))}
+                          className={cn(
+                            "w-14 h-7 rounded-full transition-all relative",
+                            appSettings.enable_delivery ? "bg-coffee-900" : "bg-coffee-200"
+                          )}
+                        >
+                          <div className={cn(
+                            "absolute top-1 w-5 h-5 rounded-full bg-white transition-all shadow-sm",
+                            appSettings.enable_delivery ? "left-8" : "left-1"
+                          )} />
+                        </button>
+                      </div>
+
+                      {appSettings.enable_delivery && (
+                        <div className="space-y-6 pt-6 border-t border-coffee-50">
+                          <div className="flex items-center justify-between">
+                            <h4 className="text-xs font-black uppercase text-coffee-400 tracking-widest flex items-center gap-2">
+                              <User size={14} />
+                              {t('driver_management')}
+                            </h4>
+                            <button 
+                              onClick={fetchData}
+                              className="p-2 text-coffee-400 hover:text-coffee-600 transition-colors"
+                            >
+                              <RefreshCw size={14} />
+                            </button>
+                          </div>
+
+                          <div className="overflow-x-auto rounded-2xl border border-coffee-100">
+                            <table className="w-full text-left text-sm">
+                              <thead className="bg-coffee-50 text-coffee-500 uppercase text-[10px] font-black tracking-widest">
+                                <tr>
+                                  <th className="px-6 py-4">Driver</th>
+                                  <th className="px-6 py-4">Kontak</th>
+                                  <th className="px-6 py-4">Status Akun</th>
+                                  <th className="px-6 py-4">Status Kerja</th>
+                                  <th className="px-6 py-4">Lokasi</th>
+                                  <th className="px-6 py-4 text-right">Aksi</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-coffee-50">
+                                {drivers.length === 0 ? (
+                                  <tr>
+                                    <td colSpan={4} className="px-6 py-12 text-center text-coffee-400 italic">
+                                      Belum ada driver yang terdaftar.
+                                    </td>
+                                  </tr>
+                                ) : (
+                                  drivers.map(d => (
+                                    <tr key={d.id} className="hover:bg-coffee-50/30 transition-colors">
+                                      <td className="px-6 py-4">
+                                        <div className="font-bold text-coffee-900">{d.full_name}</div>
+                                        <div className="text-xs text-coffee-400">@{d.username}</div>
+                                      </td>
+                                      <td className="px-6 py-4">
+                                        <div className="text-coffee-600">{d.phone}</div>
+                                        <div className="text-[10px] text-coffee-400">{d.vehicle_info}</div>
+                                      </td>
+                                      <td className="px-6 py-4">
+                                        <span className={cn(
+                                          "px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest",
+                                          d.status === 'active' ? "bg-emerald-100 text-emerald-700" : 
+                                          d.status === 'pending' ? "bg-amber-100 text-amber-700" : "bg-rose-100 text-rose-700"
+                                        )}>
+                                          {t(d.status)}
+                                        </span>
+                                      </td>
+                                      <td className="px-6 py-4">
+                                        {d.status === 'active' ? (
+                                          <span className={cn(
+                                            "px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest",
+                                            d.active_deliveries > 0 ? "bg-blue-100 text-blue-700" :
+                                            (d.last_online && (new Date().getTime() - new Date(d.last_online + 'Z').getTime()) < 300000) ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-700"
+                                          )}>
+                                            {d.active_deliveries > 0 ? t('delivering') :
+                                            (d.last_online && (new Date().getTime() - new Date(d.last_online + 'Z').getTime()) < 300000) ? t('available') : t('offline')}
+                                          </span>
+                                        ) : (
+                                          <span className="text-[10px] text-coffee-300 italic">-</span>
+                                        )}
+                                      </td>
+                                      <td className="px-6 py-4">
+                                        {d.latitude && d.longitude ? (
+                                          <button 
+                                            onClick={() => {
+                                              setSelectedDriverForMap(d.id);
+                                              setShowDriverMapModal(true);
+                                            }}
+                                            className="flex items-center gap-1 text-coffee-600 hover:text-coffee-900 transition-colors"
+                                          >
+                                            <Globe size={14} />
+                                            <span className="text-[10px] font-bold uppercase tracking-widest">Lihat Map</span>
+                                          </button>
+                                        ) : (
+                                          <span className="text-[10px] text-coffee-300 italic">Lokasi tidak tersedia</span>
+                                        )}
+                                      </td>
+                                      <td className="px-6 py-4 text-right">
+                                        <div className="flex justify-end gap-2">
+                                          {d.status === 'pending' && (
+                                            <button 
+                                              onClick={() => handleUpdateDriverStatus(d.id, 'active')}
+                                              className="px-3 py-1.5 bg-emerald-600 text-white rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-emerald-700 transition-all"
+                                            >
+                                              {t('approve')}
+                                            </button>
+                                          )}
+                                          {d.status === 'active' ? (
+                                            <button 
+                                              onClick={() => handleUpdateDriverStatus(d.id, 'suspended')}
+                                              className="px-3 py-1.5 bg-rose-50 text-rose-600 rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-rose-100 transition-all"
+                                            >
+                                              {t('suspend')}
+                                            </button>
+                                          ) : d.status === 'suspended' ? (
+                                            <button 
+                                              onClick={() => handleUpdateDriverStatus(d.id, 'active')}
+                                              className="px-3 py-1.5 bg-emerald-50 text-emerald-600 rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-emerald-100 transition-all"
+                                            >
+                                              Aktifkan
+                                            </button>
+                                          ) : null}
+                                        </div>
+                                      </td>
+                                    </tr>
+                                  ))
+                                )}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
                     <div className="glass-card p-8 border-l-4 border-l-amber-500">
                       <div className="flex gap-4">
                         <div className="p-3 bg-amber-100 text-amber-600 rounded-2xl h-fit">
@@ -7930,30 +8659,82 @@ export default function App() {
               <p className="text-coffee-500 text-sm">Silakan pilih metode pembayaran yang diinginkan</p>
             </div>
 
-            <div className="p-8 bg-white">
-              <div className="grid grid-cols-2 gap-4">
-                {(['Cash', 'QRIS'] as const).map((method) => (
-                  <button
-                    key={method}
-                    onClick={() => setPaymentMethod(method)}
-                    className={cn(
-                      "flex flex-col items-center gap-3 p-4 rounded-2xl border-2 transition-all",
-                      paymentMethod === method 
-                        ? "bg-coffee-50 border-coffee-600 text-coffee-950 shadow-md" 
-                        : "bg-white border-coffee-100 text-coffee-400 hover:border-coffee-200"
-                    )}
-                  >
-                    <div className={cn(
-                      "w-10 h-10 rounded-xl flex items-center justify-center",
-                      paymentMethod === method ? "bg-coffee-600 text-white" : "bg-coffee-50 text-coffee-400"
-                    )}>
-                      {method === 'Cash' && <Wallet size={20} />}
-                      {method === 'QRIS' && <CreditCard size={20} />}
-                    </div>
-                    <span className="font-bold text-sm">{method}</span>
-                  </button>
-                ))}
+            <div className="p-8 bg-white space-y-6">
+              <div className="space-y-3">
+                <label className="text-[10px] font-bold uppercase text-coffee-400 tracking-widest">{t('payment_method')}</label>
+                <div className="grid grid-cols-2 gap-4">
+                  {(['Cash', 'QRIS'] as const).map((method) => (
+                    <button
+                      key={method}
+                      onClick={() => setPaymentMethod(method)}
+                      className={cn(
+                        "flex flex-col items-center gap-3 p-4 rounded-2xl border-2 transition-all",
+                        paymentMethod === method 
+                          ? "bg-coffee-50 border-coffee-600 text-coffee-950 shadow-md" 
+                          : "bg-white border-coffee-100 text-coffee-400 hover:border-coffee-200"
+                      )}
+                    >
+                      <div className={cn(
+                        "w-10 h-10 rounded-xl flex items-center justify-center",
+                        paymentMethod === method ? "bg-coffee-600 text-white" : "bg-coffee-50 text-coffee-400"
+                      )}>
+                        {method === 'Cash' && <Wallet size={20} />}
+                        {method === 'QRIS' && <CreditCard size={20} />}
+                      </div>
+                      <span className="font-bold text-sm">{method}</span>
+                    </button>
+                  ))}
+                </div>
               </div>
+
+              {appSettings.enable_delivery && (
+                <div className="space-y-3 pt-4 border-t border-coffee-50">
+                  <label className="text-[10px] font-bold uppercase text-coffee-400 tracking-widest">{t('delivery_method')}</label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {(['dine_in', 'takeaway', 'delivery'] as const).map((method) => (
+                      <button
+                        key={method}
+                        onClick={() => setDeliveryMethod(method)}
+                        className={cn(
+                          "px-3 py-2 rounded-xl border-2 text-[10px] font-bold uppercase tracking-tight transition-all",
+                          deliveryMethod === method 
+                            ? "bg-coffee-900 border-coffee-900 text-white shadow-md" 
+                            : "bg-white border-coffee-100 text-coffee-400 hover:border-coffee-200"
+                        )}
+                      >
+                        {t(method)}
+                      </button>
+                    ))}
+                  </div>
+                  
+                  {deliveryMethod === 'delivery' && (
+                    <motion.div 
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: 'auto' }}
+                      className="space-y-3 pt-2"
+                    >
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-bold uppercase text-coffee-400">{t('delivery_address')}</label>
+                        <textarea 
+                          value={deliveryAddress}
+                          onChange={(e) => setDeliveryAddress(e.target.value)}
+                          placeholder="Jl. Merdeka No. 123..."
+                          className="w-full bg-coffee-50 border border-coffee-200 rounded-xl px-4 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-coffee-500 min-h-[60px] resize-none"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-bold uppercase text-coffee-400">{t('delivery_fee')}</label>
+                        <input 
+                          type="number"
+                          value={deliveryFee}
+                          onChange={(e) => setDeliveryFee(Number(e.target.value))}
+                          className="w-full bg-coffee-50 border border-coffee-200 rounded-xl px-4 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-coffee-500"
+                        />
+                      </div>
+                    </motion.div>
+                  )}
+                </div>
+              )}
             </div>
 
             <div className="p-6 bg-coffee-50 flex gap-3">
@@ -9800,6 +10581,45 @@ export default function App() {
           </div>
         )}
       </div>
+
+      {/* Driver Map Modal */}
+      {showDriverMapModal && (
+        <div className="fixed inset-0 bg-coffee-950/40 backdrop-blur-sm flex items-center justify-center z-[100] p-4">
+          <motion.div 
+            initial={{ scale: 0.9, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            className="bg-white rounded-3xl p-8 w-full max-w-2xl shadow-2xl relative"
+          >
+            <button 
+              onClick={() => setShowDriverMapModal(false)}
+              className="absolute top-6 right-6 p-2 text-coffee-400 hover:text-coffee-900 transition-colors"
+            >
+              <X size={24} />
+            </button>
+            
+            <div className="flex items-center gap-4 mb-6">
+              <div className="w-12 h-12 bg-coffee-100 text-coffee-900 rounded-2xl flex items-center justify-center">
+                <Truck size={24} />
+              </div>
+              <div>
+                <h3 className="text-2xl font-serif font-bold text-coffee-950">Lokasi Real-time Driver</h3>
+                <p className="text-sm text-coffee-500">Memantau posisi driver secara langsung</p>
+              </div>
+            </div>
+
+            <DriverMap drivers={drivers} selectedDriverId={selectedDriverForMap || undefined} />
+            
+            <div className="mt-6 flex justify-end">
+              <button 
+                onClick={() => setShowDriverMapModal(false)}
+                className="px-8 py-3 bg-coffee-900 text-white rounded-xl font-bold hover:bg-coffee-800 transition-all shadow-lg shadow-coffee-200"
+              >
+                Tutup
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
 
       {/* Custom Confirm Dialog */}
       {confirmDialog && confirmDialog.show && (

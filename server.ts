@@ -437,12 +437,21 @@ async function startServer() {
 
     const token = jwt.sign({ id: driver.id, username: driver.username, role: 'driver' }, JWT_SECRET, { expiresIn: '7d' });
     db.prepare("UPDATE drivers SET last_online = CURRENT_TIMESTAMP WHERE id = ?").run(driver.id);
-    res.cookie('driver_token', token, { httpOnly: true, secure: process.env.NODE_ENV === 'production', maxAge: 7 * 24 * 60 * 60 * 1000 });
+    res.cookie('driver_token', token, {
+      httpOnly: true,
+      secure: true,
+      sameSite: 'none',
+      maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+    });
     res.json({ success: true, driver: { id: driver.id, username: driver.username, full_name: driver.full_name } });
   });
 
   app.post("/api/driver/logout", (req, res) => {
-    res.clearCookie('driver_token');
+    res.clearCookie('driver_token', {
+      httpOnly: true,
+      secure: true,
+      sameSite: 'none'
+    });
     res.json({ success: true });
   });
 
@@ -747,7 +756,46 @@ async function startServer() {
 
     try {
       const transaction = db.transaction(() => {
-        // Get and increment order counter
+        const insufficientStock: string[] = [];
+        const aggregatedIngredients: Map<number, { name: string, required: number, current: number, unit: string }> = new Map();
+
+        // 1. Pre-check stock for all items
+        for (const item of items) {
+          if (!item.menuId) continue;
+          const menu = db.prepare("SELECT * FROM menus WHERE id = ?").get(item.menuId) as any;
+          if (!menu) throw new Error(`Menu ID ${item.menuId} tidak ditemukan`);
+
+          const ingredients = db.prepare(`
+            SELECT mi.*, i.name, i.quantity as current_stock, i.unit
+            FROM menu_ingredients mi
+            JOIN inventory i ON mi.inventory_id = i.id
+            WHERE mi.menu_id = ?
+          `).all(item.menuId) as any[];
+
+          for (const ing of ingredients) {
+            const required = ing.quantity * item.quantity;
+            const existing = aggregatedIngredients.get(ing.inventory_id) || { 
+              name: ing.name, 
+              required: 0, 
+              current: ing.current_stock, 
+              unit: ing.unit 
+            };
+            existing.required += required;
+            aggregatedIngredients.set(ing.inventory_id, existing);
+          }
+        }
+
+        for (const [id, data] of aggregatedIngredients.entries()) {
+          if (data.current < data.required) {
+            insufficientStock.push(`${data.name} (Stok: ${data.current} ${data.unit}, Butuh: ${data.required} ${data.unit})`);
+          }
+        }
+
+        if (insufficientStock.length > 0) {
+          throw new Error(`Stok tidak mencukupi: ${insufficientStock.join(', ')}`);
+        }
+
+        // 2. Get and increment order counter
         const counterSetting = db.prepare("SELECT value FROM settings WHERE key = 'order_counter'").get() as any;
         let counter = parseInt(counterSetting?.value || '1');
         const displayId = String(counter).padStart(2, '0');
@@ -758,9 +806,8 @@ async function startServer() {
         let subtotal = 0;
         let sequence = 1;
         for (const item of items) {
-          if (!item.menuId) continue; // Skip items with null/undefined menuId
+          if (!item.menuId) continue; 
           const menu = db.prepare("SELECT * FROM menus WHERE id = ?").get(item.menuId) as any;
-          if (!menu) throw new Error(`Menu ID ${item.menuId} tidak ditemukan`);
           subtotal += menu.price * item.quantity;
 
           // Insert into transactions as pending
@@ -769,7 +816,7 @@ async function startServer() {
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           `).run(
             'income',
-            menu.category,
+            'Sales',
             menu.price * item.quantity,
             `Order via Customer: ${menu.name}`,
             customerName || 'Guest',
@@ -1699,18 +1746,18 @@ async function startServer() {
     const zonedNow = toZonedTime(now, timezone);
     const today = zonedNow.toISOString().split('T')[0];
     
-    const dailySales = db.prepare("SELECT SUM(quantity) as total, SUM(amount) as income FROM transactions WHERE type = 'income' AND category = 'Sales' AND status != 'pending' AND date >= ?").get(today) as any;
+    const dailySales = db.prepare("SELECT SUM(quantity) as total, SUM(amount) as income FROM transactions WHERE type = 'income' AND category NOT IN ('Discount', 'Tax') AND status != 'pending' AND date >= ?").get(today) as any;
 
     const monthStart = new Date(zonedNow);
     monthStart.setDate(1);
     const monthStartStr = monthStart.toISOString().split('T')[0];
-    const monthlySales = db.prepare("SELECT SUM(quantity) as total FROM transactions WHERE type = 'income' AND category = 'Sales' AND status != 'pending' AND date >= ?").get(monthStartStr) as any;
+    const monthlySales = db.prepare("SELECT SUM(quantity) as total FROM transactions WHERE type = 'income' AND category NOT IN ('Discount', 'Tax') AND status != 'pending' AND date >= ?").get(monthStartStr) as any;
 
     // Sales by Source (POS vs Delivery)
     const salesBySource = db.prepare(`
       SELECT source, SUM(amount) as total 
       FROM transactions 
-      WHERE type = 'income' AND category = 'Sales' AND status != 'pending' AND date >= ?
+      WHERE type = 'income' AND category NOT IN ('Discount', 'Tax') AND status != 'pending' AND date >= ?
       GROUP BY source
     `).all(today);
 
@@ -1801,7 +1848,17 @@ async function startServer() {
   });
 
   app.get("/api/reports/daily-summary", authenticateToken, isAdmin, (req, res) => {
-    const today = new Date().toISOString().split('T')[0];
+    // Get timezone from settings
+    const settings = db.prepare("SELECT * FROM settings").all() as any[];
+    const settingsObj = settings.reduce((acc, curr) => {
+      acc[curr.key] = curr.value;
+      return acc;
+    }, {} as any);
+    const timezone = settingsObj.timezone || 'Asia/Jakarta';
+    
+    const now = new Date();
+    const zonedNow = toZonedTime(now, timezone);
+    const today = zonedNow.toISOString().split('T')[0];
     
     const summary = db.prepare(`
       SELECT 

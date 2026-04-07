@@ -2494,46 +2494,47 @@ export default function App() {
         {/* Right Side: Ordering Interface */}
         <div className="flex-1 flex flex-col h-screen overflow-hidden relative">
           {/* Header */}
-          <header className="bg-white border-b border-coffee-100 sticky top-0 z-30 px-4 py-4 md:px-8 flex items-center justify-between shrink-0">
+          <header className="bg-white/80 dark:bg-zinc-900/80 backdrop-blur-md border-b border-coffee-100 dark:border-zinc-800 sticky top-0 z-30 px-4 py-4 md:px-8 flex items-center justify-between shrink-0 pt-safe transition-colors duration-300">
             <div className="flex items-center gap-4">
               <div className={cn(
-                "p-2.5 rounded-2xl shadow-lg shadow-coffee-200 flex items-center justify-center",
-                appSettings.app_logo_url ? "bg-white" : "bg-coffee-900 text-white"
+                "p-2.5 rounded-2xl shadow-lg shadow-coffee-200 dark:shadow-none flex items-center justify-center",
+                appSettings.app_logo_url ? "bg-white dark:bg-zinc-800" : "bg-coffee-900 dark:bg-zinc-700 text-white"
               )}>
                 <IconComponent size={24} />
               </div>
               <div>
-                <h1 className="text-xl font-serif font-bold text-coffee-950">{appSettings.customer_page_title || appSettings.app_name}</h1>
-                <p className="text-xs text-coffee-500 font-medium">{appSettings.customer_page_subtitle || 'Menu Pelanggan'}</p>
+                <h1 className="text-xl font-serif font-bold text-coffee-950 dark:text-zinc-100">{appSettings.customer_page_title || appSettings.app_name}</h1>
+                <p className="text-xs text-coffee-500 dark:text-zinc-400 font-medium">{appSettings.customer_page_subtitle || 'Menu Pelanggan'}</p>
               </div>
             </div>
             <div className="flex items-center gap-3">
-              {/* Subtle Login Access (Hidden) */}
-              <button 
-                onClick={() => setIsCustomerMode(false)}
-                className="p-2 text-coffee-950/5 hover:text-coffee-950/20 transition-colors"
-                title="Staff Login"
+              <motion.button 
+                whileTap={{ scale: 0.9 }}
+                onClick={() => setDarkMode(!darkMode)}
+                className="p-3 bg-white dark:bg-zinc-800 border border-coffee-100 dark:border-zinc-700 text-coffee-600 dark:text-zinc-400 rounded-2xl shadow-sm hover:bg-coffee-50 dark:hover:bg-zinc-700 transition-all active:scale-95"
               >
-                <Lock size={16} />
-              </button>
+                {darkMode ? <Sun size={20} /> : <Moon size={20} />}
+              </motion.button>
               
-              <button 
+              <motion.button 
+                whileTap={{ scale: 0.9 }}
                 onClick={() => setShowCustomerOrderStatus(true)}
-                className="p-3 bg-white border border-coffee-100 text-coffee-600 rounded-2xl shadow-sm hover:bg-coffee-50 transition-all active:scale-95"
+                className="p-3 bg-white dark:bg-zinc-800 border border-coffee-100 dark:border-zinc-700 text-coffee-600 dark:text-zinc-400 rounded-2xl shadow-sm hover:bg-coffee-50 dark:hover:bg-zinc-700 transition-all active:scale-95"
               >
                 <ClipboardList size={20} />
-              </button>
+              </motion.button>
 
               <motion.button 
                 id="mobile-cart-icon"
+                whileTap={{ scale: 0.9 }}
                 animate={cartPulse ? { scale: [1, 1.2, 1] } : {}}
                 transition={{ duration: 0.3 }}
                 onClick={() => setShowMobileCart(true)}
-                className="relative p-3 bg-coffee-900 text-white rounded-2xl shadow-lg shadow-coffee-200"
+                className="relative p-3 bg-coffee-900 dark:bg-zinc-700 text-white rounded-2xl shadow-lg shadow-coffee-200 dark:shadow-none"
               >
                 <ShoppingCart size={20} />
                 {cart.length > 0 && (
-                  <span className="absolute -top-1 -right-1 bg-rose-500 text-white text-[10px] font-bold w-5 h-5 rounded-full flex items-center justify-center border-2 border-white">
+                  <span className="absolute -top-1 -right-1 bg-rose-500 text-white text-[10px] font-bold w-5 h-5 rounded-full flex items-center justify-center border-2 border-white dark:border-zinc-900">
                     {cart.reduce((sum, item) => sum + item.quantity, 0)}
                   </span>
                 )}
@@ -2541,54 +2542,56 @@ export default function App() {
             </div>
           </header>
 
-          <main className="flex-1 overflow-y-auto custom-scrollbar p-4 md:p-8">
+          <main className="flex-1 overflow-y-auto custom-scrollbar p-4 md:p-8 pb-safe transition-colors duration-300">
             <div className="max-w-6xl mx-auto space-y-8">
               {/* Mobile Ad (Visible on small screens) */}
-              <div className="lg:hidden h-64 rounded-[2rem] overflow-hidden shadow-lg">
+              <div className="lg:hidden h-64 rounded-[2rem] overflow-hidden shadow-lg shadow-coffee-900/10">
                 <AdCarousel />
               </div>
             {/* Search & Categories */}
             <div className="flex flex-col md:flex-row gap-4">
               <div className="relative flex-1">
-                <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-coffee-400" size={20} />
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-coffee-400 dark:text-zinc-500" size={20} />
                 <input 
                   type="text"
                   placeholder="Cari menu favorit Anda..."
                   value={menuSearch}
                   onChange={e => setMenuSearch(e.target.value)}
-                  className="w-full bg-white border border-coffee-200 rounded-2xl pl-12 pr-4 py-4 focus:outline-none focus:ring-2 focus:ring-coffee-500 shadow-sm"
+                  className="w-full bg-white dark:bg-zinc-800 border border-coffee-200 dark:border-zinc-700 rounded-2xl pl-12 pr-4 py-4 focus:outline-none focus:ring-2 focus:ring-coffee-500 dark:text-zinc-100 shadow-sm transition-colors"
                 />
               </div>
               <div className="flex gap-2 overflow-x-auto no-scrollbar pb-2">
                 {categories.map(cat => (
-                  <button
+                  <motion.button
+                    whileTap={{ scale: 0.95 }}
                     key={cat}
                     onClick={() => setSelectedCategory(cat)}
                     className={cn(
                       "px-6 py-4 rounded-2xl font-bold whitespace-nowrap transition-all shadow-sm border",
                       selectedCategory === cat 
-                        ? "bg-coffee-900 text-white border-coffee-900" 
-                        : "bg-white text-coffee-600 border-coffee-100 hover:border-coffee-300"
+                        ? "bg-coffee-900 dark:bg-zinc-700 text-white border-coffee-900 dark:border-zinc-600" 
+                        : "bg-white dark:bg-zinc-800 text-coffee-600 dark:text-zinc-400 border-coffee-100 dark:border-zinc-700 hover:border-coffee-300 dark:hover:border-zinc-600"
                     )}
                   >
                     {cat}
-                  </button>
+                  </motion.button>
                 ))}
               </div>
             </div>
 
             {/* Menu Grid */}
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2.5 sm:gap-6">
-              {filteredMenus.map(menu => (
+              {filteredMenus.map((menu, index) => (
                 <motion.div 
                   key={menu.id}
                   layout
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: index * 0.05 }}
                   whileHover={{ y: -6 }}
-                  className="bg-white rounded-[2rem] overflow-hidden border border-coffee-100/50 shadow-sm hover:shadow-2xl hover:shadow-coffee-200/40 transition-all group flex flex-col"
+                  className="bg-white dark:bg-zinc-900 rounded-[2rem] overflow-hidden border border-coffee-100/50 dark:border-zinc-800 shadow-sm hover:shadow-2xl hover:shadow-coffee-200/40 dark:hover:shadow-none transition-all group flex flex-col"
                 >
-                  <div className="relative aspect-[4/5] overflow-hidden bg-coffee-50">
+                  <div className="relative aspect-[4/5] overflow-hidden bg-coffee-50 dark:bg-zinc-800">
                     {menu.image_url ? (
                       <img 
                         src={menu.image_url} 
@@ -2597,52 +2600,53 @@ export default function App() {
                         referrerPolicy="no-referrer"
                       />
                     ) : (
-                      <div className="w-full h-full flex items-center justify-center text-coffee-200 bg-gradient-to-br from-coffee-50 to-white">
+                      <div className="w-full h-full flex items-center justify-center text-coffee-200 dark:text-zinc-700 bg-gradient-to-br from-coffee-50 to-white dark:from-zinc-800 dark:to-zinc-900">
                         <Coffee size={48} className="opacity-20" />
                       </div>
                     )}
                     
                     {/* Category Badge */}
                     <div className="absolute top-3 left-3">
-                      <span className="bg-white/90 backdrop-blur-md px-2.5 py-1 rounded-full text-[8px] sm:text-[9px] font-black uppercase tracking-[0.1em] text-coffee-900 shadow-sm border border-white/50">
+                      <span className="bg-white/90 dark:bg-zinc-900/90 backdrop-blur-md px-2.5 py-1 rounded-full text-[8px] sm:text-[9px] font-black uppercase tracking-[0.1em] text-coffee-900 dark:text-zinc-100 shadow-sm border border-white/50 dark:border-zinc-800">
                         {menu.category}
                       </span>
                     </div>
 
                     {/* Quick Add Overlay (Desktop) */}
-                    <div className="absolute inset-0 bg-coffee-950/20 opacity-0 group-hover:opacity-100 transition-opacity hidden sm:flex items-center justify-center">
-                      <button 
+                    <div className="absolute inset-0 bg-coffee-950/20 dark:bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity hidden sm:flex items-center justify-center">
+                      <motion.button 
+                        whileTap={{ scale: 0.9 }}
                         onClick={(e) => handleAddToCart(menu, e)}
-                        className="bg-white text-coffee-900 p-4 rounded-full shadow-2xl transform translate-y-4 group-hover:translate-y-0 transition-all duration-300 hover:bg-coffee-900 hover:text-white"
+                        className="bg-white dark:bg-zinc-800 text-coffee-900 dark:text-zinc-100 p-4 rounded-full shadow-2xl transform translate-y-4 group-hover:translate-y-0 transition-all duration-300 hover:bg-coffee-900 dark:hover:bg-zinc-700 hover:text-white"
                       >
                         <Plus size={24} />
-                      </button>
+                      </motion.button>
                     </div>
                   </div>
 
                   <div className="p-4 sm:p-6 flex flex-col flex-1">
                     <div className="mb-3 sm:mb-4">
-                      <h3 className="text-sm sm:text-xl font-serif font-bold text-coffee-950 leading-tight group-hover:text-coffee-700 transition-colors line-clamp-1 sm:line-clamp-2 mb-1.5">
+                      <h3 className="text-sm sm:text-xl font-serif font-bold text-coffee-950 dark:text-zinc-100 leading-tight group-hover:text-coffee-700 dark:group-hover:text-zinc-300 transition-colors line-clamp-1 sm:line-clamp-2 mb-1.5">
                         {menu.name}
                       </h3>
                       
                       <div className="flex flex-wrap items-center gap-1.5 mb-2.5">
                         {menu.size && (
-                          <span className="text-[7px] sm:text-[9px] font-black text-coffee-600 bg-coffee-50 px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full uppercase tracking-widest border border-coffee-100">
+                          <span className="text-[7px] sm:text-[9px] font-black text-coffee-600 dark:text-zinc-400 bg-coffee-50 dark:bg-zinc-800 px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full uppercase tracking-widest border border-coffee-100 dark:border-zinc-700">
                             {menu.size}
                           </span>
                         )}
                       </div>
                       
-                      <p className="text-[9px] sm:text-xs text-coffee-500 line-clamp-2 leading-relaxed italic opacity-70">
+                      <p className="text-[9px] sm:text-xs text-coffee-500 dark:text-zinc-500 line-clamp-2 leading-relaxed italic opacity-70">
                         {menu.description || 'Dibuat dengan cinta dan biji kopi pilihan terbaik.'}
                       </p>
                     </div>
 
-                    <div className="mt-auto pt-3 sm:pt-5 border-t border-coffee-50 flex items-center justify-between gap-1.5">
+                    <div className="mt-auto pt-3 sm:pt-5 border-t border-coffee-50 dark:border-zinc-800 flex items-center justify-between gap-1.5">
                       <div className="flex flex-col min-w-0">
-                        <span className="text-[7px] sm:text-[9px] uppercase tracking-[0.15em] text-coffee-400 font-black mb-0.5">Harga</span>
-                        <div className="flex items-baseline gap-0.5 text-coffee-900">
+                        <span className="text-[7px] sm:text-[9px] uppercase tracking-[0.15em] text-coffee-400 dark:text-zinc-600 font-black mb-0.5">Harga</span>
+                        <div className="flex items-baseline gap-0.5 text-coffee-900 dark:text-zinc-100">
                           <span className="text-[10px] sm:text-sm font-bold">Rp</span>
                           <span className="text-base sm:text-xl font-black tracking-tighter leading-none">
                             {menu.price.toLocaleString('id-ID')}
@@ -2650,12 +2654,13 @@ export default function App() {
                         </div>
                       </div>
                       
-                      <button 
+                      <motion.button 
+                        whileTap={{ scale: 0.8 }}
                         onClick={(e) => handleAddToCart(menu, e)}
-                        className="sm:hidden bg-coffee-900 text-white w-9 h-9 rounded-xl hover:bg-coffee-800 transition-all shadow-lg shadow-coffee-100 active:scale-90 flex items-center justify-center shrink-0"
+                        className="sm:hidden bg-coffee-900 dark:bg-zinc-700 text-white w-9 h-9 rounded-xl hover:bg-coffee-800 dark:hover:bg-zinc-600 transition-all shadow-lg shadow-coffee-100 dark:shadow-none flex items-center justify-center shrink-0"
                       >
                         <Plus size={18} />
-                      </button>
+                      </motion.button>
                     </div>
                   </div>
                 </motion.div>
@@ -4152,7 +4157,7 @@ export default function App() {
         stats={stats}
       />
       {/* Mobile Header - Sticky */}
-      <header className="md:hidden sticky top-0 z-[60] bg-white/80 backdrop-blur-xl border-b border-coffee-100 px-6 py-4 flex justify-between items-center no-print">
+      <header className="md:hidden sticky top-0 z-[60] bg-white/80 dark:bg-zinc-900/80 backdrop-blur-xl border-b border-coffee-100 dark:border-zinc-800 px-6 py-4 flex justify-between items-center no-print pt-safe">
         <div className="flex items-center gap-3">
           <div className={cn(
             "flex items-center justify-center",
@@ -4160,65 +4165,70 @@ export default function App() {
           )}>
             <IconComponent className={appSettings.app_logo_url ? "" : "text-white w-6 h-6"} size={appSettings.app_logo_url ? 32 : 24} />
           </div>
-          <span className="font-serif font-black text-coffee-950 text-lg tracking-tight">{appSettings.app_name}</span>
+          <span className="font-serif font-black text-coffee-950 dark:text-zinc-100 text-lg tracking-tight">{appSettings.app_name}</span>
         </div>
         <div className="flex items-center gap-2">
-          <button 
+          <motion.button 
+            whileTap={{ scale: 0.9 }}
             onClick={handleRefresh}
             disabled={isRefreshing}
-            className="p-2.5 bg-coffee-100 text-coffee-600 rounded-xl hover:bg-coffee-200 transition-colors"
+            className="p-2.5 bg-coffee-100 dark:bg-zinc-800 text-coffee-600 dark:text-zinc-400 rounded-xl hover:bg-coffee-200 transition-colors"
             title="Refresh Data"
           >
             <RefreshCw size={18} className={cn(isRefreshing && "animate-spin")} />
-          </button>
-          <button 
+          </motion.button>
+          <motion.button 
+            whileTap={{ scale: 0.9 }}
             onClick={toggleFullscreen}
-            className="p-2.5 bg-coffee-100 text-coffee-600 rounded-xl hover:bg-coffee-200 transition-colors"
+            className="p-2.5 bg-coffee-100 dark:bg-zinc-800 text-coffee-600 dark:text-zinc-400 rounded-xl hover:bg-coffee-200 transition-colors"
             title={isFullscreen ? "Keluar Layar Penuh" : "Layar Penuh"}
           >
             {isFullscreen ? <Minimize size={18} /> : <Maximize size={18} />}
-          </button>
+          </motion.button>
           {activeTab === 'orders' && cart.length > 0 && (
-            <button 
+            <motion.button 
+              whileTap={{ scale: 0.9 }}
               onClick={() => setShowMobileCart(true)}
-              className="relative p-2 bg-coffee-100 text-coffee-900 rounded-xl active:scale-95 transition-transform"
+              className="relative p-2 bg-coffee-100 dark:bg-zinc-800 text-coffee-900 dark:text-zinc-100 rounded-xl active:scale-95 transition-transform"
             >
               <ShoppingCart size={20} />
               <span className="absolute -top-1 -right-1 bg-rose-500 text-white text-[10px] w-4 h-4 rounded-full flex items-center justify-center font-black">
                 {cart.reduce((sum, item) => sum + item.quantity, 0)}
               </span>
-            </button>
+            </motion.button>
           )}
-          <div className="w-8 h-8 rounded-full bg-coffee-200 flex items-center justify-center text-coffee-900 font-black text-xs border-2 border-white shadow-sm">
+          <div className="w-8 h-8 rounded-full bg-coffee-200 dark:bg-zinc-700 flex items-center justify-center text-coffee-900 dark:text-zinc-100 font-black text-xs border-2 border-white dark:border-zinc-800 shadow-sm">
             {user.username[0].toUpperCase()}
           </div>
         </div>
       </header>
 
       {/* Mobile Bottom Navigation */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-[60] bg-white/90 backdrop-blur-xl border-t border-coffee-100 px-4 py-2 pb-safe no-print">
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-[60] bg-white/90 dark:bg-zinc-900/90 backdrop-blur-xl border-t border-coffee-100 dark:border-zinc-800 px-4 py-2 pb-safe no-print">
         <div className="flex justify-around items-center">
-          <button 
+          <motion.button 
+            whileTap={{ scale: 0.9 }}
             onClick={() => setActiveTab('orders')}
             className={cn(
               "flex flex-col items-center gap-1 p-2 transition-all",
-              activeTab === 'orders' ? "text-coffee-900 scale-110" : "text-coffee-400"
+              activeTab === 'orders' ? "text-coffee-900 dark:text-zinc-100 scale-110" : "text-coffee-400 dark:text-zinc-600"
             )}
           >
-            <div className={cn("p-1 rounded-lg", activeTab === 'orders' && "bg-coffee-100")}>
+            <div className={cn("p-1 rounded-lg", activeTab === 'orders' && "bg-coffee-100 dark:bg-zinc-800")}>
               <ShoppingCart size={20} />
             </div>
             <span className="text-[10px] font-black uppercase tracking-tighter">POS</span>
-          </button>
+          </motion.button>
           
-          <button 
+          <motion.button 
+            whileTap={{ scale: 0.9 }}
             onClick={() => setActiveTab('queue')}
             className={cn(
               "flex flex-col items-center gap-1 p-2 transition-all",
-              activeTab === 'queue' ? "text-coffee-900 scale-110" : "text-coffee-400"
+              activeTab === 'queue' ? "text-coffee-900 dark:text-zinc-100 scale-110" : "text-coffee-400 dark:text-zinc-600"
             )}
           >
-            <div className={cn("p-1 rounded-lg relative", activeTab === 'queue' && "bg-coffee-100")}>
+            <div className={cn("p-1 rounded-lg relative", activeTab === 'queue' && "bg-coffee-100 dark:bg-zinc-800")}>
               <Clock size={20} />
               {activeOrders.length > 0 && (
                 <span className="absolute -top-1 -right-1 bg-amber-500 text-white text-[8px] w-3 h-3 rounded-full flex items-center justify-center font-black">
@@ -4227,35 +4237,37 @@ export default function App() {
               )}
             </div>
             <span className="text-[10px] font-black uppercase tracking-tighter">Antrian</span>
-          </button>
+          </motion.button>
 
           {user.role === 'admin' && (
-            <button 
+            <motion.button 
+              whileTap={{ scale: 0.9 }}
               onClick={() => setActiveTab('dashboard')}
               className={cn(
                 "flex flex-col items-center gap-1 p-2 transition-all",
-                activeTab === 'dashboard' ? "text-coffee-900 scale-110" : "text-coffee-400"
+                activeTab === 'dashboard' ? "text-coffee-900 dark:text-zinc-100 scale-110" : "text-coffee-400 dark:text-zinc-600"
               )}
             >
-              <div className={cn("p-1 rounded-lg", activeTab === 'dashboard' && "bg-coffee-100")}>
+              <div className={cn("p-1 rounded-lg", activeTab === 'dashboard' && "bg-coffee-100 dark:bg-zinc-800")}>
                 <LayoutDashboard size={20} />
               </div>
               <span className="text-[10px] font-black uppercase tracking-tighter">Stats</span>
-            </button>
+            </motion.button>
           )}
 
-          <button 
+          <motion.button 
+            whileTap={{ scale: 0.9 }}
             onClick={() => setShowMobileMore(true)}
             className={cn(
               "flex flex-col items-center gap-1 p-2 transition-all",
-              showMobileMore ? "text-coffee-900 scale-110" : "text-coffee-400"
+              showMobileMore ? "text-coffee-900 dark:text-zinc-100 scale-110" : "text-coffee-400 dark:text-zinc-600"
             )}
           >
-            <div className={cn("p-1 rounded-lg", showMobileMore && "bg-coffee-100")}>
+            <div className={cn("p-1 rounded-lg", showMobileMore && "bg-coffee-100 dark:bg-zinc-800")}>
               <MenuIcon size={20} />
             </div>
             <span className="text-[10px] font-black uppercase tracking-tighter">Menu</span>
-          </button>
+          </motion.button>
         </div>
       </nav>
 
@@ -4275,79 +4287,97 @@ export default function App() {
               animate={{ y: 0 }}
               exit={{ y: "100%" }}
               transition={{ type: "spring", damping: 25, stiffness: 200 }}
-              className="fixed bottom-0 left-0 right-0 bg-white rounded-t-[32px] z-[80] p-8 pb-12 md:hidden shadow-2xl"
+              className="fixed bottom-0 left-0 right-0 bg-white dark:bg-zinc-900 rounded-t-[32px] z-[80] p-8 pb-12 md:hidden shadow-2xl border-t border-coffee-100 dark:border-zinc-800"
             >
-              <div className="w-12 h-1.5 bg-coffee-100 rounded-full mx-auto mb-8" />
+              <div className="w-12 h-1.5 bg-coffee-100 dark:bg-zinc-800 rounded-full mx-auto mb-8" />
               <div className="grid grid-cols-3 gap-6">
-                <button 
+                <motion.button 
+                  whileTap={{ scale: 0.9 }}
                   onClick={() => { setActiveTab('reports'); setReportSubTab('transactions'); setShowMobileMore(false); }}
                   className="flex flex-col items-center gap-3"
                 >
-                  <div className="w-14 h-14 bg-coffee-50 rounded-2xl flex items-center justify-center text-coffee-600 shadow-sm">
+                  <div className="w-14 h-14 bg-coffee-50 dark:bg-zinc-800 rounded-2xl flex items-center justify-center text-coffee-600 dark:text-zinc-400 shadow-sm">
                     <Calendar size={24} />
                   </div>
-                  <span className="text-[10px] font-bold text-coffee-900 text-center">Laporan Transaksi</span>
-                </button>
+                  <span className="text-[10px] font-bold text-coffee-900 dark:text-zinc-100 text-center">Laporan Transaksi</span>
+                </motion.button>
                 
                 {user.role === 'admin' && (
                   <>
-                    <button 
+                    <motion.button 
+                      whileTap={{ scale: 0.9 }}
                       onClick={() => { setActiveTab('reports'); setReportSubTab('financial'); setShowMobileMore(false); }}
                       className="flex flex-col items-center gap-3"
                     >
-                      <div className="w-14 h-14 bg-emerald-50 rounded-2xl flex items-center justify-center text-emerald-600 shadow-sm">
+                      <div className="w-14 h-14 bg-emerald-50 dark:bg-emerald-950/30 rounded-2xl flex items-center justify-center text-emerald-600 dark:text-emerald-400 shadow-sm">
                         <TrendingUp size={24} />
                       </div>
-                      <span className="text-[10px] font-bold text-coffee-900 text-center">Laporan Keuangan</span>
-                    </button>
-                    <button 
+                      <span className="text-[10px] font-bold text-coffee-900 dark:text-zinc-100 text-center">Laporan Keuangan</span>
+                    </motion.button>
+                    <motion.button 
+                      whileTap={{ scale: 0.9 }}
                       onClick={() => { setActiveTab('transactions'); setShowMobileMore(false); }}
                       className="flex flex-col items-center gap-3"
                     >
-                      <div className="w-14 h-14 bg-blue-50 rounded-2xl flex items-center justify-center text-blue-600 shadow-sm">
+                      <div className="w-14 h-14 bg-blue-50 dark:bg-blue-950/30 rounded-2xl flex items-center justify-center text-blue-600 dark:text-blue-400 shadow-sm">
                         <Wallet size={24} />
                       </div>
-                      <span className="text-[10px] font-bold text-coffee-900 text-center">Catatan Keuangan</span>
-                    </button>
-                    <button 
+                      <span className="text-[10px] font-bold text-coffee-900 dark:text-zinc-100 text-center">Catatan Keuangan</span>
+                    </motion.button>
+                    <motion.button 
+                      whileTap={{ scale: 0.9 }}
                       onClick={() => { setActiveTab('inventory'); setShowMobileMore(false); }}
                       className="flex flex-col items-center gap-3"
                     >
-                      <div className="w-14 h-14 bg-amber-50 rounded-2xl flex items-center justify-center text-amber-600 shadow-sm">
+                      <div className="w-14 h-14 bg-amber-50 dark:bg-amber-950/30 rounded-2xl flex items-center justify-center text-amber-600 dark:text-amber-400 shadow-sm">
                         <Package size={24} />
                       </div>
-                      <span className="text-[10px] font-bold text-coffee-900 text-center">Stok</span>
-                    </button>
-                    <button 
+                      <span className="text-[10px] font-bold text-coffee-900 dark:text-zinc-100 text-center">Stok</span>
+                    </motion.button>
+                    <motion.button 
+                      whileTap={{ scale: 0.9 }}
                       onClick={() => { setActiveTab('menu'); setShowMobileMore(false); }}
                       className="flex flex-col items-center gap-3"
                     >
-                      <div className="w-14 h-14 bg-indigo-50 rounded-2xl flex items-center justify-center text-indigo-600 shadow-sm">
+                      <div className="w-14 h-14 bg-indigo-50 dark:bg-indigo-950/30 rounded-2xl flex items-center justify-center text-indigo-600 dark:text-indigo-400 shadow-sm">
                         <Coffee size={24} />
                       </div>
-                      <span className="text-[10px] font-bold text-coffee-900 text-center">Menu</span>
-                    </button>
-                    <button 
+                      <span className="text-[10px] font-bold text-coffee-900 dark:text-zinc-100 text-center">Menu</span>
+                    </motion.button>
+                    <motion.button 
+                      whileTap={{ scale: 0.9 }}
                       onClick={() => { setActiveTab('settings'); setShowMobileMore(false); }}
                       className="flex flex-col items-center gap-3"
                     >
-                      <div className="w-14 h-14 bg-slate-50 rounded-2xl flex items-center justify-center text-slate-600 shadow-sm">
+                      <div className="w-14 h-14 bg-slate-50 dark:bg-zinc-800 rounded-2xl flex items-center justify-center text-slate-600 dark:text-zinc-400 shadow-sm">
                         <Settings size={24} />
                       </div>
-                      <span className="text-[10px] font-bold text-coffee-900 text-center">Setting</span>
-                    </button>
+                      <span className="text-[10px] font-bold text-coffee-900 dark:text-zinc-100 text-center">Setting</span>
+                    </motion.button>
                   </>
                 )}
                 
-                <button 
-                  onClick={handleLogout}
+                <motion.button 
+                  whileTap={{ scale: 0.9 }}
+                  onClick={() => { setDarkMode(!darkMode); setShowMobileMore(false); }}
                   className="flex flex-col items-center gap-3"
                 >
-                  <div className="w-14 h-14 bg-rose-50 rounded-2xl flex items-center justify-center text-rose-600 shadow-sm">
+                  <div className="w-14 h-14 bg-sky-50 dark:bg-sky-950/30 rounded-2xl flex items-center justify-center text-sky-600 dark:text-sky-400 shadow-sm">
+                    {darkMode ? <Sun size={24} /> : <Moon size={24} />}
+                  </div>
+                  <span className="text-[10px] font-bold text-coffee-900 dark:text-zinc-100 text-center">{darkMode ? 'Mode Terang' : 'Mode Gelap'}</span>
+                </motion.button>
+
+                <motion.button 
+                  whileTap={{ scale: 0.9 }}
+                  onClick={() => { handleLogout(); setShowMobileMore(false); }}
+                  className="flex flex-col items-center gap-3"
+                >
+                  <div className="w-14 h-14 bg-rose-50 dark:bg-rose-950/30 rounded-2xl flex items-center justify-center text-rose-600 dark:text-rose-400 shadow-sm">
                     <LogOut size={24} />
                   </div>
-                  <span className="text-xs font-bold text-coffee-900">Keluar</span>
-                </button>
+                  <span className="text-[10px] font-bold text-rose-600 text-center">Keluar</span>
+                </motion.button>
               </div>
             </motion.div>
           </>
@@ -6197,35 +6227,38 @@ export default function App() {
                           animate={{ y: 0 }}
                           exit={{ y: "100%" }}
                           transition={{ type: "spring", damping: 25, stiffness: 200 }}
-                          className="absolute bottom-0 left-0 right-0 bg-white rounded-t-[40px] shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
+                          className="absolute bottom-0 left-0 right-0 bg-white dark:bg-zinc-900 rounded-t-[40px] shadow-2xl overflow-hidden flex flex-col max-h-[90vh] border-t border-coffee-100 dark:border-zinc-800"
                         >
-                          <div className="p-6 border-b border-coffee-100 flex justify-between items-center bg-coffee-50/50">
+                          <div className="w-12 h-1.5 bg-coffee-100 dark:bg-zinc-800 rounded-full mx-auto mt-4 shrink-0" />
+                          <div className="p-6 border-b border-coffee-100 dark:border-zinc-800 flex justify-between items-center bg-coffee-50/50 dark:bg-zinc-800/50">
                             <div className="flex items-center gap-3">
-                              <div className="bg-coffee-900 text-white p-2 rounded-xl">
+                              <div className="bg-coffee-900 dark:bg-zinc-700 text-white p-2 rounded-xl">
                                 <ShoppingCart size={20} />
                               </div>
-                              <h3 className="text-xl font-serif font-bold text-coffee-950">Keranjang Saya</h3>
+                              <h3 className="text-xl font-serif font-bold text-coffee-950 dark:text-zinc-100">Keranjang Saya</h3>
                             </div>
                             <div className="flex items-center gap-2">
                               {cart.length > 0 && (
-                                <button 
+                                <motion.button 
+                                  whileTap={{ scale: 0.9 }}
                                   onClick={() => setCart([])}
-                                  className="p-2 text-rose-500 hover:bg-rose-50 rounded-full transition-colors"
+                                  className="p-2 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 rounded-full transition-colors"
                                   title="Hapus Semua"
                                 >
                                   <Trash2 size={20} />
-                                </button>
+                                </motion.button>
                               )}
-                              <button 
+                              <motion.button 
+                                whileTap={{ scale: 0.9 }}
                                 onClick={() => setShowMobileCart(false)}
-                                className="w-10 h-10 rounded-full bg-white border border-coffee-100 flex items-center justify-center text-coffee-400 hover:text-coffee-900"
+                                className="w-10 h-10 rounded-full bg-white dark:bg-zinc-800 border border-coffee-100 dark:border-zinc-700 flex items-center justify-center text-coffee-400 hover:text-coffee-900 dark:hover:text-zinc-100"
                               >
                                 <X size={20} />
-                              </button>
+                              </motion.button>
                             </div>
                           </div>
 
-                          <div className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar">
+                          <div className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar pb-safe">
                             <div className="space-y-6">
                               {(Object.entries(
                                 cart.reduce((acc, item) => {
@@ -6236,22 +6269,22 @@ export default function App() {
                                 }, {} as Record<string, CartItem[]>)
                               ) as [string, CartItem[]][]).map(([category, items]) => (
                                 <div key={category} className="space-y-3">
-                                  <h4 className="text-[10px] font-black uppercase text-coffee-400 tracking-widest px-1">{category}</h4>
+                                  <h4 className="text-[10px] font-black uppercase text-coffee-400 dark:text-zinc-500 tracking-widest px-1">{category}</h4>
                                   <div className="space-y-3">
                                     {items.map((item) => (
-                                      <div key={item.menu.id} className="flex items-center gap-3 min-[400px]:gap-4 bg-slate-50 p-3 min-[400px]:p-4 rounded-2xl border border-slate-100">
-                                        <div className="w-12 h-12 min-[400px]:w-16 min-[400px]:h-16 rounded-xl overflow-hidden bg-white shrink-0 shadow-sm border border-slate-100">
+                                      <div key={item.menu.id} className="flex items-center gap-3 min-[400px]:gap-4 bg-slate-50 dark:bg-zinc-800/50 p-3 min-[400px]:p-4 rounded-2xl border border-slate-100 dark:border-zinc-800">
+                                        <div className="w-12 h-12 min-[400px]:w-16 min-[400px]:h-16 rounded-xl overflow-hidden bg-white dark:bg-zinc-800 shrink-0 shadow-sm border border-slate-100 dark:border-zinc-700">
                                           {item.menu.image_url ? (
                                             <img src={item.menu.image_url} alt={item.menu.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                                           ) : (
-                                            <div className="w-full h-full flex items-center justify-center text-coffee-200">
+                                            <div className="w-full h-full flex items-center justify-center text-coffee-200 dark:text-zinc-700">
                                               <Coffee size={20} />
                                             </div>
                                           )}
                                         </div>
                                         <div className="flex-1 min-w-0">
-                                          <h4 className="font-bold text-coffee-950 text-xs min-[400px]:text-sm truncate">{item.menu.name}</h4>
-                                          <p className="text-[10px] min-[400px]:text-xs text-coffee-500">{formatIDR(item.menu.price)}</p>
+                                          <h4 className="font-bold text-coffee-950 dark:text-zinc-100 text-xs min-[400px]:text-sm truncate">{item.menu.name}</h4>
+                                          <p className="text-[10px] min-[400px]:text-xs text-coffee-500 dark:text-zinc-400">{formatIDR(item.menu.price)}</p>
                                           
                                           {/* Sugar and Ice Options */}
                                           {(item.menu.category?.toLowerCase().includes('kopi') || 
@@ -6264,7 +6297,7 @@ export default function App() {
                                               <select 
                                                 value={item.sugarLevel || 'Normal'}
                                                 onChange={(e) => handleUpdateCartOptions(item.menu.id, { sugarLevel: e.target.value })}
-                                                className="bg-white border border-slate-200 rounded-lg text-[9px] min-[400px]:text-[10px] py-0.5 min-[400px]:py-1 px-1.5 min-[400px]:px-2 focus:outline-none focus:ring-1 focus:ring-coffee-500"
+                                                className="bg-white dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 rounded-lg text-[9px] min-[400px]:text-[10px] py-0.5 min-[400px]:py-1 px-1.5 min-[400px]:px-2 focus:outline-none focus:ring-1 focus:ring-coffee-500 dark:text-zinc-300"
                                               >
                                                 <option value="No Sugar">No Sugar</option>
                                                 <option value="Less Sugar">Less Sugar</option>
@@ -6274,7 +6307,7 @@ export default function App() {
                                               <select 
                                                 value={item.iceLevel || 'Normal'}
                                                 onChange={(e) => handleUpdateCartOptions(item.menu.id, { iceLevel: e.target.value })}
-                                                className="bg-white border border-slate-200 rounded-lg text-[9px] min-[400px]:text-[10px] py-0.5 min-[400px]:py-1 px-1.5 min-[400px]:px-2 focus:outline-none focus:ring-1 focus:ring-coffee-500"
+                                                className="bg-white dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 rounded-lg text-[9px] min-[400px]:text-[10px] py-0.5 min-[400px]:py-1 px-1.5 min-[400px]:px-2 focus:outline-none focus:ring-1 focus:ring-coffee-500 dark:text-zinc-300"
                                               >
                                                 <option value="No Ice">No Ice</option>
                                                 <option value="Less Ice">Less Ice</option>
@@ -6284,20 +6317,22 @@ export default function App() {
                                             </div>
                                           )}
                                         </div>
-                                        <div className="flex items-center gap-2 min-[400px]:gap-3 bg-white p-1 rounded-xl border border-slate-200">
-                                          <button 
+                                        <div className="flex items-center gap-2 min-[400px]:gap-3 bg-white dark:bg-zinc-800 p-1 rounded-xl border border-slate-200 dark:border-zinc-700">
+                                          <motion.button 
+                                            whileTap={{ scale: 0.8 }}
                                             onClick={() => handleUpdateCartQuantity(item.menu.id, -1)}
-                                            className="w-8 h-8 min-[400px]:w-10 min-[400px]:h-10 flex items-center justify-center rounded-xl text-coffee-600 hover:bg-coffee-50 active:bg-coffee-100 active:scale-90 transition-all"
+                                            className="w-8 h-8 min-[400px]:w-10 min-[400px]:h-10 flex items-center justify-center rounded-xl text-coffee-600 dark:text-zinc-400 hover:bg-coffee-50 dark:hover:bg-zinc-700 active:bg-coffee-100 transition-all"
                                           >
                                             <Minus size={16} />
-                                          </button>
-                                          <span className="font-bold text-coffee-900 text-xs min-[400px]:text-sm w-4 text-center">{item.quantity}</span>
-                                          <button 
+                                          </motion.button>
+                                          <span className="font-bold text-coffee-900 dark:text-zinc-100 text-xs min-[400px]:text-sm w-4 text-center">{item.quantity}</span>
+                                          <motion.button 
+                                            whileTap={{ scale: 0.8 }}
                                             onClick={() => handleUpdateCartQuantity(item.menu.id, 1)}
-                                            className="w-8 h-8 min-[400px]:w-10 min-[400px]:h-10 flex items-center justify-center rounded-xl text-coffee-600 hover:bg-coffee-50 active:bg-coffee-100 active:scale-90 transition-all"
+                                            className="w-8 h-8 min-[400px]:w-10 min-[400px]:h-10 flex items-center justify-center rounded-xl text-coffee-600 dark:text-zinc-400 hover:bg-coffee-50 dark:hover:bg-zinc-700 active:bg-coffee-100 transition-all"
                                           >
                                             <Plus size={16} />
-                                          </button>
+                                          </motion.button>
                                         </div>
                                       </div>
                                     ))}
@@ -6307,39 +6342,40 @@ export default function App() {
                             </div>
 
                             <div className="space-y-4">
-                              <div className="bg-coffee-50 p-6 rounded-3xl space-y-4 border border-coffee-100">
+                              <div className="bg-coffee-50 dark:bg-zinc-800 p-6 rounded-3xl space-y-4 border border-coffee-100 dark:border-zinc-700">
                                 <div className="space-y-2">
-                                  <label className="block text-[10px] font-black uppercase text-coffee-400 tracking-widest">Nama Pembeli</label>
+                                  <label className="block text-[10px] font-black uppercase text-coffee-400 dark:text-zinc-500 tracking-widest">Nama Pembeli</label>
                                   <input 
                                     type="text"
                                     value={customerName}
                                     onChange={(e) => setCustomerName(e.target.value)}
                                     placeholder="Ketik nama pembeli..."
-                                    className="w-full bg-white border border-coffee-200 rounded-2xl px-4 py-3 text-sm text-coffee-900 focus:outline-none focus:ring-2 focus:ring-coffee-500 shadow-sm"
+                                    className="w-full bg-white dark:bg-zinc-900 border border-coffee-200 dark:border-zinc-700 rounded-2xl px-4 py-3 text-sm text-coffee-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-coffee-500 shadow-sm"
                                   />
                                 </div>
                               </div>
                             </div>
                           </div>
 
-                          <div className="p-6 bg-white border-t border-coffee-100 space-y-4">
+                          <div className="p-6 bg-white dark:bg-zinc-900 border-t border-coffee-100 dark:border-zinc-800 space-y-4 pb-safe">
                             <div className="flex justify-between items-baseline px-2">
-                              <span className="text-coffee-950 font-serif font-bold text-lg">Total Bayar</span>
-                              <span className="text-2xl font-black text-coffee-900">
+                              <span className="text-coffee-950 dark:text-zinc-400 font-serif font-bold text-lg">Total Bayar</span>
+                              <span className="text-2xl font-black text-coffee-900 dark:text-zinc-100">
                                 {formatIDR(cart.reduce((sum, item) => sum + (item.menu.price * item.quantity), 0))}
                               </span>
                             </div>
-                            <button 
+                            <motion.button 
+                              whileTap={{ scale: 0.95 }}
                               onClick={() => {
                                 setShowMobileCart(false);
                                 setShowPaymentModal(true);
                               }}
-                              className="w-full bg-emerald-500 text-white py-4 rounded-2xl font-black flex items-center justify-center gap-3 hover:bg-emerald-600 active:scale-95 transition-all shadow-xl shadow-emerald-200"
+                              className="w-full bg-emerald-500 dark:bg-emerald-600 text-white py-4 rounded-2xl font-black flex items-center justify-center gap-3 hover:bg-emerald-600 active:scale-95 transition-all shadow-xl shadow-emerald-200 dark:shadow-none"
                               disabled={loading || cart.length === 0}
                             >
                               <CreditCard size={20} />
                               LANJUT PEMBAYARAN
-                            </button>
+                            </motion.button>
                           </div>
                         </motion.div>
                       </div>
@@ -9099,176 +9135,184 @@ export default function App() {
               )}
             </div>
 
-            <div className="p-6 bg-coffee-50 flex gap-3">
-              <button 
+            <div className="p-6 bg-coffee-50 dark:bg-zinc-800 flex gap-3">
+              <motion.button 
+                whileTap={{ scale: 0.95 }}
                 onClick={() => setShowPaymentModal(false)}
-                className="flex-1 px-6 py-3 rounded-xl font-bold text-coffee-600 hover:bg-coffee-100 transition-colors"
+                className="flex-1 px-6 py-3 rounded-xl font-bold text-coffee-600 dark:text-zinc-400 hover:bg-coffee-100 dark:hover:bg-zinc-700 transition-colors"
               >
                 Batal
-              </button>
-              <button 
+              </motion.button>
+              <motion.button 
+                whileTap={{ scale: 0.95 }}
                 onClick={() => {
                   setShowPaymentModal(false);
                   setShowOrderReview(true);
                 }}
-                className="flex-1 bg-coffee-900 text-white px-6 py-3 rounded-xl font-bold hover:bg-coffee-800 transition-all"
+                className="flex-1 bg-coffee-900 dark:bg-zinc-700 text-white px-6 py-3 rounded-xl font-bold hover:bg-coffee-800 dark:hover:bg-zinc-600 transition-all"
               >
                 Lanjutkan
-              </button>
+              </motion.button>
             </div>
           </motion.div>
         </div>
       )}
 
       {showEditItemModal && editingItem && (
-        <div className="fixed inset-0 bg-coffee-950/60 backdrop-blur-md flex items-center justify-center z-[110] p-4">
+        <div className="fixed inset-0 bg-coffee-950/60 dark:bg-black/80 backdrop-blur-md flex items-center justify-center z-[110] p-4">
           <motion.div 
             initial={{ scale: 0.9, opacity: 0, y: 20 }}
             animate={{ scale: 1, opacity: 1, y: 0 }}
-            className="bg-white rounded-3xl p-0 w-full max-w-md shadow-2xl overflow-hidden"
+            className="bg-white dark:bg-zinc-900 rounded-3xl p-0 w-full max-w-md shadow-2xl overflow-hidden border border-coffee-100 dark:border-zinc-800"
           >
-            <div className="p-8 bg-coffee-50 border-b border-coffee-100 text-center">
-              <div className="w-16 h-16 bg-coffee-100 text-coffee-600 rounded-full flex items-center justify-center mx-auto mb-4">
+            <div className="p-8 bg-coffee-50 dark:bg-zinc-800/50 border-b border-coffee-100 dark:border-zinc-800 text-center">
+              <div className="w-16 h-16 bg-coffee-100 dark:bg-zinc-800 text-coffee-600 dark:text-zinc-400 rounded-full flex items-center justify-center mx-auto mb-4">
                 <Edit size={32} />
               </div>
-              <h3 className="text-2xl font-serif font-bold text-coffee-950">Edit Menu</h3>
-              <p className="text-coffee-500 text-sm font-bold uppercase tracking-widest">{editingItem.name}</p>
+              <h3 className="text-2xl font-serif font-bold text-coffee-950 dark:text-zinc-100">Edit Menu</h3>
+              <p className="text-coffee-500 dark:text-zinc-500 text-sm font-bold uppercase tracking-widest">{editingItem.name}</p>
             </div>
 
-            <div className="p-8 bg-white space-y-6">
+            <div className="p-8 bg-white dark:bg-zinc-900 space-y-6">
               <div>
-                <label className="block text-xs font-bold uppercase text-coffee-500 mb-2">Jumlah</label>
+                <label className="block text-xs font-bold uppercase text-coffee-500 dark:text-zinc-500 mb-2">Jumlah</label>
                 <div className="flex items-center gap-4">
-                  <button 
+                  <motion.button 
+                    whileTap={{ scale: 0.8 }}
                     onClick={() => setEditingItem(prev => prev ? ({ ...prev, quantity: Math.max(1, prev.quantity - 1) }) : null)}
-                    className="w-12 h-12 rounded-xl bg-coffee-50 text-coffee-600 flex items-center justify-center hover:bg-coffee-100 transition-colors"
+                    className="w-12 h-12 rounded-xl bg-coffee-50 dark:bg-zinc-800 text-coffee-600 dark:text-zinc-400 flex items-center justify-center hover:bg-coffee-100 dark:hover:bg-zinc-700 transition-colors"
                   >
                     <Minus size={20} />
-                  </button>
-                  <span className="flex-1 text-center text-2xl font-black text-coffee-950">{editingItem.quantity}</span>
-                  <button 
+                  </motion.button>
+                  <span className="flex-1 text-center text-2xl font-black text-coffee-950 dark:text-zinc-100">{editingItem.quantity}</span>
+                  <motion.button 
+                    whileTap={{ scale: 0.8 }}
                     onClick={() => setEditingItem(prev => prev ? ({ ...prev, quantity: prev.quantity + 1 }) : null)}
-                    className="w-12 h-12 rounded-xl bg-coffee-900 text-white flex items-center justify-center hover:bg-coffee-800 transition-colors"
+                    className="w-12 h-12 rounded-xl bg-coffee-900 dark:bg-zinc-700 text-white flex items-center justify-center hover:bg-coffee-800 dark:hover:bg-zinc-600 transition-colors"
                   >
                     <Plus size={20} />
-                  </button>
+                  </motion.button>
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-bold uppercase text-coffee-500 mb-2">Sugar Level</label>
+                  <label className="block text-xs font-bold uppercase text-coffee-500 dark:text-zinc-500 mb-2">Sugar Level</label>
                   <select 
                     value={editingItem.sugarLevel}
                     onChange={e => setEditingItem(prev => prev ? ({ ...prev, sugarLevel: e.target.value }) : null)}
-                    className="w-full bg-coffee-50 border border-coffee-100 rounded-xl px-4 py-3 text-sm font-bold text-coffee-900 focus:outline-none focus:ring-2 focus:ring-coffee-500"
+                    className="w-full bg-coffee-50 dark:bg-zinc-800 border border-coffee-100 dark:border-zinc-700 rounded-xl px-4 py-3 text-sm font-bold text-coffee-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-coffee-500"
                   >
                     {['No Sugar', 'Less Sugar', 'Normal', 'Extra Sugar'].map(level => (
-                      <option key={level} value={level}>{level}</option>
+                      <option key={level} value={level} className="dark:bg-zinc-900">{level}</option>
                     ))}
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs font-bold uppercase text-coffee-500 mb-2">Ice Level</label>
+                  <label className="block text-xs font-bold uppercase text-coffee-500 dark:text-zinc-500 mb-2">Ice Level</label>
                   <select 
                     value={editingItem.iceLevel}
                     onChange={e => setEditingItem(prev => prev ? ({ ...prev, iceLevel: e.target.value }) : null)}
-                    className="w-full bg-coffee-50 border border-coffee-100 rounded-xl px-4 py-3 text-sm font-bold text-coffee-900 focus:outline-none focus:ring-2 focus:ring-coffee-500"
+                    className="w-full bg-coffee-50 dark:bg-zinc-800 border border-coffee-100 dark:border-zinc-700 rounded-xl px-4 py-3 text-sm font-bold text-coffee-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-coffee-500"
                   >
                     {['No Ice', 'Less Ice', 'Normal', 'Extra Ice'].map(level => (
-                      <option key={level} value={level}>{level}</option>
+                      <option key={level} value={level} className="dark:bg-zinc-900">{level}</option>
                     ))}
                   </select>
                 </div>
               </div>
 
               <div>
-                <label className="block text-xs font-bold uppercase text-coffee-500 mb-2">Catatan</label>
+                <label className="block text-xs font-bold uppercase text-coffee-500 dark:text-zinc-500 mb-2">Catatan</label>
                 <textarea 
                   value={editingItem.notes}
                   onChange={e => setEditingItem(prev => prev ? ({ ...prev, notes: e.target.value }) : null)}
-                  className="w-full bg-coffee-50 border border-coffee-100 rounded-xl px-4 py-3 text-sm font-medium text-coffee-900 focus:outline-none focus:ring-2 focus:ring-coffee-500 min-h-[80px]"
+                  className="w-full bg-coffee-50 dark:bg-zinc-800 border border-coffee-100 dark:border-zinc-700 rounded-xl px-4 py-3 text-sm font-medium text-coffee-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-coffee-500 min-h-[80px]"
                   placeholder="Contoh: Tanpa sedotan, dll..."
                 />
               </div>
             </div>
 
-            <div className="p-6 bg-coffee-50 flex gap-3">
-              <button 
+            <div className="p-6 bg-coffee-50 dark:bg-zinc-800/50 flex gap-3">
+              <motion.button 
+                whileTap={{ scale: 0.95 }}
                 onClick={() => setShowEditItemModal(false)}
-                className="flex-1 px-6 py-3 rounded-xl font-bold text-coffee-600 hover:bg-coffee-100 transition-colors"
+                className="flex-1 px-6 py-3 rounded-xl font-bold text-coffee-600 dark:text-zinc-400 hover:bg-coffee-100 dark:hover:bg-zinc-700 transition-colors"
               >
                 Batal
-              </button>
-              <button 
+              </motion.button>
+              <motion.button 
+                whileTap={{ scale: 0.95 }}
                 onClick={handleUpdateItem}
-                className="flex-1 bg-coffee-900 text-white px-6 py-3 rounded-xl font-bold hover:bg-coffee-800 transition-all shadow-lg shadow-coffee-200"
+                className="flex-1 bg-coffee-900 dark:bg-zinc-700 text-white px-6 py-3 rounded-xl font-bold hover:bg-coffee-800 dark:hover:bg-zinc-600 transition-all shadow-lg shadow-coffee-200 dark:shadow-none"
               >
                 Simpan Perubahan
-              </button>
+              </motion.button>
             </div>
           </motion.div>
         </div>
       )}
 
       {showPasswordModal && (
-        <div className="fixed inset-0 bg-coffee-950/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-coffee-950/40 dark:bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <motion.div 
             initial={{ scale: 0.9, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
-            className="bg-white rounded-3xl p-8 w-full max-w-md shadow-2xl"
+            className="bg-white dark:bg-zinc-900 rounded-3xl p-8 w-full max-w-md shadow-2xl border border-coffee-100 dark:border-zinc-800"
           >
-            <h3 className="text-2xl font-serif font-bold mb-6 flex items-center gap-2">
-              <Lock className="text-coffee-900" /> Ganti Password
+            <h3 className="text-2xl font-serif font-bold mb-6 flex items-center gap-2 text-coffee-950 dark:text-zinc-100">
+              <Lock className="text-coffee-900 dark:text-zinc-400" /> Ganti Password
             </h3>
             <form onSubmit={handleUpdatePassword} className="space-y-4">
               <div>
-                <label className="block text-xs font-bold uppercase text-coffee-500 mb-1">Password Lama</label>
+                <label className="block text-xs font-bold uppercase text-coffee-500 dark:text-zinc-500 mb-1">Password Lama</label>
                 <input 
                   required
                   type="password" 
                   value={passwordData.oldPassword}
                   onChange={e => setPasswordData({...passwordData, oldPassword: e.target.value})}
-                  className="w-full bg-coffee-50 border border-coffee-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-coffee-500"
+                  className="w-full bg-coffee-50 dark:bg-zinc-800 border border-coffee-200 dark:border-zinc-700 rounded-xl px-4 py-3 text-coffee-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-coffee-500"
                   placeholder="••••••••"
                 />
               </div>
               <div>
-                <label className="block text-xs font-bold uppercase text-coffee-500 mb-1">Password Baru</label>
+                <label className="block text-xs font-bold uppercase text-coffee-500 dark:text-zinc-500 mb-1">Password Baru</label>
                 <input 
                   required
                   type="password" 
                   value={passwordData.newPassword}
                   onChange={e => setPasswordData({...passwordData, newPassword: e.target.value})}
-                  className="w-full bg-coffee-50 border border-coffee-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-coffee-500"
+                  className="w-full bg-coffee-50 dark:bg-zinc-800 border border-coffee-200 dark:border-zinc-700 rounded-xl px-4 py-3 text-coffee-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-coffee-500"
                   placeholder="••••••••"
                 />
               </div>
               <div>
-                <label className="block text-xs font-bold uppercase text-coffee-500 mb-1">Konfirmasi Password Baru</label>
+                <label className="block text-xs font-bold uppercase text-coffee-500 dark:text-zinc-500 mb-1">Konfirmasi Password Baru</label>
                 <input 
                   required
                   type="password" 
                   value={passwordData.confirmPassword}
                   onChange={e => setPasswordData({...passwordData, confirmPassword: e.target.value})}
-                  className="w-full bg-coffee-50 border border-coffee-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-coffee-500"
+                  className="w-full bg-coffee-50 dark:bg-zinc-800 border border-coffee-200 dark:border-zinc-700 rounded-xl px-4 py-3 text-coffee-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-coffee-500"
                   placeholder="••••••••"
                 />
               </div>
               <div className="flex gap-3 mt-8">
-                <button 
+                <motion.button 
+                  whileTap={{ scale: 0.95 }}
                   type="button"
                   onClick={() => setShowPasswordModal(false)}
-                  className="flex-1 px-6 py-3 rounded-xl font-bold text-coffee-600 hover:bg-coffee-50 transition-colors"
+                  className="flex-1 px-6 py-3 rounded-xl font-bold text-coffee-600 dark:text-zinc-400 hover:bg-coffee-50 dark:hover:bg-zinc-800 transition-colors"
                 >
                   Batal
-                </button>
-                <button 
+                </motion.button>
+                <motion.button 
+                  whileTap={{ scale: 0.95 }}
                   type="submit"
-                  className="flex-1 bg-coffee-900 text-white px-6 py-3 rounded-xl font-bold hover:bg-coffee-800 transition-all"
+                  className="flex-1 bg-coffee-900 dark:bg-zinc-700 text-white px-6 py-3 rounded-xl font-bold hover:bg-coffee-800 dark:hover:bg-zinc-600 transition-all shadow-lg shadow-coffee-200 dark:shadow-none"
                 >
                   Simpan
-                </button>
+                </motion.button>
               </div>
             </form>
           </motion.div>

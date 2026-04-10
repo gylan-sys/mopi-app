@@ -35,6 +35,8 @@ interface ReportsTabProps {
   fetchFinancialData: () => void;
   financialData: any;
   getFinancialInsights: (data: any) => any[];
+  consignmentData: any[];
+  fetchConsignmentData: () => void;
   handleReprint: (orderId: string) => void;
   setConfirmDialog: (dialog: any) => void;
   fetchData: () => void;
@@ -62,6 +64,8 @@ const ReportsTab: React.FC<ReportsTabProps> = ({
   fetchFinancialData,
   financialData,
   getFinancialInsights,
+  consignmentData,
+  fetchConsignmentData,
   handleReprint,
   setConfirmDialog,
   fetchData,
@@ -860,15 +864,119 @@ const ReportsTab: React.FC<ReportsTabProps> = ({
                 </div>
               </div>
             </div>
+          ) : (
+            <div className="space-y-6">
+              <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                <div>
+                  <p className="text-coffee-500 font-medium uppercase tracking-widest text-[10px] mb-1">Laporan Titipan Barang</p>
+                  <h2 className="text-3xl md:text-4xl font-serif font-bold text-coffee-950">{t('consignment_report')}</h2>
+                </div>
+                <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
+                  <div className="flex items-center gap-2 bg-white p-1.5 rounded-2xl border border-coffee-100 shadow-sm flex-1 md:flex-none justify-between">
+                    <input 
+                      type="date" 
+                      value={financialRange.startDate}
+                      onChange={(e) => setFinancialRange(prev => ({ ...prev, startDate: e.target.value }))}
+                      className="bg-transparent border-none text-xs font-bold text-coffee-900 focus:outline-none w-24"
+                    />
+                    <span className="text-coffee-300 text-[10px] font-bold">s/d</span>
+                    <input 
+                      type="date" 
+                      value={financialRange.endDate}
+                      onChange={(e) => setFinancialRange(prev => ({ ...prev, endDate: e.target.value }))}
+                      className="bg-transparent border-none text-xs font-bold text-coffee-900 focus:outline-none w-24"
+                    />
+                  </div>
+                  <button 
+                    onClick={fetchConsignmentData}
+                    className="p-3 bg-coffee-900 text-white rounded-2xl hover:bg-coffee-800 transition-all shadow-lg shadow-coffee-200 active:scale-95"
+                  >
+                    <RefreshCw size={18} />
+                  </button>
+                </div>
+              </header>
+
+              <div className="glass-card p-8 bg-white border-coffee-100">
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="text-left text-coffee-500 text-xs uppercase tracking-widest border-b border-coffee-100">
+                        <th className="pb-4 font-bold">{t('supplier_name')}</th>
+                        <th className="pb-4 font-bold">Menu</th>
+                        <th className="pb-4 font-bold text-center">Terjual</th>
+                        <th className="pb-4 font-bold text-right">Total Penjualan</th>
+                        <th className="pb-4 font-bold text-right">{t('settlement_amount')}</th>
+                        <th className="pb-4 font-bold text-right">{t('profit_share')}</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-coffee-50">
+                      {consignmentData.length > 0 ? consignmentData.map((item, idx) => (
+                        <tr key={idx} className="hover:bg-coffee-50/50 transition-colors">
+                          <td className="py-4">
+                            <p className="text-sm font-bold text-coffee-900">{item.supplier_name}</p>
+                          </td>
+                          <td className="py-4">
+                            <p className="text-sm text-coffee-600">{item.menu_name}</p>
+                            <p className="text-[10px] text-coffee-400">Harga Titip: {formatIDR(item.supplier_price)}</p>
+                          </td>
+                          <td className="py-4 text-center">
+                            <span className="px-3 py-1 bg-coffee-100 rounded-full text-xs font-bold text-coffee-700">
+                              {item.total_quantity}
+                            </span>
+                          </td>
+                          <td className="py-4 text-sm font-bold text-right text-coffee-900">
+                            {formatIDR(item.total_sales)}
+                          </td>
+                          <td className="py-4 text-sm font-bold text-right text-amber-600">
+                            {formatIDR(item.total_settlement)}
+                          </td>
+                          <td className="py-4 text-sm font-bold text-right text-emerald-600">
+                            {formatIDR(item.total_profit)}
+                          </td>
+                        </tr>
+                      )) : (
+                        <tr>
+                          <td colSpan={6} className="py-12 text-center text-coffee-400 italic">
+                            Belum ada data penjualan barang titipan untuk periode ini.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                    {consignmentData.length > 0 && (
+                      <tfoot>
+                        <tr className="border-t-2 border-coffee-100 bg-coffee-50/30">
+                          <td colSpan={3} className="py-4 px-4 font-serif font-bold text-coffee-900 text-lg">TOTAL</td>
+                          <td className="py-4 text-right font-bold text-coffee-900">
+                            {formatIDR(consignmentData.reduce((sum, item) => sum + item.total_sales, 0))}
+                          </td>
+                          <td className="py-4 text-right font-bold text-amber-600">
+                            {formatIDR(consignmentData.reduce((sum, item) => sum + item.total_settlement, 0))}
+                          </td>
+                          <td className="py-4 text-right font-bold text-emerald-600">
+                            {formatIDR(consignmentData.reduce((sum, item) => sum + item.total_profit, 0))}
+                          </td>
+                        </tr>
+                      </tfoot>
+                    )}
+                  </table>
+                </div>
+              </div>
+
+              <div className="p-6 bg-amber-50 rounded-3xl border border-amber-100 flex items-start gap-4">
+                <div className="p-3 bg-white rounded-2xl text-amber-600 shadow-sm">
+                  <Info size={24} />
+                </div>
+                <div>
+                  <h4 className="font-bold text-amber-900 mb-1">Informasi Pembayaran Konsinyasi</h4>
+                  <p className="text-sm text-amber-800 leading-relaxed">
+                    Laporan ini merangkum semua item menu dengan tipe <strong>Konsinyasi</strong> yang terjual dalam periode yang dipilih. 
+                    <strong> {t('settlement_amount')}</strong> adalah jumlah uang yang harus diserahkan kepada pemilik barang (supplier), 
+                    sedangkan <strong>{t('profit_share')}</strong> adalah keuntungan yang diperoleh kedai dari penjualan tersebut.
+                  </p>
+                </div>
+              </div>
+            </div>
           )}
-        </div>
-      ) : (
-        <div className="space-y-6">
-          {/* Implement Consignment Report UI here if needed, or keep it as it was in App.tsx */}
-          {/* For now, I'll just put a placeholder or the original content if I can find it */}
-          <p className="text-coffee-500 italic">Laporan Titipan Barang sedang dalam pengembangan.</p>
-        </div>
-      )}
     </motion.div>
   );
 };

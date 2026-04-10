@@ -1,25 +1,27 @@
 import React from 'react';
 import { motion } from 'motion/react';
-import { Plus, User, Calendar, ArrowUpRight, ArrowDownLeft, MessageSquare, Printer, Trash2 } from 'lucide-react';
+import { 
+  Plus, User, Calendar, ArrowUpRight, ArrowDownLeft, 
+  MessageSquare, Printer, Trash2 
+} from 'lucide-react';
 import { formatIDR, formatDate } from '../utils';
 import { cn } from '../types';
-import type { Transaction } from '../types';
-import { toast } from 'sonner';
 
 interface TransactionsTabProps {
-  transactions: Transaction[];
+  transactions: any[];
   txSearch: string;
   setTxSearch: (search: string) => void;
   txFilter: { type: string; category: string };
   setTxFilter: (filter: { type: string; category: string }) => void;
   txPage: number;
-  setTxPage: (page: number | ((prev: number) => number)) => void;
+  setTxPage: React.Dispatch<React.SetStateAction<number>>;
   ITEMS_PER_PAGE: number;
+  appSettings: any;
   setShowTxModal: (show: boolean) => void;
   handleReprint: (orderId: string) => void;
   setConfirmDialog: (dialog: any) => void;
   fetchData: () => void;
-  appSettings: any;
+  toast: any;
 }
 
 const TransactionsTab: React.FC<TransactionsTabProps> = ({
@@ -31,26 +33,13 @@ const TransactionsTab: React.FC<TransactionsTabProps> = ({
   txPage,
   setTxPage,
   ITEMS_PER_PAGE,
+  appSettings,
   setShowTxModal,
   handleReprint,
   setConfirmDialog,
   fetchData,
-  appSettings
+  toast
 }) => {
-  const filtered = transactions.filter(tx => {
-    if (txFilter.type && tx.type !== txFilter.type) return false;
-    if (txFilter.category && tx.category !== txFilter.category) return false;
-    
-    if (!txSearch) return true;
-    const search = txSearch.toLowerCase();
-    return (
-      (tx.order_id && tx.order_id.toLowerCase().includes(search)) ||
-      (tx.customer_name && tx.customer_name.toLowerCase().includes(search)) ||
-      (tx.description && tx.description.toLowerCase().includes(search))
-    );
-  });
-  const visible = filtered.slice(0, txPage * ITEMS_PER_PAGE);
-
   return (
     <motion.div 
       key="transactions"
@@ -154,102 +143,122 @@ const TransactionsTab: React.FC<TransactionsTabProps> = ({
               </tr>
             </thead>
             <tbody className="divide-y divide-coffee-50">
-              {visible.map(tx => (
-                <tr key={tx.id} className="hover:bg-coffee-50/50 transition-colors">
-                  <td className="py-4 text-sm text-coffee-600">
-                    <div className="flex items-center gap-2">
-                      <Calendar size={14} />
-                      {formatDate(tx.date, 'dd/MM/yy HH:mm', appSettings.timezone)}
-                    </div>
-                  </td>
-                  <td className="py-4">
-                    <span className="text-xs font-mono font-bold text-coffee-400">{tx.order_id || '-'}</span>
-                  </td>
-                  <td className="py-4">
-                    <div className={cn(
-                      "w-8 h-8 rounded-full flex items-center justify-center",
-                      tx.type === 'income' ? "bg-emerald-100 text-emerald-600" : "bg-rose-100 text-rose-600"
-                    )}>
-                      {tx.type === 'income' ? <ArrowUpRight size={16} /> : <ArrowDownLeft size={16} />}
-                    </div>
-                  </td>
-                  <td className="py-4">
-                    <span className="text-sm font-bold text-coffee-900">{tx.category}</span>
-                  </td>
-                  <td className="py-4 text-sm text-coffee-600">
-                    <div className="italic">{tx.description || '-'}</div>
-                    {tx.notes && (
-                      <div className="text-[10px] text-coffee-400 mt-1 flex items-center gap-1">
-                        <MessageSquare size={10} />
-                        {tx.notes}
-                      </div>
-                    )}
-                  </td>
-                  <td className={cn(
-                    "py-4 text-sm font-bold text-right",
-                    tx.type === 'income' ? "text-emerald-600" : "text-rose-600"
-                  )}>
-                    <div className="flex items-center justify-end gap-3 group">
-                      <span>{tx.type === 'income' ? '+' : '-'} {formatIDR(tx.amount)}</span>
-                      {tx.order_id && (
-                        <button 
-                          onClick={() => handleReprint(tx.order_id)}
-                          className="p-1.5 text-coffee-400 hover:text-coffee-600 hover:bg-coffee-100 rounded-lg transition-all shadow-sm bg-white border border-coffee-100"
-                          title="Cetak Ulang Struk"
-                        >
-                          <Printer size={14} />
-                        </button>
-                      )}
-                      <button 
-                        onClick={() => {
-                          setConfirmDialog({
-                            show: true,
-                            title: 'Hapus Transaksi',
-                            message: 'Apakah Anda yakin ingin menghapus catatan transaksi ini? Stok bahan akan dikembalikan jika ini adalah pesanan.',
-                            confirmText: 'Hapus',
-                            cancelText: 'Batal',
-                            isDestructive: true,
-                            onConfirm: async () => {
-                              try {
-                                const res = await fetch(`/api/transactions/${tx.id}`, {
-                                  method: 'DELETE',
-                                  headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+              {(() => {
+                const filtered = transactions.filter(tx => {
+                  // Filter by txFilter (type and category)
+                  if (txFilter.type && tx.type !== txFilter.type) return false;
+                  if (txFilter.category && tx.category !== txFilter.category) return false;
+                  
+                  if (!txSearch) return true;
+                  const search = txSearch.toLowerCase();
+                  return (
+                    (tx.order_id && tx.order_id.toLowerCase().includes(search)) ||
+                    (tx.customer_name && tx.customer_name.toLowerCase().includes(search)) ||
+                    (tx.description && tx.description.toLowerCase().includes(search))
+                  );
+                });
+                const visible = filtered.slice(0, txPage * ITEMS_PER_PAGE);
+                return (
+                  <>
+                    {visible.map(tx => (
+                      <tr key={tx.id} className="hover:bg-coffee-50/50 transition-colors">
+                        <td className="py-4 text-sm text-coffee-600">
+                          <div className="flex items-center gap-2">
+                            <Calendar size={14} />
+                            {formatDate(tx.date, 'dd/MM/yy HH:mm', appSettings.timezone)}
+                          </div>
+                        </td>
+                        <td className="py-4">
+                          <span className="text-xs font-mono font-bold text-coffee-400">{tx.order_id || '-'}</span>
+                        </td>
+                        <td className="py-4">
+                          <div className={cn(
+                            "w-8 h-8 rounded-full flex items-center justify-center",
+                            tx.type === 'income' ? "bg-emerald-100 text-emerald-600" : "bg-rose-100 text-rose-600"
+                          )}>
+                            {tx.type === 'income' ? <ArrowUpRight size={16} /> : <ArrowDownLeft size={16} />}
+                          </div>
+                        </td>
+                        <td className="py-4">
+                          <span className="text-sm font-bold text-coffee-900">{tx.category}</span>
+                        </td>
+                        <td className="py-4 text-sm text-coffee-600">
+                          <div className="italic">{tx.description || '-'}</div>
+                          {tx.notes && (
+                            <div className="text-[10px] text-coffee-400 mt-1 flex items-center gap-1">
+                              <MessageSquare size={10} />
+                              {tx.notes}
+                            </div>
+                          )}
+                        </td>
+                        <td className={cn(
+                          "py-4 text-sm font-bold text-right",
+                          tx.type === 'income' ? "text-emerald-600" : "text-rose-600"
+                        )}>
+                          <div className="flex items-center justify-end gap-3 group">
+                            <span>{tx.type === 'income' ? '+' : '-'} {formatIDR(tx.amount)}</span>
+                            {tx.order_id && (
+                              <button 
+                                onClick={() => handleReprint(tx.order_id)}
+                                className="p-1.5 text-coffee-400 hover:text-coffee-600 hover:bg-coffee-100 rounded-lg transition-all shadow-sm bg-white border border-coffee-100"
+                                title="Cetak Ulang Struk"
+                              >
+                                <Printer size={14} />
+                              </button>
+                            )}
+                            <button 
+                              onClick={() => {
+                                setConfirmDialog({
+                                  show: true,
+                                  title: 'Hapus Transaksi',
+                                  message: 'Apakah Anda yakin ingin menghapus catatan transaksi ini? Stok bahan akan dikembalikan jika ini adalah pesanan.',
+                                  confirmText: 'Hapus',
+                                  cancelText: 'Batal',
+                                  isDestructive: true,
+                                  onConfirm: async () => {
+                                    try {
+                                      const res = await fetch(`/api/transactions/${tx.id}`, {
+                                        method: 'DELETE',
+                                        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+                                      });
+                                      if (res.ok) {
+                                        toast.success('Transaksi berhasil dihapus');
+                                        fetchData();
+                                      } else {
+                                        const data = await res.json();
+                                        toast.error(data.error || 'Gagal menghapus transaksi');
+                                      }
+                                    } catch (error) {
+                                      toast.error('Terjadi kesalahan saat menghapus transaksi');
+                                    }
+                                    setConfirmDialog(null);
+                                  }
                                 });
-                                if (res.ok) {
-                                  toast.success('Transaksi berhasil dihapus');
-                                  fetchData();
-                                } else {
-                                  const data = await res.json();
-                                  toast.error(data.error || 'Gagal menghapus transaksi');
-                                }
-                              } catch (error) {
-                                toast.error('Terjadi kesalahan saat menghapus transaksi');
-                              }
-                              setConfirmDialog(null);
-                            }
-                          });
-                        }}
-                        className="p-1.5 text-coffee-300 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-all opacity-0 group-hover:opacity-100"
-                        title="Hapus Transaksi"
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-              {filtered.length > visible.length && (
-                <tr>
-                  <td colSpan={6} className="py-8 text-center">
-                    <button 
-                      onClick={() => setTxPage(prev => prev + 1)}
-                      className="bg-coffee-50 text-coffee-600 px-8 py-3 rounded-2xl font-bold hover:bg-coffee-100 transition-all border border-coffee-100"
-                    >
-                      Muat Lebih Banyak
-                    </button>
-                  </td>
-                </tr>
-              )}
+                              }}
+                              className="p-1.5 text-coffee-300 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-all opacity-0 group-hover:opacity-100"
+                              title="Hapus Transaksi"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                    {filtered.length > visible.length && (
+                      <tr>
+                        <td colSpan={6} className="py-8 text-center">
+                          <button 
+                            onClick={() => setTxPage(prev => prev + 1)}
+                            className="bg-coffee-50 text-coffee-600 px-8 py-3 rounded-2xl font-bold hover:bg-coffee-100 transition-all border border-coffee-100"
+                          >
+                            Muat Lebih Banyak
+                          </button>
+                        </td>
+                      </tr>
+                    )}
+                  </>
+                );
+              })()}
             </tbody>
           </table>
         </div>

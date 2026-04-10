@@ -1,47 +1,45 @@
 import React from 'react';
 import { motion } from 'motion/react';
-import { User, Truck, Plus, Search, Edit, Trash2, RefreshCw, Globe } from 'lucide-react';
+import { 
+  User, Truck, Plus, Search, Edit, Trash2, RefreshCw, MapPin 
+} from 'lucide-react';
 import { formatDate } from '../utils';
 import { cn } from '../types';
-import type { User as UserType, Driver } from '../types';
 
 interface UsersTabProps {
   usersSubTab: 'staff' | 'driver';
   setUsersSubTab: (tab: 'staff' | 'driver') => void;
-  setEditingUserId: (id: number | null) => void;
-  setNewUserData: (data: any) => void;
-  setShowUserModal: (show: boolean) => void;
   userSearch: string;
   setUserSearch: (search: string) => void;
   userFilter: 'all' | 'admin' | 'cashier';
   setUserFilter: (filter: 'all' | 'admin' | 'cashier') => void;
   userSort: 'username' | 'role';
   setUserSort: (sort: 'username' | 'role') => void;
-  filteredUsers: UserType[];
-  handleDeleteUser: (id: number) => void;
+  filteredUsers: any[];
+  setEditingUserId: (id: string | null) => void;
+  setNewUserData: (data: any) => void;
+  setShowUserModal: (show: boolean) => void;
+  handleDeleteUser: (id: string) => void;
   driverSearch: string;
   setDriverSearch: (search: string) => void;
   driverFilter: 'all' | 'active' | 'pending' | 'inactive';
   setDriverFilter: (filter: 'all' | 'active' | 'pending' | 'inactive') => void;
   driverSort: 'full_name' | 'status' | 'active_deliveries';
   setDriverSort: (sort: 'full_name' | 'status' | 'active_deliveries') => void;
-  filteredDrivers: Driver[];
-  handleUpdateDriverStatus: (id: number, status: string) => void;
-  setSelectedDriverForMap: (id: number | null) => void;
-  setShowDriverMapModal: (show: boolean) => void;
-  setShowDriverModal: (show: boolean) => void;
+  filteredDrivers: any[];
   setNewDriverData: (data: any) => void;
-  setConfirmDialog: (dialog: any) => void;
+  setShowDriverModal: (show: boolean) => void;
+  handleUpdateDriverStatus: (id: string, status: string) => void;
+  handleDeleteDriver: (id: string) => void;
   fetchData: () => void;
+  setSelectedDriver: (driver: any) => void;
+  setShowDriverMap: (show: boolean) => void;
   t: (key: string) => string;
 }
 
 const UsersTab: React.FC<UsersTabProps> = ({
   usersSubTab,
   setUsersSubTab,
-  setEditingUserId,
-  setNewUserData,
-  setShowUserModal,
   userSearch,
   setUserSearch,
   userFilter,
@@ -49,6 +47,9 @@ const UsersTab: React.FC<UsersTabProps> = ({
   userSort,
   setUserSort,
   filteredUsers,
+  setEditingUserId,
+  setNewUserData,
+  setShowUserModal,
   handleDeleteUser,
   driverSearch,
   setDriverSearch,
@@ -57,13 +58,13 @@ const UsersTab: React.FC<UsersTabProps> = ({
   driverSort,
   setDriverSort,
   filteredDrivers,
-  handleUpdateDriverStatus,
-  setSelectedDriverForMap,
-  setShowDriverMapModal,
-  setShowDriverModal,
   setNewDriverData,
-  setConfirmDialog,
+  setShowDriverModal,
+  handleUpdateDriverStatus,
+  handleDeleteDriver,
   fetchData,
+  setSelectedDriver,
+  setShowDriverMap,
   t
 }) => {
   return (
@@ -320,16 +321,16 @@ const UsersTab: React.FC<UsersTabProps> = ({
                           {d.latitude && d.longitude ? (
                             <button 
                               onClick={() => {
-                                setSelectedDriverForMap(d.id);
-                                setShowDriverMapModal(true);
+                                setSelectedDriver(d);
+                                setShowDriverMap(true);
                               }}
-                              className="flex items-center gap-1 text-coffee-600 hover:text-coffee-900 transition-colors"
+                              className="flex items-center gap-1 text-blue-600 hover:text-blue-800 font-bold"
                             >
-                              <Globe size={14} />
-                              <span className="text-[10px] font-bold uppercase tracking-widest">Lihat Map</span>
+                              <MapPin size={14} />
+                              Lihat Peta
                             </button>
                           ) : (
-                            <span className="text-[10px] text-coffee-300 italic">Lokasi tidak tersedia</span>
+                            <span className="text-coffee-300 italic text-xs">Lokasi tidak tersedia</span>
                           )}
                         </td>
                         <td className="px-6 py-4 text-right">
@@ -337,53 +338,23 @@ const UsersTab: React.FC<UsersTabProps> = ({
                             {d.status === 'pending' && (
                               <button 
                                 onClick={() => handleUpdateDriverStatus(d.id, 'active')}
-                                className="px-3 py-1.5 bg-emerald-600 text-white rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-emerald-700 transition-all"
+                                className="p-2 bg-emerald-50 text-emerald-600 rounded-xl hover:bg-emerald-100 transition-all"
+                                title="Setujui Driver"
                               >
-                                {t('approve')}
+                                <Plus size={16} />
                               </button>
                             )}
-                            {d.status === 'active' ? (
-                              <button 
-                                onClick={() => handleUpdateDriverStatus(d.id, 'suspended')}
-                                className="px-3 py-1.5 bg-rose-50 text-rose-600 rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-rose-100 transition-all"
-                              >
-                                {t('suspend')}
-                              </button>
-                            ) : d.status === 'suspended' ? (
-                              <button 
-                                onClick={() => handleUpdateDriverStatus(d.id, 'active')}
-                                className="px-3 py-1.5 bg-emerald-50 text-emerald-600 rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-emerald-100 transition-all"
-                              >
-                                Aktifkan
-                              </button>
-                            ) : null}
                             <button 
-                              onClick={() => {
-                                setConfirmDialog({
-                                  show: true,
-                                  title: 'Hapus Driver',
-                                  message: 'Apakah Anda yakin ingin menghapus driver ini? Tindakan ini tidak dapat dibatalkan.',
-                                  isDestructive: true,
-                                  onConfirm: async () => {
-                                    await fetch(`/api/admin/drivers/${d.id}`, { 
-                                      method: 'DELETE',
-                                      headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-                                    });
-                                    setConfirmDialog(null);
-                                    fetchData();
-                                  }
-                                });
-                              }}
-                              className="p-1.5 text-rose-300 hover:text-rose-600 transition-colors"
+                              onClick={() => handleDeleteDriver(d.id)}
+                              className="p-2 bg-rose-50 text-rose-600 rounded-xl hover:bg-rose-100 transition-all"
                               title="Hapus Driver"
                             >
-                              <Trash2 size={14} />
+                              <Trash2 size={16} />
                             </button>
                           </div>
                         </td>
                       </tr>
-                    ))
-                  )}
+                    )))}
                 </tbody>
               </table>
             </div>

@@ -1,0 +1,21 @@
+{
+  "name": "MOPI - Coffee POS",
+  "short_name": "MOPI",
+  "description": "Modern Coffee Shop Point of Sale and Delivery",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#fdfaf7",
+  "theme_color": "#9a684a",
+  "icons": [
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/924/924514.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/924/924514.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

@@ -75,9 +75,12 @@ import {
   Sun,
   Moon,
   MapPin,
+  Navigation,
+  Phone,
   FileDown,
   QrCode,
-  History
+  History,
+  Zap
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -91,7 +94,11 @@ import {
   Cell,
   PieChart,
   Pie,
-  Legend
+  Legend,
+  AreaChart,
+  Area,
+  LineChart,
+  Line
 } from 'recharts';
 import { format } from 'date-fns';
 import { toZonedTime } from 'date-fns-tz';
@@ -117,127 +124,14 @@ const DefaultIcon = L.divIcon({
 
 L.Marker.prototype.options.icon = DefaultIcon;
 
-const DriverMap = ({ drivers, selectedDriverId }: { drivers: any[], selectedDriverId?: number }) => {
-  const activeDrivers = drivers.filter(d => d.latitude && d.longitude);
-  const center: [number, number] = activeDrivers.length > 0 
-    ? [activeDrivers[0].latitude, activeDrivers[0].longitude] 
-    : [-6.200000, 106.816666]; // Jakarta default
-
-  const getStatusColor = (status: string, lastOnline: string) => {
-    const isOnline = lastOnline && (new Date().getTime() - new Date(lastOnline).getTime()) < 5 * 60 * 1000;
-    if (!isOnline) return '#94a3b8'; // Offline
-    if (status === 'delivering') return '#f59e0b'; // Delivering
-    return '#10b981'; // Available
-  };
-
-  return (
-    <div className="h-[500px] w-full rounded-2xl overflow-hidden border border-coffee-100 shadow-inner relative">
-      <MapContainer center={center} zoom={13} style={{ height: '100%', width: '100%' }}>
-        <TileLayer
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-        />
-        {activeDrivers.map(d => {
-          const isOnline = d.work_status === 'online' && d.last_online && (new Date().getTime() - new Date(d.last_online + 'Z').getTime()) < 5 * 60 * 1000;
-          const status = d.active_deliveries > 0 ? 'delivering' : (isOnline ? 'available' : 'offline');
-          const color = getStatusColor(status, d.last_online);
-          
-          const icon = L.divIcon({
-            className: 'custom-div-icon',
-            html: `<div style="background-color: ${color}; width: 32px; height: 32px; border-radius: 50% 50% 50% 0; transform: rotate(-45deg); border: 3px solid white; box-shadow: 0 0 15px rgba(0,0,0,0.3); display: flex; items-center; justify-center;"><div style="transform: rotate(45deg); color: white;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/><path d="M15 18H9"/><path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-2.035-2.544A1 1 0 0 0 17.015 10H15v8"/><circle cx="7" cy="18" r="2"/><circle cx="17" cy="18" r="2"/></svg></div></div>`,
-            iconSize: [32, 32],
-            iconAnchor: [16, 32]
-          });
-
-          return (
-            <Marker key={d.id} position={[d.latitude, d.longitude]} icon={icon}>
-              <Popup>
-                <div className="p-2 min-w-[150px]">
-                  <p className="font-black text-coffee-950 text-sm mb-1">{d.full_name}</p>
-                  <p className="text-[10px] font-bold text-coffee-500 uppercase tracking-widest mb-2">{d.vehicle_info}</p>
-                  <div className="space-y-1">
-                    <div className="flex justify-between items-center">
-                      <span className="text-[10px] text-coffee-400 font-bold uppercase">Status</span>
-                      <span className={cn(
-                        "text-[10px] font-black uppercase px-1.5 py-0.5 rounded",
-                        status === 'available' ? "bg-emerald-100 text-emerald-700" :
-                        status === 'delivering' ? "bg-amber-100 text-amber-700" :
-                        "bg-slate-100 text-slate-700"
-                      )}>
-                        {status}
-                      </span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-[10px] text-coffee-400 font-bold uppercase">Terakhir</span>
-                      <span className="text-[10px] font-bold text-coffee-700">
-                        {d.last_online ? format(new Date(d.last_online), 'HH:mm') : 'N/A'}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </Popup>
-            </Marker>
-          );
-        })}
-      </MapContainer>
-      
-      {/* Legend */}
-      <div className="absolute bottom-4 right-4 bg-white/90 backdrop-blur-sm p-3 rounded-2xl shadow-lg border border-coffee-100 z-[1000] space-y-2">
-        <div className="flex items-center gap-2">
-          <div className="w-3 h-3 rounded-full bg-emerald-500" />
-          <span className="text-[10px] font-bold text-coffee-600 uppercase tracking-widest">Tersedia</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="w-3 h-3 rounded-full bg-amber-500" />
-          <span className="text-[10px] font-bold text-coffee-600 uppercase tracking-widest">Mengantar</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="w-3 h-3 rounded-full bg-slate-400" />
-          <span className="text-[10px] font-bold text-coffee-600 uppercase tracking-widest">Offline</span>
-        </div>
-      </div>
-    </div>
-  );
-};
-
+import { formatIDR, formatDate, CHART_COLORS } from './utils';
 import { cn } from './types';
-import type { InventoryItem, Transaction, DashboardStats, Menu, UserAccount, Customer } from './types';
+import type { InventoryItem, Transaction, DashboardStats, Menu, UserAccount, Customer, Driver } from './types';
 import Sidebar from './components/Sidebar';
+import DriverMap from './components/DriverMap';
+import DriverDashboard from './components/DriverDashboard';
+import DashboardTab from './components/DashboardTab';
 import { translations } from './translations';
-
-const formatIDR = (amount: number) => {
-  return new Intl.NumberFormat('id-ID', {
-    style: 'currency',
-    currency: 'IDR',
-    minimumFractionDigits: 0,
-  }).format(amount);
-};
-
-const CHART_COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
-
-const formatDate = (date: Date | string | number, formatStr: string, timezone: string = 'Asia/Jakarta') => {
-  try {
-    let d: Date;
-    if (typeof date === 'string') {
-      // If it's a SQLite timestamp (YYYY-MM-DD HH:MM:SS), treat as UTC
-      if (date.match(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/)) {
-        d = new Date(date.replace(' ', 'T') + 'Z');
-      } else {
-        d = new Date(date);
-      }
-    } else {
-      d = new Date(date);
-    }
-    
-    if (isNaN(d.getTime())) return '-';
-    
-    const zonedDate = toZonedTime(d, timezone);
-    return format(zonedDate, formatStr, { locale: id });
-  } catch (error) {
-    console.error('Error formatting date:', error);
-    return '-';
-  }
-};
 
 const isMenuAvailable = (menu: Menu) => {
   if (!menu.ingredients || menu.ingredients.length === 0) return true;
@@ -364,15 +258,6 @@ interface CartItem {
 
 export default function App() {
   const [user, setUser] = useState<{ id: number, username: string, role: 'admin' | 'cashier' } | null>(null);
-  const [driver, setDriver] = useState<{ id: number, username: string, full_name: string } | null>(null);
-  const [driverProfile, setDriverProfile] = useState<any>(null);
-  const [isDriverMode, setIsDriverMode] = useState(false);
-  const [driverView, setDriverView] = useState<'login' | 'register' | 'dashboard'>('login');
-  const [driverLoginData, setDriverLoginData] = useState({ username: '', password: '' });
-  const [driverRegisterData, setDriverRegisterData] = useState({ username: '', password: '', full_name: '', phone: '', vehicle_info: '' });
-  const [availableOrders, setAvailableOrders] = useState<any[]>([]);
-  const [myDeliveries, setMyDeliveries] = useState<any[]>([]);
-  const [drivers, setDrivers] = useState<any[]>([]); // For admin
   const [darkMode, setDarkMode] = useState(() => {
     if (typeof window !== 'undefined') {
       return localStorage.getItem('darkMode') === 'true';
@@ -422,7 +307,7 @@ export default function App() {
 
   const [loginData, setLoginData] = useState({ username: '', password: '' });
   const [loginError, setLoginError] = useState('');
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'inventory' | 'transactions' | 'menu' | 'orders' | 'reports' | 'users' | 'settings' | 'queue' | 'loyalty'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'inventory' | 'transactions' | 'menu' | 'orders' | 'reports' | 'users' | 'settings' | 'queue' | 'loyalty' | 'delivery'>('dashboard');
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [selectedCustomerId, setSelectedCustomerId] = useState<number | null>(null);
   const [showCustomerModal, setShowCustomerModal] = useState(false);
@@ -430,12 +315,12 @@ export default function App() {
   const [newCustomer, setNewCustomer] = useState({ name: '', phone: '', email: '' });
   const [tableNumber, setTableNumber] = useState('');
   const [reportSubTab, setReportSubTab] = useState<'transactions' | 'financial' | 'consignment' | 'daily-summary'>('transactions');
-  const [isInventoryOpen, setIsInventoryOpen] = useState(false);
-  const [isReportsOpen, setIsReportsOpen] = useState(false);
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<'Cash' | 'QRIS'>('Cash');
   const [deliveryMethod, setDeliveryMethod] = useState<'dine_in' | 'takeaway' | 'delivery'>('takeaway');
   const [deliveryAddress, setDeliveryAddress] = useState('');
+  const [customerPhone, setCustomerPhone] = useState('');
+  const [customerLat, setCustomerLat] = useState<number | null>(null);
+  const [customerLng, setCustomerLng] = useState<number | null>(null);
   const [deliveryFee, setDeliveryFee] = useState(0);
   const [customerName, setCustomerName] = useState('');
   const [posNotes, setPosNotes] = useState('');
@@ -481,12 +366,22 @@ export default function App() {
     language: 'id',
     enable_delivery: false
   });
-  const [settingsSubTab, setSettingsSubTab] = useState<'general' | 'theme' | 'email' | 'payment' | 'delivery' | 'webhook' | 'receipt' | 'shortcuts' | 'backup'>('general');
+  const [settingsSubTab, setSettingsSubTab] = useState<'general' | 'theme' | 'email' | 'payment' | 'delivery' | 'webhook' | 'receipt' | 'shortcuts' | 'backup' | 'mobile'>('general');
+  const [usersSubTab, setUsersSubTab] = useState<'staff' | 'driver'>('staff');
   const [testEmailTo, setTestEmailTo] = useState('');
   const [isTestingEmail, setIsTestingEmail] = useState(false);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [activeOrders, setActiveOrders] = useState<any[]>([]);
   const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [dashboardExtra, setDashboardExtra] = useState<{
+    dailySummary: any,
+    financialTrend: any[],
+    topItems: any[]
+  }>({
+    dailySummary: null,
+    financialTrend: [],
+    topItems: []
+  });
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [menus, setMenus] = useState<Menu[]>([]);
@@ -734,7 +629,17 @@ export default function App() {
   const [editingPromo, setEditingPromo] = useState<any>(null);
   const [newAd, setNewAd] = useState({ type: 'image', url: '', title: '', subtitle: '', active: true });
   const [newPromo, setNewPromo] = useState({ code: '', discount_type: 'percentage', discount_value: 0, target_type: 'all', target_ids: [], active: true });
-  const [customerOrder, setCustomerOrder] = useState({ name: '', table: '', paymentMethod: 'Cash', notes: '', deliveryMethod: 'dine_in' as 'dine_in' | 'takeaway' | 'delivery', deliveryAddress: '' });
+  const [customerOrder, setCustomerOrder] = useState({ 
+    name: '', 
+    table: '', 
+    paymentMethod: 'Cash', 
+    notes: '', 
+    deliveryMethod: 'dine_in' as 'dine_in' | 'takeaway' | 'delivery', 
+    deliveryAddress: '',
+    phone: '',
+    lat: null as number | null,
+    lng: null as number | null
+  });
   const [lastCustomerOrder, setLastCustomerOrder] = useState<any>(null);
   const [showCustomerOrderSuccess, setShowCustomerOrderSuccess] = useState(false);
   const [showSuccessAnimation, setShowSuccessAnimation] = useState(false);
@@ -802,6 +707,13 @@ export default function App() {
     customerName?: string,
     date: string
   } | null>(null);
+
+  const [drivers, setDrivers] = useState<Driver[]>([]);
+  const [showDriverMapModal, setShowDriverMapModal] = useState(false);
+  const [selectedDriverForMap, setSelectedDriverForMap] = useState<number | null>(null);
+  const [isDriverMode, setIsDriverMode] = useState(false);
+  const [driverUser, setDriverUser] = useState<{ id: number; username: string; full_name: string } | null>(null);
+  const [loginType, setLoginType] = useState<'staff' | 'driver'>('staff');
 
   useEffect(() => {
     // Initialize socket once
@@ -897,7 +809,16 @@ export default function App() {
 
   // User Management States
   const [users, setUsers] = useState<UserAccount[]>([]);
+  const [userSearch, setUserSearch] = useState('');
+  const [userSort, setUserSort] = useState<'username' | 'role'>('username');
+  const [userFilter, setUserFilter] = useState<'all' | 'admin' | 'cashier'>('all');
+  
+  const [driverSearch, setDriverSearch] = useState('');
+  const [driverSort, setDriverSort] = useState<'full_name' | 'status' | 'active_deliveries'>('full_name');
+  const [driverFilter, setDriverFilter] = useState<'all' | 'active' | 'pending' | 'inactive'>('all');
   const [showUserModal, setShowUserModal] = useState(false);
+  const [showDriverModal, setShowDriverModal] = useState(false);
+  const [newDriverData, setNewDriverData] = useState({ username: '', password: '', full_name: '', phone: '', vehicle_info: '' });
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [showResetModal, setShowResetModal] = useState(false);
   const [resetEmail, setResetEmail] = useState('');
@@ -975,6 +896,25 @@ export default function App() {
     }
   }, [appSettings.primary_color]);
 
+  const handleUpdateDriverStatus = async (id: number, status: string) => {
+    try {
+      const res = await fetch(`/api/admin/drivers/${id}/status`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status })
+      });
+      if (res.ok) {
+        toast.success(`Status driver berhasil diupdate ke ${status}`);
+        fetchData();
+      } else {
+        toast.error('Gagal mengupdate status driver');
+      }
+    } catch (error) {
+      console.error('Error updating driver status:', error);
+      toast.error('Terjadi kesalahan saat mengupdate status driver');
+    }
+  };
+
   const fetchActiveOrders = async () => {
     try {
       const res = await fetch('/api/active-orders');
@@ -1000,9 +940,6 @@ export default function App() {
       return () => clearInterval(interval);
     }
   }, [showCustomerOrderStatus]);
-
-  const [showDriverMapModal, setShowDriverMapModal] = useState(false);
-  const [selectedDriverForMap, setSelectedDriverForMap] = useState<number | null>(null);
 
   const fetchData = async () => {
     if (!user) return;
@@ -1036,7 +973,7 @@ export default function App() {
       if (menuRes.ok) setMenus(await menuRes.json());
       if (usersRes.ok) setUsers(await usersRes.json());
       if (custRes.ok) setCustomers(await custRes.json());
-      if (driversRes && driversRes.ok) setDrivers(await driversRes.json());
+      if (driversRes.ok) setDrivers(await driversRes.json());
       if (settingsRes.ok) {
         const settingsData = await settingsRes.json();
         if (settingsData) {
@@ -1046,6 +983,25 @@ export default function App() {
           setAppSettings(prev => ({ ...prev, ...settingsData }));
         }
       }
+
+      // Fetch extra dashboard data if admin
+      if (isAdmin) {
+        const [dailySumRes, financialRes] = await Promise.all([
+          fetch('/api/reports/daily-summary'),
+          fetch('/api/reports/financial')
+        ]);
+        
+        if (dailySumRes.ok && financialRes.ok) {
+          const dailySum = await dailySumRes.json();
+          const financial = await financialRes.json();
+          setDashboardExtra({
+            dailySummary: dailySum,
+            financialTrend: financial.dailyData || [],
+            topItems: dailySum.topItems || []
+          });
+        }
+      }
+
       fetchActiveOrders();
     } catch (error) {
       console.error('Error fetching data:', error);
@@ -1054,26 +1010,8 @@ export default function App() {
     }
   };
 
-  const handleUpdateDriverStatus = async (driverId: number, status: string) => {
-    try {
-      const res = await fetch(`/api/admin/drivers/${driverId}/status`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status })
-      });
-      if (res.ok) {
-        toast.success('Status driver diperbarui');
-        fetchData();
-      } else {
-        toast.error('Gagal memperbarui status driver');
-      }
-    } catch (error) {
-      toast.error('Terjadi kesalahan koneksi');
-    }
-  };
-
   useEffect(() => {
-    if (activeTab === 'reports' || activeTab === 'orders' || activeTab === 'inventory') {
+    if (activeTab === 'dashboard' || activeTab === 'reports' || activeTab === 'orders' || activeTab === 'inventory') {
       fetchData();
     }
   }, [activeTab]);
@@ -1152,6 +1090,28 @@ export default function App() {
       }
     } catch (error) {
       toast.error('Terjadi kesalahan saat menghubungi server');
+    }
+  };
+
+  const handleRegisterDriver = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const res = await fetch('/api/driver/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newDriverData)
+      });
+      const data = await res.json();
+      if (res.ok) {
+        toast.success('Pendaftaran driver berhasil! Silakan tunggu verifikasi admin.');
+        setShowDriverModal(false);
+        setNewDriverData({ username: '', password: '', full_name: '', phone: '', vehicle_info: '' });
+        fetchData();
+      } else {
+        toast.error(data.error || 'Gagal mendaftar driver');
+      }
+    } catch (error) {
+      toast.error('Terjadi kesalahan saat mendaftar');
     }
   };
 
@@ -1570,7 +1530,10 @@ export default function App() {
           paymentMethod: customerOrder.paymentMethod,
           notes: customerOrder.notes,
           deliveryMethod: customerOrder.deliveryMethod,
-          deliveryAddress: customerOrder.deliveryMethod === 'delivery' ? customerOrder.deliveryAddress : null
+          deliveryAddress: customerOrder.deliveryMethod === 'delivery' ? customerOrder.deliveryAddress : null,
+          customerPhone: customerOrder.deliveryMethod === 'delivery' ? customerOrder.phone : null,
+          customerLat: customerOrder.deliveryMethod === 'delivery' ? customerOrder.lat : null,
+          customerLng: customerOrder.deliveryMethod === 'delivery' ? customerOrder.lng : null
         })
       });
 
@@ -2016,7 +1979,10 @@ export default function App() {
         source: 'POS',
         deliveryMethod,
         deliveryAddress: deliveryMethod === 'delivery' ? deliveryAddress : null,
-        deliveryFee: delivery_fee
+        deliveryFee: delivery_fee,
+        customerPhone: deliveryMethod === 'delivery' ? customerPhone : null,
+        customerLat: deliveryMethod === 'delivery' ? customerLat : null,
+        customerLng: deliveryMethod === 'delivery' ? customerLng : null
       };
       
       const res = await fetch('/api/orders', {
@@ -2142,146 +2108,12 @@ export default function App() {
     }
   };
 
-  const handleDriverLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoginError('');
-    try {
-      const res = await fetch('/api/driver/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(driverLoginData)
-      });
-      const data = await res.json();
-      if (res.ok) {
-        setDriver(data.driver);
-        setDriverView('dashboard');
-        toast.success(`Selamat datang Driver, ${data.driver.full_name}!`);
-      } else {
-        setLoginError(data.error || 'Gagal masuk');
-      }
-    } catch (error) {
-      setLoginError('Terjadi kesalahan koneksi');
-    }
-  };
-
-  const handleDriverRegister = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoginError('');
-    try {
-      const res = await fetch('/api/driver/register', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(driverRegisterData)
-      });
-      const data = await res.json();
-      if (res.ok) {
-        toast.success(data.message);
-        setDriverView('login');
-      } else {
-        setLoginError(data.error || 'Gagal mendaftar');
-      }
-    } catch (error) {
-      setLoginError('Terjadi kesalahan koneksi');
-    }
-  };
-
-  const handleDriverLogout = async () => {
-    await fetch('/api/driver/logout', { method: 'POST' });
-    setDriver(null);
-    setDriverView('login');
-  };
-
-  const fetchDriverData = async () => {
-    if (!driver) return;
-    try {
-      const [availableRes, myRes, profileRes] = await Promise.all([
-        fetch('/api/driver/available-orders'),
-        fetch('/api/driver/my-orders'),
-        fetch('/api/driver/profile')
-      ]);
-      if (availableRes.ok) setAvailableOrders(await availableRes.json());
-      if (myRes.ok) setMyDeliveries(await myRes.json());
-      if (profileRes.ok) setDriverProfile(await profileRes.json());
-    } catch (error) {
-      console.error('Error fetching driver data:', error);
-    }
-  };
-
-  useEffect(() => {
-    if (driver) {
-      fetchDriverData();
-      const interval = setInterval(fetchDriverData, 10000);
-
-      // Real-time location tracking
-      let watchId: number;
-      if ("geolocation" in navigator) {
-        watchId = navigator.geolocation.watchPosition(
-          async (position) => {
-            const { latitude, longitude } = position.coords;
-            try {
-              await fetch('/api/driver/location', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ latitude, longitude })
-              });
-            } catch (err) {
-              console.error('Error sending location:', err);
-            }
-          },
-          (err) => console.error('Geolocation error:', err),
-          { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
-        );
-      }
-
-      return () => {
-        clearInterval(interval);
-        if (watchId) navigator.geolocation.clearWatch(watchId);
-      };
-    }
-  }, [driver]);
-
-  const handleTakeOrder = async (orderId: string) => {
-    try {
-      const res = await fetch('/api/driver/take-order', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ order_id: orderId })
-      });
-      if (res.ok) {
-        toast.success('Orderan berhasil diambil!');
-        fetchDriverData();
-      } else {
-        const data = await res.json();
-        toast.error(data.error);
-      }
-    } catch (error) {
-      toast.error('Gagal mengambil orderan');
-    }
-  };
-
-  const handleCompleteDelivery = async (orderId: string) => {
-    try {
-      const res = await fetch('/api/driver/complete-delivery', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ order_id: orderId })
-      });
-      if (res.ok) {
-        toast.success('Pengiriman selesai!');
-        fetchDriverData();
-      } else {
-        toast.error('Gagal menyelesaikan pengiriman');
-      }
-    } catch (error) {
-      toast.error('Gagal menyelesaikan pengiriman');
-    }
-  };
-
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoginError('');
     try {
-      const res = await fetch('/api/login', {
+      const endpoint = loginType === 'driver' ? '/api/driver/login' : '/api/login';
+      const res = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(loginData)
@@ -2291,7 +2123,7 @@ export default function App() {
         const errorText = await res.text();
         try {
           const errorData = JSON.parse(errorText);
-          setLoginError(errorData.message || `Error ${res.status}: Terjadi kesalahan`);
+          setLoginError(errorData.error || errorData.message || `Error ${res.status}: Terjadi kesalahan`);
         } catch (e) {
           setLoginError(`Server Error (${res.status}). Silakan cek log CasaOS.`);
         }
@@ -2300,15 +2132,33 @@ export default function App() {
 
       const data = await res.json();
       if (data.success) {
-        setUser(data.user);
-        if (data.user.role === 'cashier') {
-          setActiveTab('orders');
+        if (loginType === 'driver') {
+          setDriverUser(data.driver);
+          setIsDriverMode(true);
+          toast.success(`Selamat datang, ${data.driver.full_name}!`);
+        } else {
+          setUser(data.user);
+          if (data.user.role === 'cashier') {
+            setActiveTab('orders');
+          }
         }
       } else {
-        setLoginError(data.message);
+        setLoginError(data.message || data.error);
       }
     } catch (error) {
       setLoginError('Gagal terhubung ke server');
+    }
+  };
+
+  const handleDriverLogout = async () => {
+    try {
+      await fetch('/api/driver/logout', { method: 'POST' });
+      setDriverUser(null);
+      setIsDriverMode(false);
+      setLoginData({ username: '', password: '' });
+      toast.info('Anda telah keluar dari akun Driver');
+    } catch (error) {
+      console.error('Logout failed:', error);
     }
   };
 
@@ -2412,8 +2262,6 @@ export default function App() {
         const index = parseInt(e.key) - 1;
         if (tabs[index]) {
           setActiveTab(tabs[index]);
-          setIsInventoryOpen(false);
-          setIsReportsOpen(false);
         }
       }
 
@@ -2432,7 +2280,6 @@ export default function App() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [activeTab, orderView, isFullscreen]);
 
-  const [showMobileMore, setShowMobileMore] = useState(false);
 
   if (loading) return (
     <div className="h-screen flex items-center justify-center bg-coffee-50">
@@ -2494,47 +2341,46 @@ export default function App() {
         {/* Right Side: Ordering Interface */}
         <div className="flex-1 flex flex-col h-screen overflow-hidden relative">
           {/* Header */}
-          <header className="bg-white/80 dark:bg-zinc-900/80 backdrop-blur-md border-b border-coffee-100 dark:border-zinc-800 sticky top-0 z-30 px-4 py-4 md:px-8 flex items-center justify-between shrink-0 pt-safe transition-colors duration-300">
+          <header className="bg-white border-b border-coffee-100 sticky top-0 z-30 px-4 py-4 md:px-8 flex items-center justify-between shrink-0">
             <div className="flex items-center gap-4">
               <div className={cn(
-                "p-2.5 rounded-2xl shadow-lg shadow-coffee-200 dark:shadow-none flex items-center justify-center",
-                appSettings.app_logo_url ? "bg-white dark:bg-zinc-800" : "bg-coffee-900 dark:bg-zinc-700 text-white"
+                "p-2.5 rounded-2xl shadow-lg shadow-coffee-200 flex items-center justify-center",
+                appSettings.app_logo_url ? "bg-white" : "bg-coffee-900 text-white"
               )}>
                 <IconComponent size={24} />
               </div>
               <div>
-                <h1 className="text-xl font-serif font-bold text-coffee-950 dark:text-zinc-100">{appSettings.customer_page_title || appSettings.app_name}</h1>
-                <p className="text-xs text-coffee-500 dark:text-zinc-400 font-medium">{appSettings.customer_page_subtitle || 'Menu Pelanggan'}</p>
+                <h1 className="text-xl font-serif font-bold text-coffee-950">{appSettings.customer_page_title || appSettings.app_name}</h1>
+                <p className="text-xs text-coffee-500 font-medium">{appSettings.customer_page_subtitle || 'Menu Pelanggan'}</p>
               </div>
             </div>
             <div className="flex items-center gap-3">
-              <motion.button 
-                whileTap={{ scale: 0.9 }}
-                onClick={() => setDarkMode(!darkMode)}
-                className="p-3 bg-white dark:bg-zinc-800 border border-coffee-100 dark:border-zinc-700 text-coffee-600 dark:text-zinc-400 rounded-2xl shadow-sm hover:bg-coffee-50 dark:hover:bg-zinc-700 transition-all active:scale-95"
+              {/* Subtle Login Access (Hidden) */}
+              <button 
+                onClick={() => setIsCustomerMode(false)}
+                className="p-2 text-coffee-950/5 hover:text-coffee-950/20 transition-colors"
+                title="Staff Login"
               >
-                {darkMode ? <Sun size={20} /> : <Moon size={20} />}
-              </motion.button>
+                <Lock size={16} />
+              </button>
               
-              <motion.button 
-                whileTap={{ scale: 0.9 }}
+              <button 
                 onClick={() => setShowCustomerOrderStatus(true)}
-                className="p-3 bg-white dark:bg-zinc-800 border border-coffee-100 dark:border-zinc-700 text-coffee-600 dark:text-zinc-400 rounded-2xl shadow-sm hover:bg-coffee-50 dark:hover:bg-zinc-700 transition-all active:scale-95"
+                className="p-3 bg-white border border-coffee-100 text-coffee-600 rounded-2xl shadow-sm hover:bg-coffee-50 transition-all active:scale-95"
               >
                 <ClipboardList size={20} />
-              </motion.button>
+              </button>
 
               <motion.button 
                 id="mobile-cart-icon"
-                whileTap={{ scale: 0.9 }}
                 animate={cartPulse ? { scale: [1, 1.2, 1] } : {}}
                 transition={{ duration: 0.3 }}
                 onClick={() => setShowMobileCart(true)}
-                className="relative p-3 bg-coffee-900 dark:bg-zinc-700 text-white rounded-2xl shadow-lg shadow-coffee-200 dark:shadow-none"
+                className="relative p-3 bg-coffee-900 text-white rounded-2xl shadow-lg shadow-coffee-200"
               >
                 <ShoppingCart size={20} />
                 {cart.length > 0 && (
-                  <span className="absolute -top-1 -right-1 bg-rose-500 text-white text-[10px] font-bold w-5 h-5 rounded-full flex items-center justify-center border-2 border-white dark:border-zinc-900">
+                  <span className="absolute -top-1 -right-1 bg-rose-500 text-white text-[10px] font-bold w-5 h-5 rounded-full flex items-center justify-center border-2 border-white">
                     {cart.reduce((sum, item) => sum + item.quantity, 0)}
                   </span>
                 )}
@@ -2542,56 +2388,54 @@ export default function App() {
             </div>
           </header>
 
-          <main className="flex-1 overflow-y-auto custom-scrollbar p-4 md:p-8 pb-safe transition-colors duration-300">
+          <main className="flex-1 overflow-y-auto custom-scrollbar p-4 md:p-8">
             <div className="max-w-6xl mx-auto space-y-8">
               {/* Mobile Ad (Visible on small screens) */}
-              <div className="lg:hidden h-64 rounded-[2rem] overflow-hidden shadow-lg shadow-coffee-900/10">
+              <div className="lg:hidden h-64 rounded-[2rem] overflow-hidden shadow-lg">
                 <AdCarousel />
               </div>
             {/* Search & Categories */}
             <div className="flex flex-col md:flex-row gap-4">
               <div className="relative flex-1">
-                <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-coffee-400 dark:text-zinc-500" size={20} />
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-coffee-400" size={20} />
                 <input 
                   type="text"
                   placeholder="Cari menu favorit Anda..."
                   value={menuSearch}
                   onChange={e => setMenuSearch(e.target.value)}
-                  className="w-full bg-white dark:bg-zinc-800 border border-coffee-200 dark:border-zinc-700 rounded-2xl pl-12 pr-4 py-4 focus:outline-none focus:ring-2 focus:ring-coffee-500 dark:text-zinc-100 shadow-sm transition-colors"
+                  className="w-full bg-white border border-coffee-200 rounded-2xl pl-12 pr-4 py-4 focus:outline-none focus:ring-2 focus:ring-coffee-500 shadow-sm"
                 />
               </div>
               <div className="flex gap-2 overflow-x-auto no-scrollbar pb-2">
                 {categories.map(cat => (
-                  <motion.button
-                    whileTap={{ scale: 0.95 }}
+                  <button
                     key={cat}
                     onClick={() => setSelectedCategory(cat)}
                     className={cn(
                       "px-6 py-4 rounded-2xl font-bold whitespace-nowrap transition-all shadow-sm border",
                       selectedCategory === cat 
-                        ? "bg-coffee-900 dark:bg-zinc-700 text-white border-coffee-900 dark:border-zinc-600" 
-                        : "bg-white dark:bg-zinc-800 text-coffee-600 dark:text-zinc-400 border-coffee-100 dark:border-zinc-700 hover:border-coffee-300 dark:hover:border-zinc-600"
+                        ? "bg-coffee-900 text-white border-coffee-900" 
+                        : "bg-white text-coffee-600 border-coffee-100 hover:border-coffee-300"
                     )}
                   >
                     {cat}
-                  </motion.button>
+                  </button>
                 ))}
               </div>
             </div>
 
             {/* Menu Grid */}
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2.5 sm:gap-6">
-              {filteredMenus.map((menu, index) => (
+              {filteredMenus.map(menu => (
                 <motion.div 
                   key={menu.id}
                   layout
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: index * 0.05 }}
                   whileHover={{ y: -6 }}
-                  className="bg-white dark:bg-zinc-900 rounded-[2rem] overflow-hidden border border-coffee-100/50 dark:border-zinc-800 shadow-sm hover:shadow-2xl hover:shadow-coffee-200/40 dark:hover:shadow-none transition-all group flex flex-col"
+                  className="bg-white rounded-[2rem] overflow-hidden border border-coffee-100/50 shadow-sm hover:shadow-2xl hover:shadow-coffee-200/40 transition-all group flex flex-col"
                 >
-                  <div className="relative aspect-[4/5] overflow-hidden bg-coffee-50 dark:bg-zinc-800">
+                  <div className="relative aspect-[4/5] overflow-hidden bg-coffee-50">
                     {menu.image_url ? (
                       <img 
                         src={menu.image_url} 
@@ -2600,53 +2444,52 @@ export default function App() {
                         referrerPolicy="no-referrer"
                       />
                     ) : (
-                      <div className="w-full h-full flex items-center justify-center text-coffee-200 dark:text-zinc-700 bg-gradient-to-br from-coffee-50 to-white dark:from-zinc-800 dark:to-zinc-900">
+                      <div className="w-full h-full flex items-center justify-center text-coffee-200 bg-gradient-to-br from-coffee-50 to-white">
                         <Coffee size={48} className="opacity-20" />
                       </div>
                     )}
                     
                     {/* Category Badge */}
                     <div className="absolute top-3 left-3">
-                      <span className="bg-white/90 dark:bg-zinc-900/90 backdrop-blur-md px-2.5 py-1 rounded-full text-[8px] sm:text-[9px] font-black uppercase tracking-[0.1em] text-coffee-900 dark:text-zinc-100 shadow-sm border border-white/50 dark:border-zinc-800">
+                      <span className="bg-white/90 backdrop-blur-md px-2.5 py-1 rounded-full text-[8px] sm:text-[9px] font-black uppercase tracking-[0.1em] text-coffee-900 shadow-sm border border-white/50">
                         {menu.category}
                       </span>
                     </div>
 
                     {/* Quick Add Overlay (Desktop) */}
-                    <div className="absolute inset-0 bg-coffee-950/20 dark:bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity hidden sm:flex items-center justify-center">
-                      <motion.button 
-                        whileTap={{ scale: 0.9 }}
+                    <div className="absolute inset-0 bg-coffee-950/20 opacity-0 group-hover:opacity-100 transition-opacity hidden sm:flex items-center justify-center">
+                      <button 
                         onClick={(e) => handleAddToCart(menu, e)}
-                        className="bg-white dark:bg-zinc-800 text-coffee-900 dark:text-zinc-100 p-4 rounded-full shadow-2xl transform translate-y-4 group-hover:translate-y-0 transition-all duration-300 hover:bg-coffee-900 dark:hover:bg-zinc-700 hover:text-white"
+                        className="bg-white text-coffee-900 p-4 rounded-full shadow-2xl transform translate-y-4 group-hover:translate-y-0 transition-all duration-300 hover:bg-coffee-900 hover:text-white"
                       >
                         <Plus size={24} />
-                      </motion.button>
+                      </button>
                     </div>
                   </div>
 
                   <div className="p-4 sm:p-6 flex flex-col flex-1">
                     <div className="mb-3 sm:mb-4">
-                      <h3 className="text-sm sm:text-xl font-serif font-bold text-coffee-950 dark:text-zinc-100 leading-tight group-hover:text-coffee-700 dark:group-hover:text-zinc-300 transition-colors line-clamp-1 sm:line-clamp-2 mb-1.5">
+                      <h3 className="text-sm sm:text-xl font-serif font-bold text-coffee-950 leading-tight group-hover:text-coffee-700 transition-colors line-clamp-1 sm:line-clamp-2 mb-1.5">
                         {menu.name}
                       </h3>
                       
                       <div className="flex flex-wrap items-center gap-1.5 mb-2.5">
                         {menu.size && (
-                          <span className="text-[7px] sm:text-[9px] font-black text-coffee-600 dark:text-zinc-400 bg-coffee-50 dark:bg-zinc-800 px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full uppercase tracking-widest border border-coffee-100 dark:border-zinc-700">
+                          <span className="text-[7px] sm:text-[9px] font-black text-coffee-600 bg-coffee-50 px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full uppercase tracking-widest border border-coffee-100">
                             {menu.size}
                           </span>
                         )}
                       </div>
                       
-                      <p className="text-[9px] sm:text-xs text-coffee-500 dark:text-zinc-500 line-clamp-2 leading-relaxed italic opacity-70">
+                      <p className="text-[9px] sm:text-xs text-coffee-500 line-clamp-2 leading-relaxed italic opacity-70">
                         {menu.description || 'Dibuat dengan cinta dan biji kopi pilihan terbaik.'}
                       </p>
                     </div>
 
-                    <div className="mt-auto pt-3 sm:pt-5 border-t border-coffee-50 dark:border-zinc-800 flex items-center justify-between gap-1.5">
+                    <div className="mt-auto pt-3 sm:pt-5 border-t border-coffee-50 flex items-center justify-between gap-1.5">
                       <div className="flex flex-col min-w-0">
-                        <span className="text-[7px] sm:text-[9px] uppercase tracking-[0.15em] text-coffee-400 dark:text-zinc-600 font-black mb-0.5">Harga</span>
-                        <div className="flex items-baseline gap-0.5 text-coffee-900 dark:text-zinc-100">
+                        <span className="text-[7px] sm:text-[9px] uppercase tracking-[0.15em] text-coffee-400 font-black mb-0.5">Harga</span>
+                        <div className="flex items-baseline gap-0.5 text-coffee-900">
                           <span className="text-[10px] sm:text-sm font-bold">Rp</span>
                           <span className="text-base sm:text-xl font-black tracking-tighter leading-none">
                             {menu.price.toLocaleString('id-ID')}
@@ -2654,13 +2497,12 @@ export default function App() {
                         </div>
                       </div>
                       
-                      <motion.button 
-                        whileTap={{ scale: 0.8 }}
+                      <button 
                         onClick={(e) => handleAddToCart(menu, e)}
-                        className="sm:hidden bg-coffee-900 dark:bg-zinc-700 text-white w-9 h-9 rounded-xl hover:bg-coffee-800 dark:hover:bg-zinc-600 transition-all shadow-lg shadow-coffee-100 dark:shadow-none flex items-center justify-center shrink-0"
+                        className="sm:hidden bg-coffee-900 text-white w-9 h-9 rounded-xl hover:bg-coffee-800 transition-all shadow-lg shadow-coffee-100 active:scale-90 flex items-center justify-center shrink-0"
                       >
                         <Plus size={18} />
-                      </motion.button>
+                      </button>
                     </div>
                   </div>
                 </motion.div>
@@ -2930,15 +2772,72 @@ export default function App() {
                           <motion.div 
                             initial={{ opacity: 0, height: 0 }}
                             animate={{ opacity: 1, height: 'auto' }}
-                            className="space-y-3 pt-2"
+                            className="space-y-4 pt-2"
                           >
-                            <label className="block text-[10px] font-bold uppercase text-coffee-500 mb-1.5 tracking-widest">Alamat Pengiriman</label>
-                            <textarea 
-                              value={customerOrder.deliveryAddress}
-                              onChange={e => setCustomerOrder({...customerOrder, deliveryAddress: e.target.value})}
-                              className="w-full bg-white border border-coffee-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-coffee-500 min-h-[80px] resize-none"
-                              placeholder="Jl. Merdeka No. 123..."
-                            />
+                            <div className="space-y-1.5">
+                              <label className="block text-[10px] font-bold uppercase text-coffee-500 tracking-widest">Alamat Pengiriman</label>
+                              <textarea 
+                                value={customerOrder.deliveryAddress}
+                                onChange={e => setCustomerOrder({...customerOrder, deliveryAddress: e.target.value})}
+                                className="w-full bg-white border border-coffee-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-coffee-500 min-h-[80px] resize-none"
+                                placeholder="Jl. Merdeka No. 123..."
+                              />
+                            </div>
+                            <div className="space-y-1.5">
+                              <label className="block text-[10px] font-bold uppercase text-coffee-500 tracking-widest">Nomor Telepon</label>
+                              <input 
+                                type="tel"
+                                value={customerOrder.phone}
+                                onChange={e => setCustomerOrder({...customerOrder, phone: e.target.value})}
+                                className="w-full bg-white border border-coffee-200 rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-coffee-500"
+                                placeholder="08123456789..."
+                              />
+                            </div>
+                            <div className="grid grid-cols-2 gap-3">
+                              <div className="space-y-1.5">
+                                <label className="block text-[10px] font-bold uppercase text-coffee-500 tracking-widest">Latitude</label>
+                                <input 
+                                  type="number"
+                                  step="any"
+                                  value={customerOrder.lat || ''}
+                                  onChange={e => setCustomerOrder({...customerOrder, lat: e.target.value ? Number(e.target.value) : null})}
+                                  className="w-full bg-white border border-coffee-200 rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-coffee-500"
+                                  placeholder="-6.1234"
+                                />
+                              </div>
+                              <div className="space-y-1.5">
+                                <label className="block text-[10px] font-bold uppercase text-coffee-500 tracking-widest">Longitude</label>
+                                <input 
+                                  type="number"
+                                  step="any"
+                                  value={customerOrder.lng || ''}
+                                  onChange={e => setCustomerOrder({...customerOrder, lng: e.target.value ? Number(e.target.value) : null})}
+                                  className="w-full bg-white border border-coffee-200 rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-coffee-500"
+                                  placeholder="106.1234"
+                                />
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (navigator.geolocation) {
+                                  navigator.geolocation.getCurrentPosition((pos) => {
+                                    setCustomerOrder({
+                                      ...customerOrder,
+                                      lat: pos.coords.latitude,
+                                      lng: pos.coords.longitude
+                                    });
+                                    toast.success('Lokasi berhasil diambil');
+                                  }, (err) => {
+                                    toast.error('Gagal mengambil lokasi: ' + err.message);
+                                  });
+                                }
+                              }}
+                              className="w-full py-2.5 bg-coffee-50 text-coffee-700 rounded-xl text-[10px] font-bold uppercase flex items-center justify-center gap-2 hover:bg-coffee-100 transition-colors border border-coffee-100"
+                            >
+                              <MapPin size={14} />
+                              Gunakan Lokasi Saat Ini
+                            </button>
                           </motion.div>
                         )}
                       </div>
@@ -3569,392 +3468,8 @@ export default function App() {
     );
   }
 
-  if (driver && driverView === 'dashboard') {
-    return (
-      <div className="min-h-screen bg-coffee-50 pb-20">
-        <header className="bg-white p-4 shadow-sm sticky top-0 z-10 flex justify-between items-center">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-coffee-900 rounded-xl flex items-center justify-center text-white">
-              <Truck size={20} />
-            </div>
-            <div>
-              <h1 className="font-bold text-coffee-900 leading-tight">{driver.full_name}</h1>
-              <p className="text-[10px] text-coffee-500 uppercase font-bold tracking-widest">{t('driver')}</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <button 
-              onClick={() => fetchDriverData()}
-              className="p-2 text-coffee-400 hover:text-coffee-600 transition-colors"
-              title="Refresh"
-            >
-              <RefreshCw size={20} />
-            </button>
-            <button onClick={handleDriverLogout} className="p-2 text-coffee-400 hover:text-rose-500 transition-colors">
-              <LogOut size={20} />
-            </button>
-          </div>
-        </header>
-
-        <main className="p-4 space-y-6 max-w-lg mx-auto">
-          {/* Status Toggle */}
-          <section className="bg-white p-5 rounded-3xl border border-coffee-100 shadow-sm flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className={cn(
-                "w-10 h-10 rounded-xl flex items-center justify-center",
-                driverProfile?.work_status === 'online' ? "bg-emerald-100 text-emerald-600" : "bg-slate-100 text-slate-400"
-              )}>
-                {driverProfile?.work_status === 'online' ? <Sun size={20} /> : <Moon size={20} />}
-              </div>
-              <div>
-                <p className="text-sm font-bold text-coffee-900">
-                  {driverProfile?.work_status === 'online' ? 'Anda Sedang Online' : 'Anda Sedang Offline'}
-                </p>
-                <p className="text-[10px] text-coffee-500 font-bold uppercase tracking-widest">
-                  {driverProfile?.work_status === 'online' ? 'Siap menerima orderan' : 'Istirahat sejenak'}
-                </p>
-              </div>
-            </div>
-            <button
-              onClick={async () => {
-                const newStatus = driverProfile?.work_status === 'online' ? 'offline' : 'online';
-                const res = await fetch('/api/driver/status', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ status: newStatus })
-                });
-                if (res.ok) fetchDriverData();
-              }}
-              className={cn(
-                "w-14 h-7 rounded-full transition-all relative",
-                driverProfile?.work_status === 'online' ? "bg-emerald-500" : "bg-slate-200"
-              )}
-            >
-              <div className={cn(
-                "absolute top-1 w-5 h-5 rounded-full bg-white transition-all shadow-sm",
-                driverProfile?.work_status === 'online' ? "left-8" : "left-1"
-              )} />
-            </button>
-          </section>
-
-          {/* My Active Deliveries */}
-          <section className="space-y-4">
-            <h2 className="text-xs font-black uppercase text-coffee-400 tracking-widest flex items-center gap-2">
-              <Package size={14} />
-              {t('my_deliveries')}
-            </h2>
-            {myDeliveries.length === 0 ? (
-              <div className="bg-white p-8 rounded-3xl border border-dashed border-coffee-200 text-center">
-                <p className="text-sm text-coffee-400 italic">Belum ada pengiriman aktif</p>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {myDeliveries.map(order => (
-                  <motion.div 
-                    key={order.order_id}
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="bg-white p-5 rounded-3xl border border-coffee-100 shadow-sm space-y-4"
-                  >
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <span className="text-[10px] font-black text-coffee-300 uppercase tracking-widest">Order ID</span>
-                        <h3 className="text-lg font-bold text-coffee-900">#{order.display_id}</h3>
-                      </div>
-                      <span className="px-3 py-1 bg-amber-100 text-amber-700 rounded-full text-[10px] font-bold uppercase tracking-widest">
-                        {t('out_for_delivery')}
-                      </span>
-                    </div>
-                    
-                    <div className="space-y-3">
-                      <div className="flex gap-3">
-                        <div className="w-8 h-8 bg-coffee-50 rounded-lg flex items-center justify-center text-coffee-400 flex-shrink-0">
-                          <User size={16} />
-                        </div>
-                        <div>
-                          <p className="text-[10px] font-bold text-coffee-400 uppercase tracking-widest">Pelanggan</p>
-                          <p className="text-sm font-bold text-coffee-900">{order.customer_name}</p>
-                        </div>
-                      </div>
-                      <div className="flex gap-3">
-                        <div className="w-8 h-8 bg-coffee-50 rounded-lg flex items-center justify-center text-coffee-400 flex-shrink-0">
-                          <ArrowUpRight size={16} />
-                        </div>
-                        <div className="flex-1">
-                          <p className="text-[10px] font-bold text-coffee-400 uppercase tracking-widest">Alamat</p>
-                          <p className="text-sm text-coffee-700 leading-relaxed">{order.delivery_address}</p>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="flex gap-2 pt-2">
-                      <button 
-                        onClick={() => window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(order.delivery_address)}`, '_blank')}
-                        className="flex-1 bg-coffee-100 text-coffee-700 py-3 rounded-2xl font-bold text-xs flex items-center justify-center gap-2"
-                      >
-                        <Globe size={14} />
-                        Navigasi
-                      </button>
-                      <button 
-                        onClick={() => handleCompleteDelivery(order.order_id)}
-                        className="flex-[2] bg-emerald-600 text-white py-3 rounded-2xl font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-emerald-100"
-                      >
-                        <CheckCircle2 size={14} />
-                        {t('complete_delivery')}
-                      </button>
-                    </div>
-                  </motion.div>
-                ))}
-              </div>
-            )}
-          </section>
-
-          {/* Available Orders */}
-          <section className="space-y-4">
-            <h2 className="text-xs font-black uppercase text-coffee-400 tracking-widest flex items-center gap-2">
-              <ShoppingCart size={14} />
-              {t('available_orders')}
-            </h2>
-            {availableOrders.length === 0 ? (
-              <div className="bg-white p-8 rounded-3xl border border-dashed border-coffee-200 text-center">
-                <p className="text-sm text-coffee-400 italic">Tidak ada orderan tersedia saat ini</p>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {availableOrders.map(order => (
-                  <motion.div 
-                    key={order.order_id}
-                    initial={{ opacity: 0, scale: 0.95 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    className="bg-white p-5 rounded-3xl border border-coffee-100 shadow-sm flex items-center justify-between gap-4"
-                  >
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="text-[10px] font-black text-coffee-900 uppercase tracking-widest">#{order.display_id}</span>
-                        <span className="text-[10px] text-coffee-400">• {formatDate(order.date, 'HH:mm')}</span>
-                      </div>
-                      <p className="text-sm font-bold text-coffee-900 truncate">{order.customer_name}</p>
-                      <p className="text-[10px] text-coffee-500 truncate mt-1">{order.delivery_address}</p>
-                    </div>
-                    <button 
-                      onClick={() => handleTakeOrder(order.order_id)}
-                      className="bg-coffee-900 text-white px-4 py-3 rounded-2xl font-bold text-xs whitespace-nowrap"
-                    >
-                      {t('take_order')}
-                    </button>
-                  </motion.div>
-                ))}
-              </div>
-            )}
-          </section>
-        </main>
-
-        <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-coffee-100 p-2 flex justify-around items-center z-20">
-          <button className="flex flex-col items-center gap-1 p-2 text-coffee-900">
-            <LayoutDashboard size={20} />
-            <span className="text-[8px] font-bold uppercase tracking-widest">Beranda</span>
-          </button>
-          <button className="flex flex-col items-center gap-1 p-2 text-coffee-300">
-            <History size={20} />
-            <span className="text-[8px] font-bold uppercase tracking-widest">Riwayat</span>
-          </button>
-          <button className="flex flex-col items-center gap-1 p-2 text-coffee-300">
-            <User size={20} />
-            <span className="text-[8px] font-bold uppercase tracking-widest">Profil</span>
-          </button>
-        </nav>
-      </div>
-    );
-  }
-
-  if (isDriverMode && !driver && !user && !isCustomerMode) {
-    if (driverView === 'login') {
-      return (
-        <div 
-          className="min-h-screen flex items-center justify-center p-4 bg-cover bg-center bg-no-repeat" 
-          style={{ 
-            backgroundColor: appSettings.login_bg,
-            backgroundImage: appSettings.login_bg_image ? `url(${appSettings.login_bg_image})` : 'none'
-          }}
-        >
-          <motion.div 
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="bg-white p-8 rounded-3xl shadow-2xl w-full max-w-md border border-coffee-100"
-          >
-            <div className="text-center mb-8">
-              <div className="w-20 h-20 bg-coffee-900 rounded-2xl flex items-center justify-center text-white mx-auto mb-4 shadow-xl shadow-coffee-100">
-                <Truck size={40} />
-              </div>
-              <h2 className="text-2xl font-serif font-bold text-coffee-950 mb-1">{t('driver_login')}</h2>
-              <p className="text-coffee-500 text-sm">{t('driver_login_desc')}</p>
-            </div>
-
-            <form onSubmit={handleDriverLogin} className="space-y-5">
-              <div className="space-y-1">
-                <label className="text-[10px] font-bold uppercase text-coffee-400 tracking-widest ml-1">Username</label>
-                <div className="relative">
-                  <User className="absolute left-4 top-1/2 -translate-y-1/2 text-coffee-400" size={18} />
-                  <input 
-                    required
-                    type="text"
-                    value={driverLoginData.username}
-                    onChange={e => setDriverLoginData({...driverLoginData, username: e.target.value})}
-                    className="w-full bg-coffee-50 border border-coffee-200 rounded-2xl pl-12 pr-4 py-4 focus:outline-none focus:ring-2 focus:ring-coffee-500 transition-all"
-                    placeholder="Username driver"
-                  />
-                </div>
-              </div>
-              <div className="space-y-1">
-                <label className="text-[10px] font-bold uppercase text-coffee-400 tracking-widest ml-1">Password</label>
-                <div className="relative">
-                  <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-coffee-400" size={18} />
-                  <input 
-                    required
-                    type="password"
-                    value={driverLoginData.password}
-                    onChange={e => setDriverLoginData({...driverLoginData, password: e.target.value})}
-                    className="w-full bg-coffee-50 border border-coffee-200 rounded-2xl pl-12 pr-4 py-4 focus:outline-none focus:ring-2 focus:ring-coffee-500 transition-all"
-                    placeholder="••••••••"
-                  />
-                </div>
-              </div>
-
-              {loginError && (
-                <div className="bg-rose-50 text-rose-600 p-4 rounded-2xl text-xs font-bold border border-rose-100 flex items-center gap-2">
-                  <AlertCircle size={14} />
-                  {loginError}
-                </div>
-              )}
-
-              <button 
-                type="submit"
-                className="w-full bg-coffee-900 text-white py-4 rounded-2xl font-bold hover:bg-coffee-800 transition-all shadow-lg shadow-coffee-200"
-              >
-                {t('login')}
-              </button>
-
-              <div className="flex flex-col gap-3 pt-4 border-t border-coffee-50">
-                <button 
-                  type="button"
-                  onClick={() => setDriverView('register')}
-                  className="text-sm font-bold text-coffee-600 hover:text-coffee-900 transition-colors"
-                >
-                  {t('no_account')} {t('register_here')}
-                </button>
-                <button 
-                  type="button"
-                  onClick={() => setIsDriverMode(false)}
-                  className="text-sm font-bold text-coffee-400 hover:text-coffee-600 transition-colors"
-                >
-                  Kembali ke Login Kasir
-                </button>
-              </div>
-            </form>
-          </motion.div>
-        </div>
-      );
-    }
-
-    if (driverView === 'register') {
-      return (
-        <div 
-          className="min-h-screen flex items-center justify-center p-4 bg-cover bg-center bg-no-repeat" 
-          style={{ 
-            backgroundColor: appSettings.login_bg,
-            backgroundImage: appSettings.login_bg_image ? `url(${appSettings.login_bg_image})` : 'none'
-          }}
-        >
-          <motion.div 
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="bg-white p-8 rounded-3xl shadow-2xl w-full max-w-md border border-coffee-100"
-          >
-            <div className="text-center mb-8">
-              <h2 className="text-2xl font-serif font-bold text-coffee-950 mb-1">{t('driver_registration')}</h2>
-              <p className="text-coffee-500 text-sm">{t('driver_registration_desc')}</p>
-            </div>
-
-            <form onSubmit={handleDriverRegister} className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <label className="text-[10px] font-bold uppercase text-coffee-400 tracking-widest ml-1">Username</label>
-                  <input 
-                    required
-                    type="text"
-                    value={driverRegisterData.username}
-                    onChange={e => setDriverRegisterData({...driverRegisterData, username: e.target.value})}
-                    className="w-full bg-coffee-50 border border-coffee-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-coffee-500"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-[10px] font-bold uppercase text-coffee-400 tracking-widest ml-1">Password</label>
-                  <input 
-                    required
-                    type="password"
-                    value={driverRegisterData.password}
-                    onChange={e => setDriverRegisterData({...driverRegisterData, password: e.target.value})}
-                    className="w-full bg-coffee-50 border border-coffee-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-coffee-500"
-                  />
-                </div>
-              </div>
-              <div className="space-y-1">
-                <label className="text-[10px] font-bold uppercase text-coffee-400 tracking-widest ml-1">Nama Lengkap</label>
-                <input 
-                  required
-                  type="text"
-                  value={driverRegisterData.full_name}
-                  onChange={e => setDriverRegisterData({...driverRegisterData, full_name: e.target.value})}
-                  className="w-full bg-coffee-50 border border-coffee-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-coffee-500"
-                />
-              </div>
-              <div className="space-y-1">
-                <label className="text-[10px] font-bold uppercase text-coffee-400 tracking-widest ml-1">Nomor HP</label>
-                <input 
-                  required
-                  type="tel"
-                  value={driverRegisterData.phone}
-                  onChange={e => setDriverRegisterData({...driverRegisterData, phone: e.target.value})}
-                  className="w-full bg-coffee-50 border border-coffee-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-coffee-500"
-                />
-              </div>
-              <div className="space-y-1">
-                <label className="text-[10px] font-bold uppercase text-coffee-400 tracking-widest ml-1">Info Kendaraan (Plat/Model)</label>
-                <input 
-                  required
-                  type="text"
-                  value={driverRegisterData.vehicle_info}
-                  onChange={e => setDriverRegisterData({...driverRegisterData, vehicle_info: e.target.value})}
-                  className="w-full bg-coffee-50 border border-coffee-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-coffee-500"
-                  placeholder="B 1234 ABC - Honda Vario"
-                />
-              </div>
-
-              {loginError && (
-                <div className="bg-rose-50 text-rose-600 p-4 rounded-2xl text-xs font-bold border border-rose-100">
-                  {loginError}
-                </div>
-              )}
-
-              <button 
-                type="submit"
-                className="w-full bg-coffee-900 text-white py-4 rounded-2xl font-bold hover:bg-coffee-800 transition-all shadow-lg shadow-coffee-200 mt-4"
-              >
-                {t('register')}
-              </button>
-
-              <button 
-                type="button"
-                onClick={() => setDriverView('login')}
-                className="w-full text-sm font-bold text-coffee-400 hover:text-coffee-600 transition-colors pt-2"
-              >
-                Sudah punya akun? Login
-              </button>
-            </form>
-          </motion.div>
-        </div>
-      );
-    }
+  if (isDriverMode && driverUser) {
+    return <DriverDashboard driver={driverUser} onLogout={handleDriverLogout} />;
   }
 
   if (!user) {
@@ -3980,6 +3495,27 @@ export default function App() {
             </div>
             <h2 className="text-3xl font-serif font-bold text-coffee-950 mb-2">{appSettings.login_title}</h2>
             <p className="text-coffee-500 font-medium">{appSettings.login_subtitle}</p>
+          </div>
+
+          <div className="flex bg-coffee-50 p-1 rounded-2xl mb-8">
+            <button 
+              onClick={() => setLoginType('staff')}
+              className={cn(
+                "flex-1 py-2.5 rounded-xl text-xs font-bold uppercase tracking-widest transition-all",
+                loginType === 'staff' ? "bg-white text-coffee-900 shadow-sm" : "text-coffee-400 hover:text-coffee-600"
+              )}
+            >
+              Staff / Admin
+            </button>
+            <button 
+              onClick={() => setLoginType('driver')}
+              className={cn(
+                "flex-1 py-2.5 rounded-xl text-xs font-bold uppercase tracking-widest transition-all",
+                loginType === 'driver' ? "bg-white text-coffee-900 shadow-sm" : "text-coffee-400 hover:text-coffee-600"
+              )}
+            >
+              Driver Partner
+            </button>
           </div>
 
           <form onSubmit={handleLogin} className="space-y-6">
@@ -4033,29 +3569,30 @@ export default function App() {
               </button>
             </div>
 
+            {loginType === 'driver' && (
+              <div className="text-center">
+                <p className="text-sm text-coffee-500">
+                  Belum punya akun driver?{' '}
+                  <button 
+                    type="button"
+                    onClick={() => {
+                      setNewDriverData({ username: '', password: '', full_name: '', phone: '', vehicle_info: '' });
+                      setShowDriverModal(true);
+                    }}
+                    className="font-bold text-coffee-900 hover:underline"
+                  >
+                    Daftar Sekarang
+                  </button>
+                </p>
+              </div>
+            )}
+
             <button 
               type="submit"
               className="w-full bg-coffee-900 text-white py-4 rounded-2xl font-bold text-lg hover:bg-coffee-800 transition-all shadow-lg shadow-coffee-200"
             >
               {t('login')}
             </button>
-
-            {appSettings.enable_delivery && (
-              <div className="pt-4 border-t border-coffee-50 space-y-4">
-                <p className="text-center text-[10px] font-bold text-coffee-300 uppercase tracking-widest">Atau Masuk Sebagai</p>
-                <button 
-                  type="button"
-                  onClick={() => {
-                    setIsDriverMode(true);
-                    setDriverView('login');
-                  }}
-                  className="w-full bg-white border-2 border-coffee-100 text-coffee-600 py-3 rounded-2xl font-bold text-sm hover:bg-coffee-50 transition-all flex items-center justify-center gap-2"
-                >
-                  <Truck size={18} />
-                  {t('driver_login')}
-                </button>
-              </div>
-            )}
 
             <button 
               type="button"
@@ -4118,9 +3655,36 @@ export default function App() {
     );
   }
 
+  const filteredUsers = users
+    .filter(u => {
+      const matchesSearch = u.username.toLowerCase().includes(userSearch.toLowerCase());
+      const matchesFilter = userFilter === 'all' || u.role === userFilter;
+      return matchesSearch && matchesFilter;
+    })
+    .sort((a, b) => {
+      if (userSort === 'username') return a.username.localeCompare(b.username);
+      if (userSort === 'role') return a.role.localeCompare(b.role);
+      return 0;
+    });
+
+  const filteredDrivers = drivers
+    .filter(d => {
+      const matchesSearch = 
+        d.full_name.toLowerCase().includes(driverSearch.toLowerCase()) || 
+        d.username.toLowerCase().includes(driverSearch.toLowerCase());
+      const matchesFilter = driverFilter === 'all' || d.status === driverFilter;
+      return matchesSearch && matchesFilter;
+    })
+    .sort((a, b) => {
+      if (driverSort === 'full_name') return a.full_name.localeCompare(b.full_name);
+      if (driverSort === 'status') return a.status.localeCompare(b.status);
+      if (driverSort === 'active_deliveries') return b.active_deliveries - a.active_deliveries;
+      return 0;
+    });
+
   return (
     <div 
-      className="min-h-screen flex flex-col md:flex-row bg-cover bg-center bg-no-repeat bg-fixed"
+      className="min-h-screen flex flex-col lg:flex-row bg-cover bg-center bg-no-repeat bg-fixed"
       style={{ 
         backgroundColor: appSettings.main_bg,
         backgroundImage: appSettings.main_bg_image ? `url(${appSettings.main_bg_image})` : 'none'
@@ -4134,485 +3698,70 @@ export default function App() {
         user={user}
         cart={cart}
         activeOrders={activeOrders}
-        isReportsOpen={isReportsOpen}
-        setIsReportsOpen={setIsReportsOpen}
-        isInventoryOpen={isInventoryOpen}
-        setIsInventoryOpen={setIsInventoryOpen}
-        isSettingsOpen={isSettingsOpen}
-        setIsSettingsOpen={setIsSettingsOpen}
-        reportSubTab={reportSubTab}
-        setReportSubTab={setReportSubTab}
-        invCategoryFilter={invCategoryFilter}
-        setInvCategoryFilter={setInvCategoryFilter}
         appSettings={appSettings}
         t={t}
-        IconComponent={IconComponent}
         handleLogout={handleLogout}
         darkMode={darkMode}
         setDarkMode={setDarkMode}
-        setShowShortcuts={setShowShortcuts}
         handleRefresh={handleRefresh}
         isRefreshing={isRefreshing}
-        setShowPasswordModal={setShowPasswordModal}
-        stats={stats}
+        isFullscreen={isFullscreen}
+        toggleFullscreen={toggleFullscreen}
+        notifications={notifications}
+        showNotifications={showNotifications}
+        setShowNotifications={setShowNotifications}
+        setNotifications={setNotifications}
       />
-      {/* Mobile Header - Sticky */}
-      <header className="md:hidden sticky top-0 z-[60] bg-white/80 dark:bg-zinc-900/80 backdrop-blur-xl border-b border-coffee-100 dark:border-zinc-800 px-6 py-4 flex justify-between items-center no-print pt-safe">
-        <div className="flex items-center gap-3">
-          <div className={cn(
-            "flex items-center justify-center",
-            appSettings.app_logo_url ? "" : "bg-coffee-900 p-1.5 rounded-lg shadow-sm"
-          )}>
-            <IconComponent className={appSettings.app_logo_url ? "" : "text-white w-6 h-6"} size={appSettings.app_logo_url ? 32 : 24} />
-          </div>
-          <span className="font-serif font-black text-coffee-950 dark:text-zinc-100 text-lg tracking-tight">{appSettings.app_name}</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <motion.button 
-            whileTap={{ scale: 0.9 }}
-            onClick={handleRefresh}
-            disabled={isRefreshing}
-            className="p-2.5 bg-coffee-100 dark:bg-zinc-800 text-coffee-600 dark:text-zinc-400 rounded-xl hover:bg-coffee-200 transition-colors"
-            title="Refresh Data"
-          >
-            <RefreshCw size={18} className={cn(isRefreshing && "animate-spin")} />
-          </motion.button>
-          <motion.button 
-            whileTap={{ scale: 0.9 }}
-            onClick={toggleFullscreen}
-            className="p-2.5 bg-coffee-100 dark:bg-zinc-800 text-coffee-600 dark:text-zinc-400 rounded-xl hover:bg-coffee-200 transition-colors"
-            title={isFullscreen ? "Keluar Layar Penuh" : "Layar Penuh"}
-          >
-            {isFullscreen ? <Minimize size={18} /> : <Maximize size={18} />}
-          </motion.button>
-          {activeTab === 'orders' && cart.length > 0 && (
-            <motion.button 
-              whileTap={{ scale: 0.9 }}
-              onClick={() => setShowMobileCart(true)}
-              className="relative p-2 bg-coffee-100 dark:bg-zinc-800 text-coffee-900 dark:text-zinc-100 rounded-xl active:scale-95 transition-transform"
-            >
-              <ShoppingCart size={20} />
-              <span className="absolute -top-1 -right-1 bg-rose-500 text-white text-[10px] w-4 h-4 rounded-full flex items-center justify-center font-black">
-                {cart.reduce((sum, item) => sum + item.quantity, 0)}
-              </span>
-            </motion.button>
-          )}
-          <div className="w-8 h-8 rounded-full bg-coffee-200 dark:bg-zinc-700 flex items-center justify-center text-coffee-900 dark:text-zinc-100 font-black text-xs border-2 border-white dark:border-zinc-800 shadow-sm">
-            {user.username[0].toUpperCase()}
-          </div>
-        </div>
-      </header>
-
-      {/* Mobile Bottom Navigation */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-[60] bg-white/90 dark:bg-zinc-900/90 backdrop-blur-xl border-t border-coffee-100 dark:border-zinc-800 px-4 py-2 pb-safe no-print">
-        <div className="flex justify-around items-center">
-          <motion.button 
-            whileTap={{ scale: 0.9 }}
-            onClick={() => setActiveTab('orders')}
-            className={cn(
-              "flex flex-col items-center gap-1 p-2 transition-all",
-              activeTab === 'orders' ? "text-coffee-900 dark:text-zinc-100 scale-110" : "text-coffee-400 dark:text-zinc-600"
-            )}
-          >
-            <div className={cn("p-1 rounded-lg", activeTab === 'orders' && "bg-coffee-100 dark:bg-zinc-800")}>
-              <ShoppingCart size={20} />
-            </div>
-            <span className="text-[10px] font-black uppercase tracking-tighter">POS</span>
-          </motion.button>
-          
-          <motion.button 
-            whileTap={{ scale: 0.9 }}
-            onClick={() => setActiveTab('queue')}
-            className={cn(
-              "flex flex-col items-center gap-1 p-2 transition-all",
-              activeTab === 'queue' ? "text-coffee-900 dark:text-zinc-100 scale-110" : "text-coffee-400 dark:text-zinc-600"
-            )}
-          >
-            <div className={cn("p-1 rounded-lg relative", activeTab === 'queue' && "bg-coffee-100 dark:bg-zinc-800")}>
-              <Clock size={20} />
-              {activeOrders.length > 0 && (
-                <span className="absolute -top-1 -right-1 bg-amber-500 text-white text-[8px] w-3 h-3 rounded-full flex items-center justify-center font-black">
-                  {activeOrders.length}
-                </span>
-              )}
-            </div>
-            <span className="text-[10px] font-black uppercase tracking-tighter">Antrian</span>
-          </motion.button>
-
-          {user.role === 'admin' && (
-            <motion.button 
-              whileTap={{ scale: 0.9 }}
-              onClick={() => setActiveTab('dashboard')}
-              className={cn(
-                "flex flex-col items-center gap-1 p-2 transition-all",
-                activeTab === 'dashboard' ? "text-coffee-900 dark:text-zinc-100 scale-110" : "text-coffee-400 dark:text-zinc-600"
-              )}
-            >
-              <div className={cn("p-1 rounded-lg", activeTab === 'dashboard' && "bg-coffee-100 dark:bg-zinc-800")}>
-                <LayoutDashboard size={20} />
-              </div>
-              <span className="text-[10px] font-black uppercase tracking-tighter">Stats</span>
-            </motion.button>
-          )}
-
-          <motion.button 
-            whileTap={{ scale: 0.9 }}
-            onClick={() => setShowMobileMore(true)}
-            className={cn(
-              "flex flex-col items-center gap-1 p-2 transition-all",
-              showMobileMore ? "text-coffee-900 dark:text-zinc-100 scale-110" : "text-coffee-400 dark:text-zinc-600"
-            )}
-          >
-            <div className={cn("p-1 rounded-lg", showMobileMore && "bg-coffee-100 dark:bg-zinc-800")}>
-              <MenuIcon size={20} />
-            </div>
-            <span className="text-[10px] font-black uppercase tracking-tighter">Menu</span>
-          </motion.button>
-        </div>
-      </nav>
-
-      {/* Mobile More Menu Overlay */}
-      <AnimatePresence>
-        {showMobileMore && (
-          <>
-            <motion.div 
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setShowMobileMore(false)}
-              className="fixed inset-0 bg-coffee-950/40 backdrop-blur-sm z-[70] md:hidden"
-            />
-            <motion.div 
-              initial={{ y: "100%" }}
-              animate={{ y: 0 }}
-              exit={{ y: "100%" }}
-              transition={{ type: "spring", damping: 25, stiffness: 200 }}
-              className="fixed bottom-0 left-0 right-0 bg-white dark:bg-zinc-900 rounded-t-[32px] z-[80] p-8 pb-12 md:hidden shadow-2xl border-t border-coffee-100 dark:border-zinc-800"
-            >
-              <div className="w-12 h-1.5 bg-coffee-100 dark:bg-zinc-800 rounded-full mx-auto mb-8" />
-              <div className="grid grid-cols-3 gap-6">
-                <motion.button 
-                  whileTap={{ scale: 0.9 }}
-                  onClick={() => { setActiveTab('reports'); setReportSubTab('transactions'); setShowMobileMore(false); }}
-                  className="flex flex-col items-center gap-3"
-                >
-                  <div className="w-14 h-14 bg-coffee-50 dark:bg-zinc-800 rounded-2xl flex items-center justify-center text-coffee-600 dark:text-zinc-400 shadow-sm">
-                    <Calendar size={24} />
-                  </div>
-                  <span className="text-[10px] font-bold text-coffee-900 dark:text-zinc-100 text-center">Laporan Transaksi</span>
-                </motion.button>
-                
-                {user.role === 'admin' && (
-                  <>
-                    <motion.button 
-                      whileTap={{ scale: 0.9 }}
-                      onClick={() => { setActiveTab('reports'); setReportSubTab('financial'); setShowMobileMore(false); }}
-                      className="flex flex-col items-center gap-3"
-                    >
-                      <div className="w-14 h-14 bg-emerald-50 dark:bg-emerald-950/30 rounded-2xl flex items-center justify-center text-emerald-600 dark:text-emerald-400 shadow-sm">
-                        <TrendingUp size={24} />
-                      </div>
-                      <span className="text-[10px] font-bold text-coffee-900 dark:text-zinc-100 text-center">Laporan Keuangan</span>
-                    </motion.button>
-                    <motion.button 
-                      whileTap={{ scale: 0.9 }}
-                      onClick={() => { setActiveTab('transactions'); setShowMobileMore(false); }}
-                      className="flex flex-col items-center gap-3"
-                    >
-                      <div className="w-14 h-14 bg-blue-50 dark:bg-blue-950/30 rounded-2xl flex items-center justify-center text-blue-600 dark:text-blue-400 shadow-sm">
-                        <Wallet size={24} />
-                      </div>
-                      <span className="text-[10px] font-bold text-coffee-900 dark:text-zinc-100 text-center">Catatan Keuangan</span>
-                    </motion.button>
-                    <motion.button 
-                      whileTap={{ scale: 0.9 }}
-                      onClick={() => { setActiveTab('inventory'); setShowMobileMore(false); }}
-                      className="flex flex-col items-center gap-3"
-                    >
-                      <div className="w-14 h-14 bg-amber-50 dark:bg-amber-950/30 rounded-2xl flex items-center justify-center text-amber-600 dark:text-amber-400 shadow-sm">
-                        <Package size={24} />
-                      </div>
-                      <span className="text-[10px] font-bold text-coffee-900 dark:text-zinc-100 text-center">Stok</span>
-                    </motion.button>
-                    <motion.button 
-                      whileTap={{ scale: 0.9 }}
-                      onClick={() => { setActiveTab('menu'); setShowMobileMore(false); }}
-                      className="flex flex-col items-center gap-3"
-                    >
-                      <div className="w-14 h-14 bg-indigo-50 dark:bg-indigo-950/30 rounded-2xl flex items-center justify-center text-indigo-600 dark:text-indigo-400 shadow-sm">
-                        <Coffee size={24} />
-                      </div>
-                      <span className="text-[10px] font-bold text-coffee-900 dark:text-zinc-100 text-center">Menu</span>
-                    </motion.button>
-                    <motion.button 
-                      whileTap={{ scale: 0.9 }}
-                      onClick={() => { setActiveTab('settings'); setShowMobileMore(false); }}
-                      className="flex flex-col items-center gap-3"
-                    >
-                      <div className="w-14 h-14 bg-slate-50 dark:bg-zinc-800 rounded-2xl flex items-center justify-center text-slate-600 dark:text-zinc-400 shadow-sm">
-                        <Settings size={24} />
-                      </div>
-                      <span className="text-[10px] font-bold text-coffee-900 dark:text-zinc-100 text-center">Setting</span>
-                    </motion.button>
-                  </>
-                )}
-                
-                <motion.button 
-                  whileTap={{ scale: 0.9 }}
-                  onClick={() => { setDarkMode(!darkMode); setShowMobileMore(false); }}
-                  className="flex flex-col items-center gap-3"
-                >
-                  <div className="w-14 h-14 bg-sky-50 dark:bg-sky-950/30 rounded-2xl flex items-center justify-center text-sky-600 dark:text-sky-400 shadow-sm">
-                    {darkMode ? <Sun size={24} /> : <Moon size={24} />}
-                  </div>
-                  <span className="text-[10px] font-bold text-coffee-900 dark:text-zinc-100 text-center">{darkMode ? 'Mode Terang' : 'Mode Gelap'}</span>
-                </motion.button>
-
-                <motion.button 
-                  whileTap={{ scale: 0.9 }}
-                  onClick={() => { handleLogout(); setShowMobileMore(false); }}
-                  className="flex flex-col items-center gap-3"
-                >
-                  <div className="w-14 h-14 bg-rose-50 dark:bg-rose-950/30 rounded-2xl flex items-center justify-center text-rose-600 dark:text-rose-400 shadow-sm">
-                    <LogOut size={24} />
-                  </div>
-                  <span className="text-[10px] font-bold text-rose-600 text-center">Keluar</span>
-                </motion.button>
-              </div>
-            </motion.div>
-          </>
-        )}
-      </AnimatePresence>
 
       {/* Main Content */}
-      <main className="flex-1 overflow-y-auto bg-coffee-50/50 relative">
-        {/* Global Header - Desktop Only */}
-        <div className="hidden md:flex sticky top-0 z-40 bg-white/80 backdrop-blur-md border-b border-coffee-100 px-6 py-4 justify-between items-center no-print">
-          <div className="flex items-center gap-3">
-            <div className="md:hidden bg-coffee-900 p-2 rounded-lg">
-              <Coffee className="text-white w-5 h-5" />
-            </div>
-            <h2 className="text-lg font-serif font-bold text-coffee-950 capitalize">{activeTab.replace('_', ' ')}</h2>
-          </div>
-          
-          <div className="flex items-center gap-4">
-            <button 
-              onClick={toggleFullscreen}
-              className="p-2.5 bg-white border border-coffee-100 rounded-xl text-coffee-600 hover:bg-coffee-50 transition-all"
-              title={isFullscreen ? "Keluar Layar Penuh" : "Layar Penuh"}
-            >
-              {isFullscreen ? <Minimize size={20} /> : <Maximize size={20} />}
-            </button>
-
-            <div className="relative">
-              <button 
-                onClick={() => setShowNotifications(!showNotifications)}
-                className="p-2.5 bg-white border border-coffee-100 rounded-xl text-coffee-600 hover:bg-coffee-50 transition-all relative"
-              >
-                <Bell size={20} />
-                {notifications.length > 0 && (
-                  <span className="absolute -top-1 -right-1 w-5 h-5 bg-rose-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center border-2 border-white">
-                    {notifications.length}
-                  </span>
-                )}
-              </button>
-
-              <AnimatePresence>
-                {showNotifications && (
-                  <motion.div 
-                    initial={{ opacity: 0, y: 10, scale: 0.95 }}
-                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                    exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                    className="absolute right-0 mt-3 w-80 bg-white rounded-2xl shadow-2xl border border-coffee-100 overflow-hidden z-50"
-                  >
-                    <div className="p-4 border-b border-coffee-50 bg-coffee-50/50 flex justify-between items-center">
-                      <h4 className="font-bold text-coffee-950">Notifikasi</h4>
-                      <button 
-                        onClick={() => setNotifications([])}
-                        className="text-[10px] font-bold text-coffee-500 uppercase hover:text-rose-500 transition-colors"
-                      >
-                        Hapus Semua
-                      </button>
-                    </div>
-                    <div className="max-h-[300px] overflow-y-auto">
-                      {notifications.length === 0 ? (
-                        <div className="p-8 text-center text-coffee-400">
-                          <Bell size={32} className="mx-auto mb-2 opacity-20" />
-                          <p className="text-xs">Belum ada notifikasi</p>
-                        </div>
-                      ) : (
-                        notifications.map(notif => (
-                          <div key={notif.id} className="p-4 border-b border-coffee-50 hover:bg-coffee-50/50 transition-colors flex gap-3">
-                            <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-600 flex items-center justify-center shrink-0">
-                              <Check size={16} />
-                            </div>
-                            <div>
-                              <p className="text-xs text-coffee-900 leading-relaxed">{notif.message}</p>
-                              <p className="text-[10px] text-coffee-400 mt-1 font-medium">{notif.time}</p>
-                            </div>
-                          </div>
-                        ))
-                      )}
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
-          </div>
-        </div>
-
-        <div className="p-6 md:p-10">
+      <main className="flex-1 h-screen overflow-y-auto bg-coffee-50/50 relative pt-16 lg:pt-0">
+        <div className="p-6 md:p-10 max-w-[1600px] mx-auto">
           <AnimatePresence mode="wait">
-          {activeTab === 'dashboard' && (
+          {activeTab === 'dashboard' && user && (
+            <DashboardTab 
+              user={user}
+              stats={stats}
+              dashboardExtra={dashboardExtra}
+              transactions={transactions}
+              activeOrders={activeOrders}
+              appSettings={appSettings}
+              setActiveTab={setActiveTab}
+              setNewTx={setNewTx}
+              setShowTxModal={setShowTxModal}
+              setShowInvModal={setShowInvModal}
+              setConfirmUpdate={setConfirmUpdate}
+            />
+          )}
+
+          {activeTab === 'delivery' && (
             <motion.div 
-              key="dashboard"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
+              key="delivery"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
               className="space-y-8"
             >
-              <header className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
-                <div className="w-full">
-                  <div className="flex items-center gap-2 mb-1">
-                    <div className="w-8 h-1 bg-coffee-900 rounded-full" />
-                    <p className="text-coffee-500 font-black uppercase tracking-[0.2em] text-[10px]">Ringkasan Bisnis</p>
-                  </div>
-                  <h2 className="text-3xl md:text-4xl font-serif font-bold text-coffee-950 leading-tight">
-                    Dashboard <span className="gradient-text italic">Utama</span>
-                  </h2>
+              <header className="flex justify-between items-center">
+                <div>
+                  <p className="text-coffee-500 font-medium uppercase tracking-widest text-xs mb-1">Layanan Antar</p>
+                  <h2 className="text-4xl font-serif font-bold text-coffee-950">Delivery & Driver</h2>
                 </div>
-                <div className="flex items-center gap-2 bg-white p-1.5 rounded-2xl border border-coffee-100 shadow-sm w-full md:w-auto">
-                  <Calendar size={16} className="text-coffee-400 ml-2" />
-                  <span className="text-xs font-bold text-coffee-900 pr-4">{formatDate(new Date(), 'EEEE, d MMMM yyyy', appSettings.timezone)}</span>
+                <div className="flex items-center gap-3">
+                  <button 
+                    onClick={fetchData}
+                    className="p-3 bg-coffee-100 text-coffee-600 rounded-2xl hover:bg-coffee-200 transition-all"
+                  >
+                    <RefreshCw size={20} />
+                  </button>
+                  <div className="bg-blue-100 text-blue-700 px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2">
+                    <Truck size={16} />
+                    {drivers.filter(d => d.work_status === 'online').length} Driver Online
+                  </div>
                 </div>
               </header>
 
-              {/* Stats Grid */}
-              <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3 md:gap-4">
-                <motion.div 
-                  whileHover={{ y: -5, scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                  className="glass-card p-4 bg-gradient-to-br from-emerald-500 to-emerald-600 text-white border-none shadow-xl shadow-emerald-200/50 relative overflow-hidden group"
-                >
-                  <div className="absolute -right-4 -bottom-4 opacity-10 group-hover:scale-110 transition-transform duration-500">
-                    <TrendingUp size={100} />
-                  </div>
-                  <div className="relative z-10">
-                    <div className="flex justify-between items-start mb-4">
-                      <div className="p-2 bg-white/20 rounded-xl backdrop-blur-sm">
-                        <ArrowUpRight size={18} />
-                      </div>
-                    </div>
-                    <p className="text-[10px] font-bold uppercase tracking-widest opacity-80 mb-1">Total Pemasukan</p>
-                    <p className="text-lg font-black truncate">{formatIDR(stats?.totalIncome || 0)}</p>
-                  </div>
-                </motion.div>
-
-                <motion.div 
-                  whileHover={{ y: -5, scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                  className="glass-card p-4 bg-gradient-to-br from-rose-500 to-rose-600 text-white border-none shadow-xl shadow-rose-200/50 relative overflow-hidden group"
-                >
-                  <div className="absolute -right-4 -bottom-4 opacity-10 group-hover:scale-110 transition-transform duration-500">
-                    <ArrowDownLeft size={100} />
-                  </div>
-                  <div className="relative z-10">
-                    <div className="flex justify-between items-start mb-4">
-                      <div className="p-2 bg-white/20 rounded-xl backdrop-blur-sm">
-                        <ArrowDownLeft size={18} />
-                      </div>
-                    </div>
-                    <p className="text-[10px] font-bold uppercase tracking-widest opacity-80 mb-1">Total Pengeluaran</p>
-                    <p className="text-lg font-black truncate">{formatIDR(stats?.totalExpense || 0)}</p>
-                  </div>
-                </motion.div>
-
-                <motion.div 
-                  whileHover={{ y: -5, scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                  className="glass-card p-4 bg-gradient-to-br from-amber-500 to-amber-600 text-white border-none shadow-xl shadow-amber-200/50 relative overflow-hidden group"
-                >
-                  <div className="absolute -right-4 -bottom-4 opacity-10 group-hover:scale-110 transition-transform duration-500">
-                    <ShoppingCart size={100} />
-                  </div>
-                  <div className="relative z-10">
-                    <div className="flex justify-between items-start mb-4">
-                      <div className="p-2 bg-white/20 rounded-xl backdrop-blur-sm">
-                        <ShoppingCart size={18} />
-                      </div>
-                    </div>
-                    <p className="text-[10px] font-bold uppercase tracking-widest opacity-80 mb-1">Terjual Hari Ini</p>
-                    <p className="text-lg font-black truncate">{stats?.dailySalesCount || 0} Item</p>
-                  </div>
-                </motion.div>
-
-                <motion.div 
-                  whileHover={{ y: -5, scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                  className="glass-card p-4 bg-gradient-to-br from-indigo-500 to-indigo-600 text-white border-none shadow-xl shadow-indigo-200/50 relative overflow-hidden group"
-                >
-                  <div className="absolute -right-4 -bottom-4 opacity-10 group-hover:scale-110 transition-transform duration-500">
-                    <Calendar size={100} />
-                  </div>
-                  <div className="relative z-10">
-                    <div className="flex justify-between items-start mb-4">
-                      <div className="p-2 bg-white/20 rounded-xl backdrop-blur-sm">
-                        <Calendar size={18} />
-                      </div>
-                    </div>
-                    <p className="text-[10px] font-bold uppercase tracking-widest opacity-80 mb-1">Terjual Bulan Ini</p>
-                    <p className="text-lg font-black truncate">{stats?.monthlySalesCount || 0} Item</p>
-                  </div>
-                </motion.div>
-
-                <motion.div 
-                  whileHover={{ y: -5, scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                  onClick={() => setActiveTab('queue')}
-                  className="glass-card p-4 bg-gradient-to-br from-violet-500 to-violet-600 text-white border-none shadow-xl shadow-violet-200/50 relative overflow-hidden group cursor-pointer"
-                >
-                  <div className="absolute -right-4 -bottom-4 opacity-10 group-hover:scale-110 transition-transform duration-500">
-                    <Clock size={100} />
-                  </div>
-                  <div className="relative z-10">
-                    <div className="flex justify-between items-start mb-4">
-                      <div className="p-2 bg-white/20 rounded-xl backdrop-blur-sm">
-                        <Clock size={18} />
-                      </div>
-                      {activeOrders.length > 0 && (
-                        <span className="flex h-3 w-3">
-                          <span className="animate-ping absolute inline-flex h-3 w-3 rounded-full bg-white opacity-75"></span>
-                          <span className="relative inline-flex rounded-full h-3 w-3 bg-white"></span>
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-[10px] font-bold uppercase tracking-widest opacity-80 mb-1">Antrian Aktif</p>
-                    <p className="text-lg font-black truncate">{activeOrders.length} Pesanan</p>
-                  </div>
-                </motion.div>
-
-                <motion.div 
-                  whileHover={{ y: -5, scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                  className="glass-card p-4 bg-gradient-to-br from-slate-700 to-slate-800 text-white border-none shadow-xl shadow-slate-400/50 relative overflow-hidden group"
-                >
-                  <div className="absolute -right-4 -bottom-4 opacity-10 group-hover:scale-110 transition-transform duration-500">
-                    <AlertCircle size={100} />
-                  </div>
-                  <div className="relative z-10">
-                    <div className="flex justify-between items-start mb-4">
-                      <div className="p-2 bg-white/20 rounded-xl backdrop-blur-sm">
-                        <AlertCircle size={18} />
-                      </div>
-                    </div>
-                    <p className="text-[10px] font-bold uppercase tracking-widest opacity-80 mb-1">Stok Menipis</p>
-                    <p className="text-lg font-black truncate">{stats?.lowStock.length || 0} Item</p>
-                  </div>
-                </motion.div>
-              </div>
-
-              {/* Active Orders Summary */}
-              {activeOrders.length > 0 && (
+              <div className="grid grid-cols-1 gap-8">
+                {/* Driver Monitoring Map */}
                 <motion.div 
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
@@ -4620,255 +3769,87 @@ export default function App() {
                 >
                   <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
                     <div className="flex items-center gap-3">
-                      <div className="bg-violet-100 p-2 rounded-xl text-violet-600">
-                        <Clock size={20} />
+                      <div className="bg-coffee-100 p-2 rounded-xl text-coffee-900">
+                        <Globe size={20} />
                       </div>
                       <div>
-                        <h3 className="text-lg font-serif font-bold text-coffee-950">Antrian Pesanan Aktif</h3>
-                        <p className="text-xs text-coffee-500 font-medium">Menampilkan {Math.min(activeOrders.length, 5)} pesanan terbaru dari total {activeOrders.length}</p>
+                        <h3 className="text-lg font-serif font-bold text-coffee-950">Monitoring Driver</h3>
+                        <p className="text-xs text-coffee-500 font-medium">Posisi real-time driver yang sedang aktif</p>
                       </div>
                     </div>
                     <button 
-                      onClick={() => setActiveTab('queue')}
-                      className="text-xs font-bold text-violet-600 hover:text-violet-700 transition-colors flex items-center gap-1 bg-violet-50 px-3 py-1.5 rounded-full"
+                      onClick={() => {
+                        setActiveTab('users');
+                        setUsersSubTab('driver');
+                      }}
+                      className="text-[10px] font-bold text-coffee-500 uppercase hover:text-coffee-900 transition-colors flex items-center gap-1"
                     >
-                      Lihat Semua <ArrowRight size={14} />
+                      Kelola Driver <ArrowRight size={12} />
                     </button>
                   </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-                    {activeOrders.slice(0, 5).map((order) => (
-                      <div 
-                        key={order.orderId}
-                        className="p-3 bg-white border border-coffee-50 rounded-2xl shadow-sm hover:shadow-md transition-all cursor-pointer group"
-                        onClick={() => setActiveTab('queue')}
-                      >
-                        <div className="flex justify-between items-start mb-2">
-                          <span className="text-[10px] font-black text-coffee-400 uppercase tracking-wider">#{order.displayId || order.orderId.slice(-4)}</span>
-                          <span className={`text-[8px] px-2 py-0.5 rounded-full font-bold uppercase ${
-                            order.status === 'processing' ? 'bg-blue-100 text-blue-600' :
-                            order.status === 'pending' ? 'bg-amber-100 text-amber-600' :
-                            'bg-violet-100 text-violet-600'
-                          }`}>
-                            {order.status === 'processing' ? 'Proses' : order.status === 'pending' ? 'Menunggu' : 'Konfirmasi'}
-                          </span>
-                        </div>
-                        <p className="text-sm font-bold text-coffee-950 truncate group-hover:text-violet-600 transition-colors">{order.customerName || 'Pelanggan'}</p>
-                        <p className="text-[10px] text-coffee-400 mt-1">{formatDate(order.date, 'HH:mm', appSettings.timezone)}</p>
-                      </div>
-                    ))}
-                  </div>
-                </motion.div>
-              )}
-
-              {/* Charts and Lists */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                <motion.div 
-                  whileHover={{ y: -5 }}
-                  className="glass-card p-8 bg-white/80 backdrop-blur-xl border border-white/20 shadow-2xl relative overflow-hidden"
-                >
-                  <div className="flex justify-between items-center mb-8">
-                    <div>
-                      <h3 className="text-xl font-serif font-bold text-coffee-950">Penjualan per Kategori</h3>
-                      <p className="text-xs text-coffee-500 font-medium">Distribusi menu yang paling banyak terjual</p>
-                    </div>
-                  </div>
-                  <div className="h-[300px] w-full">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <PieChart>
-                        <Pie
-                          data={Object.entries(
-                            transactions
-                              .filter(tx => tx.type === 'income' && tx.category === 'Sales')
-                              .reduce((acc: any, tx) => {
-                                const cat = tx.description.split(' - ')[0] || 'Lainnya';
-                                acc[cat] = (acc[cat] || 0) + 1;
-                                return acc;
-                              }, {})
-                          ).map(([name, value]) => ({ name, value }))}
-                          cx="50%"
-                          cy="50%"
-                          innerRadius={60}
-                          outerRadius={80}
-                          paddingAngle={5}
-                          dataKey="value"
-                        >
-                          {Object.entries(
-                            transactions
-                              .filter(tx => tx.type === 'income' && tx.category === 'Sales')
-                              .reduce((acc: any, tx) => {
-                                const cat = tx.description.split(' - ')[0] || 'Lainnya';
-                                acc[cat] = (acc[cat] || 0) + 1;
-                                return acc;
-                              }, {})
-                          ).map((entry, index) => (
-                            <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
-                          ))}
-                        </Pie>
-                        <Tooltip 
-                          contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
-                        />
-                        <Legend verticalAlign="bottom" height={36}/>
-                      </PieChart>
-                    </ResponsiveContainer>
+                  <div className="rounded-2xl overflow-hidden border border-coffee-100 shadow-inner h-[500px]">
+                    <DriverMap 
+                      drivers={drivers} 
+                      merchantLocation={[Number(appSettings.merchant_lat || -6.2), Number(appSettings.merchant_lng || 106.816)]}
+                    />
                   </div>
                 </motion.div>
 
-                <motion.div 
-                  whileHover={{ y: -5 }}
-                  className="glass-card p-8 bg-white/80 backdrop-blur-xl border border-white/20 shadow-2xl relative overflow-hidden"
-                >
-                  <motion.div
-                    initial={{ opacity: 0, x: -20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    className="bg-white p-8 rounded-[40px] border border-coffee-100 shadow-sm"
-                  >
-                    <div className="flex justify-between items-center mb-8">
-                      <h3 className="text-xl font-serif font-bold flex items-center gap-2">
-                        <TrendingUp className="text-emerald-500" /> Performa Keuangan
-                      </h3>
-                      <div className="flex gap-2">
-                        <div className="flex items-center gap-1">
-                          <div className="w-3 h-3 rounded-full bg-emerald-500" />
-                          <span className="text-[10px] font-bold text-coffee-400 uppercase">Masuk</span>
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <div className="w-3 h-3 rounded-full bg-rose-500" />
-                          <span className="text-[10px] font-bold text-coffee-400 uppercase">Keluar</span>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="h-72">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={
-                          stats?.salesBySource && stats.salesBySource.length > 0 
-                            ? stats.salesBySource.map((s: any) => ({ name: s.source, value: s.total }))
-                            : [
-                                { name: 'Pemasukan', value: stats?.totalIncome || 0, fill: '#10b981' },
-                                { name: 'Pengeluaran', value: stats?.totalExpense || 0, fill: '#f43f5e' }
-                              ]
-                        }>
-                          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
-                          <XAxis 
-                            dataKey="name" 
-                            axisLine={false} 
-                            tickLine={false} 
-                            tick={{ fill: '#9ca3af', fontSize: 12, fontWeight: 600 }}
-                          />
-                          <YAxis hide />
-                          <Tooltip 
-                            cursor={{ fill: 'transparent' }}
-                            contentStyle={{ 
-                              borderRadius: '24px', 
-                              border: 'none', 
-                              boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)',
-                              padding: '12px 20px'
-                            }}
-                            formatter={(value: number) => [formatIDR(value), '']}
-                          />
-                          <Bar dataKey="value" radius={[20, 20, 20, 20]} barSize={80}>
-                            { stats?.salesBySource && stats.salesBySource.length > 0 
-                              ? stats.salesBySource.map((entry: any, index: number) => (
-                                  <Cell key={`cell-${index}`} fill={
-                                    entry.source === 'POS' ? '#9a684a' :
-                                    entry.source === 'GrabFood' ? '#10b981' :
-                                    entry.source === 'GoFood' ? '#f43f5e' :
-                                    entry.source === 'ShopeeFood' ? '#f97316' :
-                                    '#64748b'
-                                  } />
-                                ))
-                              : [0, 1].map((entry, index) => (
-                                  <Cell key={`cell-${index}`} fill={index === 0 ? '#10b981' : '#f43f5e'} />
-                                ))
-                            }
-                          </Bar>
-                        </BarChart>
-                      </ResponsiveContainer>
-                    </div>
-                  </motion.div>
-                </motion.div>
-
-                <motion.div 
-                  initial={{ opacity: 0, x: 20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  className="bg-white p-8 rounded-[40px] border border-coffee-100 shadow-sm"
-                >
-                  <div className="flex justify-between items-center mb-8">
-                    <h3 className="text-xl font-serif font-bold flex items-center gap-2">
-                      <AlertCircle className="text-amber-500" /> Stok Menipis
-                    </h3>
-                    <button onClick={() => setActiveTab('inventory')} className="text-coffee-500 text-xs font-black uppercase tracking-widest hover:text-coffee-950 transition-colors">Lihat Semua</button>
-                  </div>
-                  <div className="space-y-4 max-h-[280px] overflow-y-auto pr-2 custom-scrollbar">
-                    {stats?.lowStock.length === 0 ? (
-                      <div className="flex flex-col items-center justify-center py-12 text-coffee-300">
-                        <Check size={48} className="mb-4 opacity-20" />
-                        <p className="text-sm font-medium italic">Semua stok dalam kondisi aman.</p>
-                      </div>
-                    ) : (
-                      stats?.lowStock.map(item => (
-                        <motion.div 
-                          key={item.id} 
-                          whileHover={{ x: 5 }}
-                          className="flex items-center justify-between p-5 bg-amber-50/50 rounded-3xl border border-amber-100/50 group transition-all hover:bg-amber-50"
-                        >
-                          <div className="flex items-center gap-4">
-                            <div className="w-12 h-12 rounded-2xl bg-amber-100 text-amber-600 flex items-center justify-center font-black">
-                              {item.quantity}
-                            </div>
-                            <div>
-                              <p className="font-black text-coffee-950">{item.name}</p>
-                              <p className="text-[10px] text-amber-600 font-black uppercase tracking-wider">Sisa: {item.quantity} {item.unit} • Min: {item.min_stock}</p>
-                            </div>
-                          </div>
-                          <button 
-                            onClick={() => setConfirmUpdate({ id: item.id, name: item.name, currentQty: item.quantity, delta: 10 })}
-                            className="bg-white text-amber-600 p-3 rounded-2xl shadow-sm border border-amber-100 hover:bg-amber-500 hover:text-white transition-all"
-                          >
-                            <Plus size={20} />
-                          </button>
-                        </motion.div>
-                      ))
-                    )}
-                  </div>
-                </motion.div>
-              </div>
-
-              {/* Recent Transactions */}
-              <div className="glass-card p-8">
-                <h3 className="text-xl font-serif font-bold mb-6">Transaksi Terakhir</h3>
-                <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead>
-                      <tr className="text-left text-coffee-500 text-xs uppercase tracking-widest border-b border-coffee-100">
-                        <th className="pb-4 font-bold">Tanggal</th>
-                        <th className="pb-4 font-bold">Kategori</th>
-                        <th className="pb-4 font-bold">Deskripsi</th>
-                        <th className="pb-4 font-bold text-right">Jumlah</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-coffee-50">
-                      {stats?.recentTransactions.map(tx => (
-                        <tr key={tx.id} className="group">
-                          <td className="py-4 text-sm text-coffee-600">{formatDate(tx.date, 'dd MMM yyyy', appSettings.timezone)}</td>
-                          <td className="py-4">
-                            <span className={cn(
-                              "px-3 py-1 rounded-full text-xs font-bold",
-                              tx.type === 'income' ? "bg-emerald-50 text-emerald-600" : "bg-rose-50 text-rose-600"
-                            )}>
-                              {tx.category}
-                            </span>
-                          </td>
-                          <td className="py-4 text-sm text-coffee-900 font-medium">{tx.description}</td>
-                          <td className={cn(
-                            "py-4 text-sm font-bold text-right",
-                            tx.type === 'income' ? "text-emerald-600" : "text-rose-600"
-                          )}>
-                            {tx.type === 'income' ? '+' : '-'} {formatIDR(tx.amount)}
-                          </td>
+                {/* Delivery Orders Summary */}
+                <div className="glass-card p-8">
+                  <h3 className="text-xl font-serif font-bold mb-6">Pesanan Delivery Aktif</h3>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-sm">
+                      <thead className="bg-coffee-50 text-coffee-500 uppercase text-[10px] font-black tracking-widest">
+                        <tr>
+                          <th className="px-6 py-4">Order</th>
+                          <th className="px-6 py-4">Customer</th>
+                          <th className="px-6 py-4">Alamat</th>
+                          <th className="px-6 py-4">Status</th>
+                          <th className="px-6 py-4">Driver</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody className="divide-y divide-coffee-50">
+                        {activeOrders.filter(o => o.deliveryMethod === 'delivery').length === 0 ? (
+                          <tr>
+                            <td colSpan={5} className="px-6 py-12 text-center text-coffee-400 italic">
+                              Tidak ada pesanan delivery aktif saat ini.
+                            </td>
+                          </tr>
+                        ) : (
+                          activeOrders.filter(o => o.deliveryMethod === 'delivery').map(order => (
+                            <tr key={order.orderId} className="hover:bg-coffee-50/30 transition-colors">
+                              <td className="px-6 py-4 font-mono font-bold">#{order.displayId || order.orderId.slice(-4)}</td>
+                              <td className="px-6 py-4 font-bold">{order.customerName}</td>
+                              <td className="px-6 py-4 text-xs max-w-xs truncate">{order.deliveryAddress}</td>
+                              <td className="px-6 py-4">
+                                <span className={cn(
+                                  "px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest",
+                                  order.deliveryStatus === 'ready_for_pickup' ? "bg-blue-100 text-blue-700" :
+                                  order.deliveryStatus === 'out_for_delivery' ? "bg-purple-100 text-purple-700" :
+                                  "bg-amber-100 text-amber-700"
+                                )}>
+                                  {t(order.deliveryStatus || 'pending')}
+                                </span>
+                              </td>
+                              <td className="px-6 py-4">
+                                {order.driverId ? (
+                                  <div className="flex items-center gap-2">
+                                    <div className="w-6 h-6 bg-coffee-100 rounded-full flex items-center justify-center text-coffee-600">
+                                      <User size={12} />
+                                    </div>
+                                    <span className="text-xs font-bold">{drivers.find(d => d.id === order.driverId)?.full_name || 'Driver'}</span>
+                                  </div>
+                                ) : (
+                                  <span className="text-[10px] text-coffee-300 italic">Belum ada driver</span>
+                                )}
+                              </td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               </div>
             </motion.div>
@@ -6227,38 +5208,35 @@ export default function App() {
                           animate={{ y: 0 }}
                           exit={{ y: "100%" }}
                           transition={{ type: "spring", damping: 25, stiffness: 200 }}
-                          className="absolute bottom-0 left-0 right-0 bg-white dark:bg-zinc-900 rounded-t-[40px] shadow-2xl overflow-hidden flex flex-col max-h-[90vh] border-t border-coffee-100 dark:border-zinc-800"
+                          className="absolute bottom-0 left-0 right-0 bg-white rounded-t-[40px] shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
                         >
-                          <div className="w-12 h-1.5 bg-coffee-100 dark:bg-zinc-800 rounded-full mx-auto mt-4 shrink-0" />
-                          <div className="p-6 border-b border-coffee-100 dark:border-zinc-800 flex justify-between items-center bg-coffee-50/50 dark:bg-zinc-800/50">
+                          <div className="p-6 border-b border-coffee-100 flex justify-between items-center bg-coffee-50/50">
                             <div className="flex items-center gap-3">
-                              <div className="bg-coffee-900 dark:bg-zinc-700 text-white p-2 rounded-xl">
+                              <div className="bg-coffee-900 text-white p-2 rounded-xl">
                                 <ShoppingCart size={20} />
                               </div>
-                              <h3 className="text-xl font-serif font-bold text-coffee-950 dark:text-zinc-100">Keranjang Saya</h3>
+                              <h3 className="text-xl font-serif font-bold text-coffee-950">Keranjang Saya</h3>
                             </div>
                             <div className="flex items-center gap-2">
                               {cart.length > 0 && (
-                                <motion.button 
-                                  whileTap={{ scale: 0.9 }}
+                                <button 
                                   onClick={() => setCart([])}
-                                  className="p-2 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 rounded-full transition-colors"
+                                  className="p-2 text-rose-500 hover:bg-rose-50 rounded-full transition-colors"
                                   title="Hapus Semua"
                                 >
                                   <Trash2 size={20} />
-                                </motion.button>
+                                </button>
                               )}
-                              <motion.button 
-                                whileTap={{ scale: 0.9 }}
+                              <button 
                                 onClick={() => setShowMobileCart(false)}
-                                className="w-10 h-10 rounded-full bg-white dark:bg-zinc-800 border border-coffee-100 dark:border-zinc-700 flex items-center justify-center text-coffee-400 hover:text-coffee-900 dark:hover:text-zinc-100"
+                                className="w-10 h-10 rounded-full bg-white border border-coffee-100 flex items-center justify-center text-coffee-400 hover:text-coffee-900"
                               >
                                 <X size={20} />
-                              </motion.button>
+                              </button>
                             </div>
                           </div>
 
-                          <div className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar pb-safe">
+                          <div className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar">
                             <div className="space-y-6">
                               {(Object.entries(
                                 cart.reduce((acc, item) => {
@@ -6269,22 +5247,22 @@ export default function App() {
                                 }, {} as Record<string, CartItem[]>)
                               ) as [string, CartItem[]][]).map(([category, items]) => (
                                 <div key={category} className="space-y-3">
-                                  <h4 className="text-[10px] font-black uppercase text-coffee-400 dark:text-zinc-500 tracking-widest px-1">{category}</h4>
+                                  <h4 className="text-[10px] font-black uppercase text-coffee-400 tracking-widest px-1">{category}</h4>
                                   <div className="space-y-3">
                                     {items.map((item) => (
-                                      <div key={item.menu.id} className="flex items-center gap-3 min-[400px]:gap-4 bg-slate-50 dark:bg-zinc-800/50 p-3 min-[400px]:p-4 rounded-2xl border border-slate-100 dark:border-zinc-800">
-                                        <div className="w-12 h-12 min-[400px]:w-16 min-[400px]:h-16 rounded-xl overflow-hidden bg-white dark:bg-zinc-800 shrink-0 shadow-sm border border-slate-100 dark:border-zinc-700">
+                                      <div key={item.menu.id} className="flex items-center gap-3 min-[400px]:gap-4 bg-slate-50 p-3 min-[400px]:p-4 rounded-2xl border border-slate-100">
+                                        <div className="w-12 h-12 min-[400px]:w-16 min-[400px]:h-16 rounded-xl overflow-hidden bg-white shrink-0 shadow-sm border border-slate-100">
                                           {item.menu.image_url ? (
                                             <img src={item.menu.image_url} alt={item.menu.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                                           ) : (
-                                            <div className="w-full h-full flex items-center justify-center text-coffee-200 dark:text-zinc-700">
+                                            <div className="w-full h-full flex items-center justify-center text-coffee-200">
                                               <Coffee size={20} />
                                             </div>
                                           )}
                                         </div>
                                         <div className="flex-1 min-w-0">
-                                          <h4 className="font-bold text-coffee-950 dark:text-zinc-100 text-xs min-[400px]:text-sm truncate">{item.menu.name}</h4>
-                                          <p className="text-[10px] min-[400px]:text-xs text-coffee-500 dark:text-zinc-400">{formatIDR(item.menu.price)}</p>
+                                          <h4 className="font-bold text-coffee-950 text-xs min-[400px]:text-sm truncate">{item.menu.name}</h4>
+                                          <p className="text-[10px] min-[400px]:text-xs text-coffee-500">{formatIDR(item.menu.price)}</p>
                                           
                                           {/* Sugar and Ice Options */}
                                           {(item.menu.category?.toLowerCase().includes('kopi') || 
@@ -6297,7 +5275,7 @@ export default function App() {
                                               <select 
                                                 value={item.sugarLevel || 'Normal'}
                                                 onChange={(e) => handleUpdateCartOptions(item.menu.id, { sugarLevel: e.target.value })}
-                                                className="bg-white dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 rounded-lg text-[9px] min-[400px]:text-[10px] py-0.5 min-[400px]:py-1 px-1.5 min-[400px]:px-2 focus:outline-none focus:ring-1 focus:ring-coffee-500 dark:text-zinc-300"
+                                                className="bg-white border border-slate-200 rounded-lg text-[9px] min-[400px]:text-[10px] py-0.5 min-[400px]:py-1 px-1.5 min-[400px]:px-2 focus:outline-none focus:ring-1 focus:ring-coffee-500"
                                               >
                                                 <option value="No Sugar">No Sugar</option>
                                                 <option value="Less Sugar">Less Sugar</option>
@@ -6307,7 +5285,7 @@ export default function App() {
                                               <select 
                                                 value={item.iceLevel || 'Normal'}
                                                 onChange={(e) => handleUpdateCartOptions(item.menu.id, { iceLevel: e.target.value })}
-                                                className="bg-white dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 rounded-lg text-[9px] min-[400px]:text-[10px] py-0.5 min-[400px]:py-1 px-1.5 min-[400px]:px-2 focus:outline-none focus:ring-1 focus:ring-coffee-500 dark:text-zinc-300"
+                                                className="bg-white border border-slate-200 rounded-lg text-[9px] min-[400px]:text-[10px] py-0.5 min-[400px]:py-1 px-1.5 min-[400px]:px-2 focus:outline-none focus:ring-1 focus:ring-coffee-500"
                                               >
                                                 <option value="No Ice">No Ice</option>
                                                 <option value="Less Ice">Less Ice</option>
@@ -6317,22 +5295,20 @@ export default function App() {
                                             </div>
                                           )}
                                         </div>
-                                        <div className="flex items-center gap-2 min-[400px]:gap-3 bg-white dark:bg-zinc-800 p-1 rounded-xl border border-slate-200 dark:border-zinc-700">
-                                          <motion.button 
-                                            whileTap={{ scale: 0.8 }}
+                                        <div className="flex items-center gap-2 min-[400px]:gap-3 bg-white p-1 rounded-xl border border-slate-200">
+                                          <button 
                                             onClick={() => handleUpdateCartQuantity(item.menu.id, -1)}
-                                            className="w-8 h-8 min-[400px]:w-10 min-[400px]:h-10 flex items-center justify-center rounded-xl text-coffee-600 dark:text-zinc-400 hover:bg-coffee-50 dark:hover:bg-zinc-700 active:bg-coffee-100 transition-all"
+                                            className="w-8 h-8 min-[400px]:w-10 min-[400px]:h-10 flex items-center justify-center rounded-xl text-coffee-600 hover:bg-coffee-50 active:bg-coffee-100 active:scale-90 transition-all"
                                           >
                                             <Minus size={16} />
-                                          </motion.button>
-                                          <span className="font-bold text-coffee-900 dark:text-zinc-100 text-xs min-[400px]:text-sm w-4 text-center">{item.quantity}</span>
-                                          <motion.button 
-                                            whileTap={{ scale: 0.8 }}
+                                          </button>
+                                          <span className="font-bold text-coffee-900 text-xs min-[400px]:text-sm w-4 text-center">{item.quantity}</span>
+                                          <button 
                                             onClick={() => handleUpdateCartQuantity(item.menu.id, 1)}
-                                            className="w-8 h-8 min-[400px]:w-10 min-[400px]:h-10 flex items-center justify-center rounded-xl text-coffee-600 dark:text-zinc-400 hover:bg-coffee-50 dark:hover:bg-zinc-700 active:bg-coffee-100 transition-all"
+                                            className="w-8 h-8 min-[400px]:w-10 min-[400px]:h-10 flex items-center justify-center rounded-xl text-coffee-600 hover:bg-coffee-50 active:bg-coffee-100 active:scale-90 transition-all"
                                           >
                                             <Plus size={16} />
-                                          </motion.button>
+                                          </button>
                                         </div>
                                       </div>
                                     ))}
@@ -6342,40 +5318,39 @@ export default function App() {
                             </div>
 
                             <div className="space-y-4">
-                              <div className="bg-coffee-50 dark:bg-zinc-800 p-6 rounded-3xl space-y-4 border border-coffee-100 dark:border-zinc-700">
+                              <div className="bg-coffee-50 p-6 rounded-3xl space-y-4 border border-coffee-100">
                                 <div className="space-y-2">
-                                  <label className="block text-[10px] font-black uppercase text-coffee-400 dark:text-zinc-500 tracking-widest">Nama Pembeli</label>
+                                  <label className="block text-[10px] font-black uppercase text-coffee-400 tracking-widest">Nama Pembeli</label>
                                   <input 
                                     type="text"
                                     value={customerName}
                                     onChange={(e) => setCustomerName(e.target.value)}
                                     placeholder="Ketik nama pembeli..."
-                                    className="w-full bg-white dark:bg-zinc-900 border border-coffee-200 dark:border-zinc-700 rounded-2xl px-4 py-3 text-sm text-coffee-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-coffee-500 shadow-sm"
+                                    className="w-full bg-white border border-coffee-200 rounded-2xl px-4 py-3 text-sm text-coffee-900 focus:outline-none focus:ring-2 focus:ring-coffee-500 shadow-sm"
                                   />
                                 </div>
                               </div>
                             </div>
                           </div>
 
-                          <div className="p-6 bg-white dark:bg-zinc-900 border-t border-coffee-100 dark:border-zinc-800 space-y-4 pb-safe">
+                          <div className="p-6 bg-white border-t border-coffee-100 space-y-4">
                             <div className="flex justify-between items-baseline px-2">
-                              <span className="text-coffee-950 dark:text-zinc-400 font-serif font-bold text-lg">Total Bayar</span>
-                              <span className="text-2xl font-black text-coffee-900 dark:text-zinc-100">
+                              <span className="text-coffee-950 font-serif font-bold text-lg">Total Bayar</span>
+                              <span className="text-2xl font-black text-coffee-900">
                                 {formatIDR(cart.reduce((sum, item) => sum + (item.menu.price * item.quantity), 0))}
                               </span>
                             </div>
-                            <motion.button 
-                              whileTap={{ scale: 0.95 }}
+                            <button 
                               onClick={() => {
                                 setShowMobileCart(false);
                                 setShowPaymentModal(true);
                               }}
-                              className="w-full bg-emerald-500 dark:bg-emerald-600 text-white py-4 rounded-2xl font-black flex items-center justify-center gap-3 hover:bg-emerald-600 active:scale-95 transition-all shadow-xl shadow-emerald-200 dark:shadow-none"
+                              className="w-full bg-emerald-500 text-white py-4 rounded-2xl font-black flex items-center justify-center gap-3 hover:bg-emerald-600 active:scale-95 transition-all shadow-xl shadow-emerald-200"
                               disabled={loading || cart.length === 0}
                             >
                               <CreditCard size={20} />
                               LANJUT PEMBAYARAN
-                            </motion.button>
+                            </button>
                           </div>
                         </motion.div>
                       </div>
@@ -7308,57 +6283,322 @@ export default function App() {
               exit={{ opacity: 0, x: -20 }}
               className="space-y-8"
             >
-              <header className="flex justify-between items-center">
+              <header className="flex flex-col md:flex-row md:items-end justify-between gap-4">
                 <div>
                   <p className="text-coffee-500 font-medium uppercase tracking-widest text-xs mb-1">Pengaturan Sistem</p>
-                  <h2 className="text-4xl font-serif font-bold text-coffee-950">Manajemen User</h2>
+                  <h2 className="text-4xl font-serif font-bold text-coffee-950">Manajemen Akun</h2>
                 </div>
-                <button 
-                  onClick={() => {
-                    setEditingUserId(null);
-                    setNewUserData({ username: '', password: '', role: 'cashier' });
-                    setShowUserModal(true);
-                  }}
-                  className="bg-coffee-900 text-white px-6 py-3 rounded-2xl flex items-center gap-2 hover:bg-coffee-800 transition-all shadow-lg shadow-coffee-200"
-                >
-                  <Plus size={20} />
-                  <span className="font-bold">Tambah User</span>
-                </button>
+                <div className="flex bg-coffee-100 p-1 rounded-2xl">
+                  <button
+                    onClick={() => setUsersSubTab('staff')}
+                    className={cn(
+                      "flex items-center gap-2 px-6 py-2 rounded-xl text-sm font-bold transition-all",
+                      usersSubTab === 'staff' 
+                        ? "bg-white text-coffee-900 shadow-sm" 
+                        : "text-coffee-500 hover:text-coffee-700"
+                    )}
+                  >
+                    <User size={16} />
+                    Staf
+                  </button>
+                  <button
+                    onClick={() => setUsersSubTab('driver')}
+                    className={cn(
+                      "flex items-center gap-2 px-6 py-2 rounded-xl text-sm font-bold transition-all",
+                      usersSubTab === 'driver' 
+                        ? "bg-white text-coffee-900 shadow-sm" 
+                        : "text-coffee-500 hover:text-coffee-700"
+                    )}
+                  >
+                    <Truck size={16} />
+                    Driver
+                  </button>
+                </div>
               </header>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {users.map(u => (
-                  <div key={u.id} className="glass-card p-6 group hover:border-coffee-400 transition-colors">
-                    <div className="flex justify-between items-start mb-4">
-                      <div className="bg-coffee-100 p-3 rounded-2xl group-hover:bg-coffee-200 transition-colors">
-                        <User className="text-coffee-600" />
-                      </div>
-                      <div className="flex gap-2">
-                        <button 
-                          onClick={() => {
-                            setEditingUserId(u.id);
-                            setNewUserData({ username: u.username, password: '', role: u.role });
-                            setShowUserModal(true);
-                          }}
-                          className="text-coffee-300 hover:text-coffee-600 transition-colors"
-                        >
-                          <Edit size={18} />
-                        </button>
-                        <button 
-                          onClick={() => handleDeleteUser(u.id)}
-                          className="text-coffee-300 hover:text-rose-500 transition-colors"
-                        >
-                          <Trash2 size={18} />
-                        </button>
-                      </div>
-                    </div>
-                    <h4 className="text-xl font-bold text-coffee-950 mb-1">{u.username}</h4>
-                    <p className="text-xs font-bold text-coffee-500 uppercase tracking-widest bg-coffee-50 inline-block px-2 py-1 rounded-lg">
-                      {u.role}
-                    </p>
+              {usersSubTab === 'staff' ? (
+                <div className="space-y-6">
+                  <div className="flex justify-between items-center">
+                    <h3 className="text-xl font-bold text-coffee-950">Daftar Staf Kasir & Admin</h3>
+                    <button 
+                      onClick={() => {
+                        setEditingUserId(null);
+                        setNewUserData({ username: '', password: '', role: 'cashier' });
+                        setShowUserModal(true);
+                      }}
+                      className="bg-coffee-900 text-white px-6 py-3 rounded-2xl flex items-center gap-2 hover:bg-coffee-800 transition-all shadow-lg shadow-coffee-200"
+                    >
+                      <Plus size={20} />
+                      <span className="font-bold">Tambah User</span>
+                    </button>
                   </div>
-                ))}
-              </div>
+
+                  {/* Staff Search & Filter */}
+                  <div className="flex flex-col md:flex-row gap-4 items-center bg-white p-4 rounded-3xl border border-coffee-100 shadow-sm">
+                    <div className="relative flex-1 w-full">
+                      <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-coffee-400" size={18} />
+                      <input 
+                        type="text"
+                        placeholder="Cari nama user..."
+                        value={userSearch}
+                        onChange={(e) => setUserSearch(e.target.value)}
+                        className="w-full pl-12 pr-4 py-3 bg-coffee-50/50 border-none rounded-2xl focus:ring-2 focus:ring-coffee-200 transition-all text-sm"
+                      />
+                    </div>
+                    <div className="flex gap-2 w-full md:w-auto">
+                      <select 
+                        value={userFilter}
+                        onChange={(e) => setUserFilter(e.target.value as any)}
+                        className="flex-1 md:w-40 px-4 py-3 bg-coffee-50/50 border-none rounded-2xl focus:ring-2 focus:ring-coffee-200 text-sm font-bold text-coffee-700"
+                      >
+                        <option value="all">Semua Role</option>
+                        <option value="admin">Admin</option>
+                        <option value="cashier">Kasir</option>
+                      </select>
+                      <select 
+                        value={userSort}
+                        onChange={(e) => setUserSort(e.target.value as any)}
+                        className="flex-1 md:w-40 px-4 py-3 bg-coffee-50/50 border-none rounded-2xl focus:ring-2 focus:ring-coffee-200 text-sm font-bold text-coffee-700"
+                      >
+                        <option value="username">Nama (A-Z)</option>
+                        <option value="role">Role</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {filteredUsers.length === 0 ? (
+                      <div className="col-span-full py-20 text-center bg-white rounded-[40px] border border-dashed border-coffee-200">
+                        <User size={48} className="mx-auto mb-4 text-coffee-200" />
+                        <p className="text-coffee-400 italic">Tidak ada user yang ditemukan.</p>
+                      </div>
+                    ) : (
+                      filteredUsers.map(u => (
+                      <div key={u.id} className="glass-card p-6 group hover:border-coffee-400 transition-colors">
+                        <div className="flex justify-between items-start mb-4">
+                          <div className="bg-coffee-100 p-3 rounded-2xl group-hover:bg-coffee-200 transition-colors">
+                            <User className="text-coffee-600" />
+                          </div>
+                          <div className="flex gap-2">
+                            <button 
+                              onClick={() => {
+                                setEditingUserId(u.id);
+                                setNewUserData({ username: u.username, password: '', role: u.role });
+                                setShowUserModal(true);
+                              }}
+                              className="text-coffee-300 hover:text-coffee-600 transition-colors"
+                            >
+                              <Edit size={18} />
+                            </button>
+                            <button 
+                              onClick={() => handleDeleteUser(u.id)}
+                              className="text-coffee-300 hover:text-rose-500 transition-colors"
+                            >
+                              <Trash2 size={18} />
+                            </button>
+                          </div>
+                        </div>
+                        <h4 className="text-xl font-bold text-coffee-950 mb-1">{u.username}</h4>
+                        <p className="text-xs font-bold text-coffee-500 uppercase tracking-widest bg-coffee-50 inline-block px-2 py-1 rounded-lg">
+                          {u.role}
+                        </p>
+                      </div>
+                    )))}
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="text-xl font-bold text-coffee-950">{t('driver_management')}</h3>
+                      <p className="text-sm text-coffee-500">Kelola pendaftaran dan status driver internal.</p>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <button 
+                        onClick={() => {
+                          setNewDriverData({ username: '', password: '', full_name: '', phone: '', vehicle_info: '' });
+                          setShowDriverModal(true);
+                        }}
+                        className="bg-coffee-900 text-white px-6 py-3 rounded-2xl flex items-center gap-2 hover:bg-coffee-800 transition-all shadow-lg shadow-coffee-200"
+                      >
+                        <Plus size={20} />
+                        <span className="font-bold">Tambah Driver</span>
+                      </button>
+                      <button 
+                        onClick={fetchData}
+                        className="p-3 bg-coffee-100 text-coffee-600 rounded-2xl hover:bg-coffee-200 transition-all"
+                      >
+                        <RefreshCw size={20} />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Driver Search & Filter */}
+                  <div className="flex flex-col md:flex-row gap-4 items-center bg-white p-4 rounded-3xl border border-coffee-100 shadow-sm">
+                    <div className="relative flex-1 w-full">
+                      <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-coffee-400" size={18} />
+                      <input 
+                        type="text"
+                        placeholder="Cari nama atau username driver..."
+                        value={driverSearch}
+                        onChange={(e) => setDriverSearch(e.target.value)}
+                        className="w-full pl-12 pr-4 py-3 bg-coffee-50/50 border-none rounded-2xl focus:ring-2 focus:ring-coffee-200 transition-all text-sm"
+                      />
+                    </div>
+                    <div className="flex gap-2 w-full md:w-auto">
+                      <select 
+                        value={driverFilter}
+                        onChange={(e) => setDriverFilter(e.target.value as any)}
+                        className="flex-1 md:w-40 px-4 py-3 bg-coffee-50/50 border-none rounded-2xl focus:ring-2 focus:ring-coffee-200 text-sm font-bold text-coffee-700"
+                      >
+                        <option value="all">Semua Status</option>
+                        <option value="active">Aktif</option>
+                        <option value="pending">Menunggu</option>
+                        <option value="inactive">Nonaktif</option>
+                      </select>
+                      <select 
+                        value={driverSort}
+                        onChange={(e) => setDriverSort(e.target.value as any)}
+                        className="flex-1 md:w-40 px-4 py-3 bg-coffee-50/50 border-none rounded-2xl focus:ring-2 focus:ring-coffee-200 text-sm font-bold text-coffee-700"
+                      >
+                        <option value="full_name">Nama (A-Z)</option>
+                        <option value="status">Status</option>
+                        <option value="active_deliveries">Pengiriman Aktif</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="glass-card overflow-hidden border-coffee-100 shadow-xl">
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left text-sm">
+                        <thead className="bg-coffee-50 text-coffee-500 uppercase text-[10px] font-black tracking-widest">
+                          <tr>
+                            <th className="px-6 py-4">Driver</th>
+                            <th className="px-6 py-4">Kontak</th>
+                            <th className="px-6 py-4">Status Akun</th>
+                            <th className="px-6 py-4">Status Kerja</th>
+                            <th className="px-6 py-4">Lokasi</th>
+                            <th className="px-6 py-4 text-right">Aksi</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-coffee-50">
+                          {filteredDrivers.length === 0 ? (
+                            <tr>
+                              <td colSpan={6} className="px-6 py-12 text-center text-coffee-400 italic">
+                                Tidak ada driver yang ditemukan.
+                              </td>
+                            </tr>
+                          ) : (
+                            filteredDrivers.map(d => (
+                              <tr key={d.id} className="hover:bg-coffee-50/30 transition-colors">
+                                <td className="px-6 py-4">
+                                  <div className="font-bold text-coffee-900">{d.full_name}</div>
+                                  <div className="text-xs text-coffee-400">@{d.username}</div>
+                                </td>
+                                <td className="px-6 py-4">
+                                  <div className="text-coffee-600">{d.phone}</div>
+                                  <div className="text-[10px] text-coffee-400">{d.vehicle_info}</div>
+                                </td>
+                                <td className="px-6 py-4">
+                                  <span className={cn(
+                                    "px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest",
+                                    d.status === 'active' ? "bg-emerald-100 text-emerald-700" : 
+                                    d.status === 'pending' ? "bg-amber-100 text-amber-700" : "bg-rose-100 text-rose-700"
+                                  )}>
+                                    {t(d.status)}
+                                  </span>
+                                </td>
+                                <td className="px-6 py-4">
+                                  <div className="flex flex-col gap-1">
+                                    <span className={cn(
+                                      "px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest w-fit",
+                                      d.active_deliveries > 0 ? "bg-blue-100 text-blue-700" :
+                                      (d.last_online && (new Date().getTime() - new Date(d.last_online + 'Z').getTime()) < 300000) ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-700"
+                                    )}>
+                                      {d.active_deliveries > 0 ? t('delivering') :
+                                      (d.last_online && (new Date().getTime() - new Date(d.last_online + 'Z').getTime()) < 300000) ? t('available') : t('offline')}
+                                    </span>
+                                    {d.last_online && (
+                                      <span className="text-[9px] text-coffee-400 font-bold uppercase">
+                                        Aktif: {formatDate(new Date(d.last_online + 'Z'), 'HH:mm')}
+                                      </span>
+                                    )}
+                                  </div>
+                                </td>
+                                <td className="px-6 py-4">
+                                  {d.latitude && d.longitude ? (
+                                    <button 
+                                      onClick={() => {
+                                        setSelectedDriverForMap(d.id);
+                                        setShowDriverMapModal(true);
+                                      }}
+                                      className="flex items-center gap-1 text-coffee-600 hover:text-coffee-900 transition-colors"
+                                    >
+                                      <Globe size={14} />
+                                      <span className="text-[10px] font-bold uppercase tracking-widest">Lihat Map</span>
+                                    </button>
+                                  ) : (
+                                    <span className="text-[10px] text-coffee-300 italic">Lokasi tidak tersedia</span>
+                                  )}
+                                </td>
+                                <td className="px-6 py-4 text-right">
+                                  <div className="flex justify-end gap-2">
+                                    {d.status === 'pending' && (
+                                      <button 
+                                        onClick={() => handleUpdateDriverStatus(d.id, 'active')}
+                                        className="px-3 py-1.5 bg-emerald-600 text-white rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-emerald-700 transition-all"
+                                      >
+                                        {t('approve')}
+                                      </button>
+                                    )}
+                                    {d.status === 'active' ? (
+                                      <button 
+                                        onClick={() => handleUpdateDriverStatus(d.id, 'suspended')}
+                                        className="px-3 py-1.5 bg-rose-50 text-rose-600 rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-rose-100 transition-all"
+                                      >
+                                        {t('suspend')}
+                                      </button>
+                                    ) : d.status === 'suspended' ? (
+                                      <button 
+                                        onClick={() => handleUpdateDriverStatus(d.id, 'active')}
+                                        className="px-3 py-1.5 bg-emerald-50 text-emerald-600 rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-emerald-100 transition-all"
+                                      >
+                                        Aktifkan
+                                      </button>
+                                    ) : null}
+                                    <button 
+                                      onClick={() => {
+                                        setConfirmDialog({
+                                          show: true,
+                                          title: 'Hapus Driver',
+                                          message: 'Apakah Anda yakin ingin menghapus driver ini? Tindakan ini tidak dapat dibatalkan.',
+                                          isDestructive: true,
+                                          onConfirm: async () => {
+                                            await fetch(`/api/admin/drivers/${d.id}`, { 
+                                              method: 'DELETE',
+                                              headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+                                            });
+                                            setConfirmDialog(null);
+                                            fetchData();
+                                          }
+                                        });
+                                      }}
+                                      className="p-1.5 text-rose-300 hover:text-rose-600 transition-colors"
+                                      title="Hapus Driver"
+                                    >
+                                      <Trash2 size={14} />
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            ))
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+              )}
             </motion.div>
           )}
 
@@ -7474,6 +6714,7 @@ export default function App() {
                     { id: 'webhook', label: t('webhook'), icon: Settings },
                     { id: 'backup', label: t('backup'), icon: Database },
                     { id: 'shortcuts', label: t('shortcuts'), icon: Keyboard },
+                    { id: 'mobile', label: 'Mobile App', icon: Smartphone },
                   ].map((tab) => (
                     <button
                       key={tab.id}
@@ -7974,6 +7215,120 @@ export default function App() {
                           <span className="font-medium text-coffee-700">{t('shortcut_help')}</span>
                           <kbd className="px-3 py-1 bg-white border border-coffee-200 rounded-lg text-xs font-bold shadow-sm">?</kbd>
                         </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {settingsSubTab === 'mobile' && (
+                  <div className="max-w-4xl mx-auto space-y-8">
+                    <div className="glass-card p-8">
+                      <div className="flex items-center gap-4 mb-8">
+                        <div className="bg-coffee-900 p-4 rounded-3xl text-white shadow-xl shadow-coffee-200">
+                          <Smartphone size={32} />
+                        </div>
+                        <div>
+                          <h3 className="text-2xl font-serif font-bold text-coffee-950">Install Aplikasi Mobile</h3>
+                          <p className="text-coffee-500 font-medium">Gunakan MOPI langsung dari handphone Anda seperti aplikasi native.</p>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                        <div className="space-y-6">
+                          <div className="bg-coffee-50 p-6 rounded-3xl border border-coffee-100">
+                            <h4 className="flex items-center gap-2 font-bold text-coffee-900 mb-4">
+                              <div className="w-8 h-8 bg-white rounded-full flex items-center justify-center text-xs shadow-sm">1</div>
+                              Buka di Browser HP
+                            </h4>
+                            <p className="text-sm text-coffee-600 leading-relaxed">
+                              Buka URL aplikasi ini di browser handphone Anda (Safari di iOS atau Chrome di Android).
+                            </p>
+                            <div className="mt-4 p-3 bg-white rounded-xl border border-coffee-100 flex items-center justify-between">
+                              <code className="text-[10px] font-mono text-coffee-500 truncate mr-2">{window.location.origin}</code>
+                              <button 
+                                onClick={() => {
+                                  navigator.clipboard.writeText(window.location.origin);
+                                  toast.success('URL disalin!');
+                                }}
+                                className="p-2 hover:bg-coffee-50 rounded-lg text-coffee-900 transition-colors"
+                              >
+                                <Copy size={14} />
+                              </button>
+                            </div>
+                          </div>
+
+                          <div className="bg-coffee-50 p-6 rounded-3xl border border-coffee-100">
+                            <h4 className="flex items-center gap-2 font-bold text-coffee-900 mb-4">
+                              <div className="w-8 h-8 bg-white rounded-full flex items-center justify-center text-xs shadow-sm">2</div>
+                              Tambahkan ke Home Screen
+                            </h4>
+                            <div className="space-y-4">
+                              <div className="flex gap-3">
+                                <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center text-blue-500 shadow-sm shrink-0">
+                                  <Globe size={16} />
+                                </div>
+                                <div>
+                                  <p className="text-xs font-bold text-coffee-900">iOS (Safari)</p>
+                                  <p className="text-[11px] text-coffee-500">Tap ikon <span className="font-bold">Share</span> (kotak dengan panah atas), lalu pilih <span className="font-bold">"Add to Home Screen"</span>.</p>
+                                </div>
+                              </div>
+                              <div className="flex gap-3">
+                                <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center text-amber-500 shadow-sm shrink-0">
+                                  <Smartphone size={16} />
+                                </div>
+                                <div>
+                                  <p className="text-xs font-bold text-coffee-900">Android (Chrome)</p>
+                                  <p className="text-[11px] text-coffee-500">Tap ikon <span className="font-bold">Tiga Titik</span> di pojok kanan atas, lalu pilih <span className="font-bold">"Install App"</span> atau <span className="font-bold">"Add to Home Screen"</span>.</p>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="bg-coffee-950 rounded-3xl p-8 text-white relative overflow-hidden flex flex-col justify-center items-center text-center">
+                          <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full -mr-16 -mt-16 blur-2xl" />
+                          <div className="absolute bottom-0 left-0 w-32 h-32 bg-coffee-500/10 rounded-full -ml-16 -mb-16 blur-2xl" />
+                          
+                          <div className="relative z-10 space-y-6">
+                            <div className="w-20 h-20 bg-white/10 backdrop-blur-md rounded-3xl flex items-center justify-center mx-auto border border-white/20 shadow-2xl">
+                              <QrCode size={40} className="text-white" />
+                            </div>
+                            <div>
+                              <h4 className="text-xl font-serif font-bold mb-2">Scan QR Code</h4>
+                              <p className="text-sm text-coffee-200/80">Scan kode ini dengan kamera HP Anda untuk membuka aplikasi secara instan.</p>
+                            </div>
+                            <div className="bg-white p-4 rounded-2xl inline-block shadow-2xl">
+                              {/* Placeholder for QR Code - in real app use a QR generator library */}
+                              <div className="w-32 h-32 bg-gray-100 rounded-lg flex items-center justify-center text-gray-400">
+                                <QrCode size={64} />
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                      <div className="glass-card p-6 text-center space-y-3">
+                        <div className="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center mx-auto">
+                          <Zap size={24} />
+                        </div>
+                        <h5 className="font-bold text-coffee-900">Lebih Cepat</h5>
+                        <p className="text-xs text-coffee-500">Akses instan dari home screen tanpa perlu mengetik URL.</p>
+                      </div>
+                      <div className="glass-card p-6 text-center space-y-3">
+                        <div className="w-12 h-12 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center mx-auto">
+                          <Maximize size={24} />
+                        </div>
+                        <h5 className="font-bold text-coffee-900">Layar Penuh</h5>
+                        <p className="text-xs text-coffee-500">Tampilan bersih tanpa bar navigasi browser yang mengganggu.</p>
+                      </div>
+                      <div className="glass-card p-6 text-center space-y-3">
+                        <div className="w-12 h-12 bg-amber-50 text-amber-600 rounded-2xl flex items-center justify-center mx-auto">
+                          <Bell size={24} />
+                        </div>
+                        <h5 className="font-bold text-coffee-900">Notifikasi</h5>
+                        <p className="text-xs text-coffee-500">Mendukung push notification untuk update pesanan (Segera hadir).</p>
                       </div>
                     </div>
                   </div>
@@ -8647,138 +8002,39 @@ export default function App() {
 
                       {appSettings.enable_delivery && (
                         <div className="space-y-6 pt-6 border-t border-coffee-50">
-                          <div className="flex items-center justify-between">
-                            <h4 className="text-xs font-black uppercase text-coffee-400 tracking-widest flex items-center gap-2">
-                              <User size={14} />
-                              {t('driver_management')}
-                            </h4>
-                            <button 
-                              onClick={fetchData}
-                              className="p-2 text-coffee-400 hover:text-coffee-600 transition-colors"
-                            >
-                              <RefreshCw size={14} />
-                            </button>
-                          </div>
-
-                          <div className="overflow-x-auto rounded-2xl border border-coffee-100">
-                            <table className="w-full text-left text-sm">
-                              <thead className="bg-coffee-50 text-coffee-500 uppercase text-[10px] font-black tracking-widest">
-                                <tr>
-                                  <th className="px-6 py-4">Driver</th>
-                                  <th className="px-6 py-4">Kontak</th>
-                                  <th className="px-6 py-4">Status Akun</th>
-                                  <th className="px-6 py-4">Status Kerja</th>
-                                  <th className="px-6 py-4">Lokasi</th>
-                                  <th className="px-6 py-4 text-right">Aksi</th>
-                                </tr>
-                              </thead>
-                              <tbody className="divide-y divide-coffee-50">
-                                {drivers.length === 0 ? (
-                                  <tr>
-                                    <td colSpan={4} className="px-6 py-12 text-center text-coffee-400 italic">
-                                      Belum ada driver yang terdaftar.
-                                    </td>
-                                  </tr>
-                                ) : (
-                                  drivers.map(d => (
-                                    <tr key={d.id} className="hover:bg-coffee-50/30 transition-colors">
-                                      <td className="px-6 py-4">
-                                        <div className="font-bold text-coffee-900">{d.full_name}</div>
-                                        <div className="text-xs text-coffee-400">@{d.username}</div>
-                                      </td>
-                                      <td className="px-6 py-4">
-                                        <div className="text-coffee-600">{d.phone}</div>
-                                        <div className="text-[10px] text-coffee-400">{d.vehicle_info}</div>
-                                      </td>
-                                      <td className="px-6 py-4">
-                                        <span className={cn(
-                                          "px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest",
-                                          d.status === 'active' ? "bg-emerald-100 text-emerald-700" : 
-                                          d.status === 'pending' ? "bg-amber-100 text-amber-700" : "bg-rose-100 text-rose-700"
-                                        )}>
-                                          {t(d.status)}
-                                        </span>
-                                      </td>
-                                      <td className="px-6 py-4">
-                                        <div className="flex flex-col gap-1">
-                                          <span className={cn(
-                                            "px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest w-fit",
-                                            d.active_deliveries > 0 ? "bg-blue-100 text-blue-700" :
-                                            (d.last_online && (new Date().getTime() - new Date(d.last_online + 'Z').getTime()) < 300000) ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-700"
-                                          )}>
-                                            {d.active_deliveries > 0 ? t('delivering') :
-                                            (d.last_online && (new Date().getTime() - new Date(d.last_online + 'Z').getTime()) < 300000) ? t('available') : t('offline')}
-                                          </span>
-                                          {d.last_online && (
-                                            <span className="text-[9px] text-coffee-400 font-bold uppercase">
-                                              Aktif: {formatDate(new Date(d.last_online + 'Z'), 'HH:mm')}
-                                            </span>
-                                          )}
-                                        </div>
-                                      </td>
-                                      <td className="px-6 py-4">
-                                        {d.latitude && d.longitude ? (
-                                          <button 
-                                            onClick={() => {
-                                              setSelectedDriverForMap(d.id);
-                                              setShowDriverMapModal(true);
-                                            }}
-                                            className="flex items-center gap-1 text-coffee-600 hover:text-coffee-900 transition-colors"
-                                          >
-                                            <Globe size={14} />
-                                            <span className="text-[10px] font-bold uppercase tracking-widest">Lihat Map</span>
-                                          </button>
-                                        ) : (
-                                          <span className="text-[10px] text-coffee-300 italic">Lokasi tidak tersedia</span>
-                                        )}
-                                      </td>
-                                      <td className="px-6 py-4 text-right">
-                                        <div className="flex justify-end gap-2">
-                                          {d.status === 'pending' && (
-                                            <button 
-                                              onClick={() => handleUpdateDriverStatus(d.id, 'active')}
-                                              className="px-3 py-1.5 bg-emerald-600 text-white rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-emerald-700 transition-all"
-                                            >
-                                              {t('approve')}
-                                            </button>
-                                          )}
-                                          {d.status === 'active' ? (
-                                            <button 
-                                              onClick={() => handleUpdateDriverStatus(d.id, 'suspended')}
-                                              className="px-3 py-1.5 bg-rose-50 text-rose-600 rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-rose-100 transition-all"
-                                            >
-                                              {t('suspend')}
-                                            </button>
-                                          ) : d.status === 'suspended' ? (
-                                            <button 
-                                              onClick={() => handleUpdateDriverStatus(d.id, 'active')}
-                                              className="px-3 py-1.5 bg-emerald-50 text-emerald-600 rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-emerald-100 transition-all"
-                                            >
-                                              Aktifkan
-                                            </button>
-                                          ) : null}
-                                          <button 
-                                            onClick={async () => {
-                                              if (window.confirm('Hapus driver ini?')) {
-                                                await fetch(`/api/admin/drivers/${d.id}`, { 
-                                                  method: 'DELETE',
-                                                  headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-                                                });
-                                                fetchData();
-                                              }
-                                            }}
-                                            className="p-1.5 text-rose-300 hover:text-rose-600 transition-colors"
-                                            title="Hapus Driver"
-                                          >
-                                            <Trash2 size={14} />
-                                          </button>
-                                        </div>
-                                      </td>
-                                    </tr>
-                                  ))
-                                )}
-                              </tbody>
-                            </table>
+                          <div className="bg-coffee-50/50 p-6 rounded-3xl border border-coffee-100 mb-6">
+                            <div className="flex items-center gap-4 mb-6">
+                              <div className="w-10 h-10 bg-white text-coffee-600 rounded-xl flex items-center justify-center shadow-sm">
+                                <MapPin size={20} />
+                              </div>
+                              <div>
+                                <h4 className="text-base font-bold text-coffee-950">Lokasi Toko (Merchant)</h4>
+                                <p className="text-xs text-coffee-500">Titik jemput untuk driver di peta monitoring</p>
+                              </div>
+                            </div>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                              <div>
+                                <label className="block text-[10px] font-black text-coffee-400 uppercase tracking-widest mb-1.5">Latitude</label>
+                                <input 
+                                  type="text" 
+                                  value={appSettings.merchant_lat || ''}
+                                  onChange={(e) => setAppSettings(prev => ({ ...prev, merchant_lat: e.target.value }))}
+                                  className="w-full bg-white border border-coffee-100 rounded-xl px-4 py-3 text-sm font-mono text-coffee-900 focus:outline-none focus:ring-2 focus:ring-coffee-500"
+                                  placeholder="-6.200000"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-[10px] font-black text-coffee-400 uppercase tracking-widest mb-1.5">Longitude</label>
+                                <input 
+                                  type="text" 
+                                  value={appSettings.merchant_lng || ''}
+                                  onChange={(e) => setAppSettings(prev => ({ ...prev, merchant_lng: e.target.value }))}
+                                  className="w-full bg-white border border-coffee-100 rounded-xl px-4 py-3 text-sm font-mono text-coffee-900 focus:outline-none focus:ring-2 focus:ring-coffee-500"
+                                  placeholder="106.816666"
+                                />
+                              </div>
+                            </div>
+                            <p className="text-[10px] text-coffee-400 italic mt-3">Dapatkan koordinat dari Google Maps (klik kanan pada lokasi &gt; salin koordinat).</p>
                           </div>
                         </div>
                       )}
@@ -9041,7 +8297,99 @@ export default function App() {
 
     </main>
 
-      {/* Modals */}
+      {/* Driver Registration Modal */}
+      {showDriverModal && (
+        <div className="fixed inset-0 bg-coffee-950/40 backdrop-blur-sm flex items-center justify-center z-[110] p-4">
+          <motion.div 
+            initial={{ scale: 0.9, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            className="bg-white rounded-3xl p-8 w-full max-w-md shadow-2xl"
+          >
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-2xl font-serif font-bold text-coffee-950">Pendaftaran Driver</h3>
+              <button onClick={() => setShowDriverModal(false)} className="text-coffee-400 hover:text-coffee-600">
+                <X size={24} />
+              </button>
+            </div>
+            
+            <form onSubmit={handleRegisterDriver} className="space-y-4">
+              <div className="grid grid-cols-1 gap-4">
+                <div>
+                  <label className="block text-xs font-bold uppercase text-coffee-500 mb-1">Nama Lengkap</label>
+                  <input 
+                    required
+                    type="text" 
+                    value={newDriverData.full_name}
+                    onChange={e => setNewDriverData({...newDriverData, full_name: e.target.value})}
+                    className="w-full bg-coffee-50 border border-coffee-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-coffee-500"
+                    placeholder="Contoh: Budi Santoso"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold uppercase text-coffee-500 mb-1">Nomor WhatsApp</label>
+                  <input 
+                    required
+                    type="tel" 
+                    value={newDriverData.phone}
+                    onChange={e => setNewDriverData({...newDriverData, phone: e.target.value})}
+                    className="w-full bg-coffee-50 border border-coffee-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-coffee-500"
+                    placeholder="0812xxxxxxxx"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold uppercase text-coffee-500 mb-1">Informasi Kendaraan</label>
+                  <input 
+                    required
+                    type="text" 
+                    value={newDriverData.vehicle_info}
+                    onChange={e => setNewDriverData({...newDriverData, vehicle_info: e.target.value})}
+                    className="w-full bg-coffee-50 border border-coffee-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-coffee-500"
+                    placeholder="Contoh: Honda Vario (B 1234 ABC)"
+                  />
+                </div>
+                <div className="border-t border-coffee-50 pt-4 mt-2">
+                  <label className="block text-xs font-bold uppercase text-coffee-500 mb-1">Username Akun</label>
+                  <input 
+                    required
+                    type="text" 
+                    value={newDriverData.username}
+                    onChange={e => setNewDriverData({...newDriverData, username: e.target.value})}
+                    className="w-full bg-coffee-50 border border-coffee-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-coffee-500"
+                    placeholder="username_driver"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold uppercase text-coffee-500 mb-1">Password</label>
+                  <input 
+                    required
+                    type="password" 
+                    value={newDriverData.password}
+                    onChange={e => setNewDriverData({...newDriverData, password: e.target.value})}
+                    className="w-full bg-coffee-50 border border-coffee-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-coffee-500"
+                    placeholder="********"
+                  />
+                </div>
+              </div>
+
+              <div className="flex gap-3 mt-8">
+                <button 
+                  type="button"
+                  onClick={() => setShowDriverModal(false)}
+                  className="flex-1 px-6 py-3 rounded-xl font-bold text-coffee-600 hover:bg-coffee-50 transition-colors"
+                >
+                  Batal
+                </button>
+                <button 
+                  type="submit"
+                  className="flex-1 bg-coffee-900 text-white px-6 py-3 rounded-xl font-bold hover:bg-coffee-800 transition-all"
+                >
+                  Daftar
+                </button>
+              </div>
+            </form>
+          </motion.div>
+        </div>
+      )}
       {showPaymentModal && (
         <div className="fixed inset-0 bg-coffee-950/60 backdrop-blur-md flex items-center justify-center z-[100] p-4">
           <motion.div 
@@ -9121,6 +8469,58 @@ export default function App() {
                         />
                       </div>
                       <div className="space-y-1">
+                        <label className="text-[10px] font-bold uppercase text-coffee-400">Nomor Telepon Pelanggan</label>
+                        <input 
+                          type="tel"
+                          value={customerPhone}
+                          onChange={(e) => setCustomerPhone(e.target.value)}
+                          placeholder="08123456789..."
+                          className="w-full bg-coffee-50 border border-coffee-200 rounded-xl px-4 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-coffee-500"
+                        />
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-bold uppercase text-coffee-400">Latitude</label>
+                          <input 
+                            type="number"
+                            step="any"
+                            value={customerLat || ''}
+                            onChange={(e) => setCustomerLat(e.target.value ? Number(e.target.value) : null)}
+                            placeholder="-6.1234"
+                            className="w-full bg-coffee-50 border border-coffee-200 rounded-xl px-4 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-coffee-500"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-bold uppercase text-coffee-400">Longitude</label>
+                          <input 
+                            type="number"
+                            step="any"
+                            value={customerLng || ''}
+                            onChange={(e) => setCustomerLng(e.target.value ? Number(e.target.value) : null)}
+                            placeholder="106.1234"
+                            className="w-full bg-coffee-50 border border-coffee-200 rounded-xl px-4 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-coffee-500"
+                          />
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (navigator.geolocation) {
+                            navigator.geolocation.getCurrentPosition((pos) => {
+                              setCustomerLat(pos.coords.latitude);
+                              setCustomerLng(pos.coords.longitude);
+                              toast.success('Lokasi berhasil diambil');
+                            }, (err) => {
+                              toast.error('Gagal mengambil lokasi: ' + err.message);
+                            });
+                          }
+                        }}
+                        className="w-full py-2 bg-coffee-100 text-coffee-700 rounded-xl text-[10px] font-bold uppercase flex items-center justify-center gap-2 hover:bg-coffee-200 transition-colors"
+                      >
+                        <MapPin size={14} />
+                        Gunakan Lokasi Saat Ini
+                      </button>
+                      <div className="space-y-1">
                         <label className="text-[10px] font-bold uppercase text-coffee-400">{t('delivery_fee')}</label>
                         <input 
                           type="number"
@@ -9135,184 +8535,176 @@ export default function App() {
               )}
             </div>
 
-            <div className="p-6 bg-coffee-50 dark:bg-zinc-800 flex gap-3">
-              <motion.button 
-                whileTap={{ scale: 0.95 }}
+            <div className="p-6 bg-coffee-50 flex gap-3">
+              <button 
                 onClick={() => setShowPaymentModal(false)}
-                className="flex-1 px-6 py-3 rounded-xl font-bold text-coffee-600 dark:text-zinc-400 hover:bg-coffee-100 dark:hover:bg-zinc-700 transition-colors"
+                className="flex-1 px-6 py-3 rounded-xl font-bold text-coffee-600 hover:bg-coffee-100 transition-colors"
               >
                 Batal
-              </motion.button>
-              <motion.button 
-                whileTap={{ scale: 0.95 }}
+              </button>
+              <button 
                 onClick={() => {
                   setShowPaymentModal(false);
                   setShowOrderReview(true);
                 }}
-                className="flex-1 bg-coffee-900 dark:bg-zinc-700 text-white px-6 py-3 rounded-xl font-bold hover:bg-coffee-800 dark:hover:bg-zinc-600 transition-all"
+                className="flex-1 bg-coffee-900 text-white px-6 py-3 rounded-xl font-bold hover:bg-coffee-800 transition-all"
               >
                 Lanjutkan
-              </motion.button>
+              </button>
             </div>
           </motion.div>
         </div>
       )}
 
       {showEditItemModal && editingItem && (
-        <div className="fixed inset-0 bg-coffee-950/60 dark:bg-black/80 backdrop-blur-md flex items-center justify-center z-[110] p-4">
+        <div className="fixed inset-0 bg-coffee-950/60 backdrop-blur-md flex items-center justify-center z-[110] p-4">
           <motion.div 
             initial={{ scale: 0.9, opacity: 0, y: 20 }}
             animate={{ scale: 1, opacity: 1, y: 0 }}
-            className="bg-white dark:bg-zinc-900 rounded-3xl p-0 w-full max-w-md shadow-2xl overflow-hidden border border-coffee-100 dark:border-zinc-800"
+            className="bg-white rounded-3xl p-0 w-full max-w-md shadow-2xl overflow-hidden"
           >
-            <div className="p-8 bg-coffee-50 dark:bg-zinc-800/50 border-b border-coffee-100 dark:border-zinc-800 text-center">
-              <div className="w-16 h-16 bg-coffee-100 dark:bg-zinc-800 text-coffee-600 dark:text-zinc-400 rounded-full flex items-center justify-center mx-auto mb-4">
+            <div className="p-8 bg-coffee-50 border-b border-coffee-100 text-center">
+              <div className="w-16 h-16 bg-coffee-100 text-coffee-600 rounded-full flex items-center justify-center mx-auto mb-4">
                 <Edit size={32} />
               </div>
-              <h3 className="text-2xl font-serif font-bold text-coffee-950 dark:text-zinc-100">Edit Menu</h3>
-              <p className="text-coffee-500 dark:text-zinc-500 text-sm font-bold uppercase tracking-widest">{editingItem.name}</p>
+              <h3 className="text-2xl font-serif font-bold text-coffee-950">Edit Menu</h3>
+              <p className="text-coffee-500 text-sm font-bold uppercase tracking-widest">{editingItem.name}</p>
             </div>
 
-            <div className="p-8 bg-white dark:bg-zinc-900 space-y-6">
+            <div className="p-8 bg-white space-y-6">
               <div>
-                <label className="block text-xs font-bold uppercase text-coffee-500 dark:text-zinc-500 mb-2">Jumlah</label>
+                <label className="block text-xs font-bold uppercase text-coffee-500 mb-2">Jumlah</label>
                 <div className="flex items-center gap-4">
-                  <motion.button 
-                    whileTap={{ scale: 0.8 }}
+                  <button 
                     onClick={() => setEditingItem(prev => prev ? ({ ...prev, quantity: Math.max(1, prev.quantity - 1) }) : null)}
-                    className="w-12 h-12 rounded-xl bg-coffee-50 dark:bg-zinc-800 text-coffee-600 dark:text-zinc-400 flex items-center justify-center hover:bg-coffee-100 dark:hover:bg-zinc-700 transition-colors"
+                    className="w-12 h-12 rounded-xl bg-coffee-50 text-coffee-600 flex items-center justify-center hover:bg-coffee-100 transition-colors"
                   >
                     <Minus size={20} />
-                  </motion.button>
-                  <span className="flex-1 text-center text-2xl font-black text-coffee-950 dark:text-zinc-100">{editingItem.quantity}</span>
-                  <motion.button 
-                    whileTap={{ scale: 0.8 }}
+                  </button>
+                  <span className="flex-1 text-center text-2xl font-black text-coffee-950">{editingItem.quantity}</span>
+                  <button 
                     onClick={() => setEditingItem(prev => prev ? ({ ...prev, quantity: prev.quantity + 1 }) : null)}
-                    className="w-12 h-12 rounded-xl bg-coffee-900 dark:bg-zinc-700 text-white flex items-center justify-center hover:bg-coffee-800 dark:hover:bg-zinc-600 transition-colors"
+                    className="w-12 h-12 rounded-xl bg-coffee-900 text-white flex items-center justify-center hover:bg-coffee-800 transition-colors"
                   >
                     <Plus size={20} />
-                  </motion.button>
+                  </button>
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-bold uppercase text-coffee-500 dark:text-zinc-500 mb-2">Sugar Level</label>
+                  <label className="block text-xs font-bold uppercase text-coffee-500 mb-2">Sugar Level</label>
                   <select 
                     value={editingItem.sugarLevel}
                     onChange={e => setEditingItem(prev => prev ? ({ ...prev, sugarLevel: e.target.value }) : null)}
-                    className="w-full bg-coffee-50 dark:bg-zinc-800 border border-coffee-100 dark:border-zinc-700 rounded-xl px-4 py-3 text-sm font-bold text-coffee-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-coffee-500"
+                    className="w-full bg-coffee-50 border border-coffee-100 rounded-xl px-4 py-3 text-sm font-bold text-coffee-900 focus:outline-none focus:ring-2 focus:ring-coffee-500"
                   >
                     {['No Sugar', 'Less Sugar', 'Normal', 'Extra Sugar'].map(level => (
-                      <option key={level} value={level} className="dark:bg-zinc-900">{level}</option>
+                      <option key={level} value={level}>{level}</option>
                     ))}
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs font-bold uppercase text-coffee-500 dark:text-zinc-500 mb-2">Ice Level</label>
+                  <label className="block text-xs font-bold uppercase text-coffee-500 mb-2">Ice Level</label>
                   <select 
                     value={editingItem.iceLevel}
                     onChange={e => setEditingItem(prev => prev ? ({ ...prev, iceLevel: e.target.value }) : null)}
-                    className="w-full bg-coffee-50 dark:bg-zinc-800 border border-coffee-100 dark:border-zinc-700 rounded-xl px-4 py-3 text-sm font-bold text-coffee-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-coffee-500"
+                    className="w-full bg-coffee-50 border border-coffee-100 rounded-xl px-4 py-3 text-sm font-bold text-coffee-900 focus:outline-none focus:ring-2 focus:ring-coffee-500"
                   >
                     {['No Ice', 'Less Ice', 'Normal', 'Extra Ice'].map(level => (
-                      <option key={level} value={level} className="dark:bg-zinc-900">{level}</option>
+                      <option key={level} value={level}>{level}</option>
                     ))}
                   </select>
                 </div>
               </div>
 
               <div>
-                <label className="block text-xs font-bold uppercase text-coffee-500 dark:text-zinc-500 mb-2">Catatan</label>
+                <label className="block text-xs font-bold uppercase text-coffee-500 mb-2">Catatan</label>
                 <textarea 
                   value={editingItem.notes}
                   onChange={e => setEditingItem(prev => prev ? ({ ...prev, notes: e.target.value }) : null)}
-                  className="w-full bg-coffee-50 dark:bg-zinc-800 border border-coffee-100 dark:border-zinc-700 rounded-xl px-4 py-3 text-sm font-medium text-coffee-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-coffee-500 min-h-[80px]"
+                  className="w-full bg-coffee-50 border border-coffee-100 rounded-xl px-4 py-3 text-sm font-medium text-coffee-900 focus:outline-none focus:ring-2 focus:ring-coffee-500 min-h-[80px]"
                   placeholder="Contoh: Tanpa sedotan, dll..."
                 />
               </div>
             </div>
 
-            <div className="p-6 bg-coffee-50 dark:bg-zinc-800/50 flex gap-3">
-              <motion.button 
-                whileTap={{ scale: 0.95 }}
+            <div className="p-6 bg-coffee-50 flex gap-3">
+              <button 
                 onClick={() => setShowEditItemModal(false)}
-                className="flex-1 px-6 py-3 rounded-xl font-bold text-coffee-600 dark:text-zinc-400 hover:bg-coffee-100 dark:hover:bg-zinc-700 transition-colors"
+                className="flex-1 px-6 py-3 rounded-xl font-bold text-coffee-600 hover:bg-coffee-100 transition-colors"
               >
                 Batal
-              </motion.button>
-              <motion.button 
-                whileTap={{ scale: 0.95 }}
+              </button>
+              <button 
                 onClick={handleUpdateItem}
-                className="flex-1 bg-coffee-900 dark:bg-zinc-700 text-white px-6 py-3 rounded-xl font-bold hover:bg-coffee-800 dark:hover:bg-zinc-600 transition-all shadow-lg shadow-coffee-200 dark:shadow-none"
+                className="flex-1 bg-coffee-900 text-white px-6 py-3 rounded-xl font-bold hover:bg-coffee-800 transition-all shadow-lg shadow-coffee-200"
               >
                 Simpan Perubahan
-              </motion.button>
+              </button>
             </div>
           </motion.div>
         </div>
       )}
 
       {showPasswordModal && (
-        <div className="fixed inset-0 bg-coffee-950/40 dark:bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-coffee-950/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <motion.div 
             initial={{ scale: 0.9, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
-            className="bg-white dark:bg-zinc-900 rounded-3xl p-8 w-full max-w-md shadow-2xl border border-coffee-100 dark:border-zinc-800"
+            className="bg-white rounded-3xl p-8 w-full max-w-md shadow-2xl"
           >
-            <h3 className="text-2xl font-serif font-bold mb-6 flex items-center gap-2 text-coffee-950 dark:text-zinc-100">
-              <Lock className="text-coffee-900 dark:text-zinc-400" /> Ganti Password
+            <h3 className="text-2xl font-serif font-bold mb-6 flex items-center gap-2">
+              <Lock className="text-coffee-900" /> Ganti Password
             </h3>
             <form onSubmit={handleUpdatePassword} className="space-y-4">
               <div>
-                <label className="block text-xs font-bold uppercase text-coffee-500 dark:text-zinc-500 mb-1">Password Lama</label>
+                <label className="block text-xs font-bold uppercase text-coffee-500 mb-1">Password Lama</label>
                 <input 
                   required
                   type="password" 
                   value={passwordData.oldPassword}
                   onChange={e => setPasswordData({...passwordData, oldPassword: e.target.value})}
-                  className="w-full bg-coffee-50 dark:bg-zinc-800 border border-coffee-200 dark:border-zinc-700 rounded-xl px-4 py-3 text-coffee-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-coffee-500"
+                  className="w-full bg-coffee-50 border border-coffee-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-coffee-500"
                   placeholder="••••••••"
                 />
               </div>
               <div>
-                <label className="block text-xs font-bold uppercase text-coffee-500 dark:text-zinc-500 mb-1">Password Baru</label>
+                <label className="block text-xs font-bold uppercase text-coffee-500 mb-1">Password Baru</label>
                 <input 
                   required
                   type="password" 
                   value={passwordData.newPassword}
                   onChange={e => setPasswordData({...passwordData, newPassword: e.target.value})}
-                  className="w-full bg-coffee-50 dark:bg-zinc-800 border border-coffee-200 dark:border-zinc-700 rounded-xl px-4 py-3 text-coffee-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-coffee-500"
+                  className="w-full bg-coffee-50 border border-coffee-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-coffee-500"
                   placeholder="••••••••"
                 />
               </div>
               <div>
-                <label className="block text-xs font-bold uppercase text-coffee-500 dark:text-zinc-500 mb-1">Konfirmasi Password Baru</label>
+                <label className="block text-xs font-bold uppercase text-coffee-500 mb-1">Konfirmasi Password Baru</label>
                 <input 
                   required
                   type="password" 
                   value={passwordData.confirmPassword}
                   onChange={e => setPasswordData({...passwordData, confirmPassword: e.target.value})}
-                  className="w-full bg-coffee-50 dark:bg-zinc-800 border border-coffee-200 dark:border-zinc-700 rounded-xl px-4 py-3 text-coffee-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-coffee-500"
+                  className="w-full bg-coffee-50 border border-coffee-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-coffee-500"
                   placeholder="••••••••"
                 />
               </div>
               <div className="flex gap-3 mt-8">
-                <motion.button 
-                  whileTap={{ scale: 0.95 }}
+                <button 
                   type="button"
                   onClick={() => setShowPasswordModal(false)}
-                  className="flex-1 px-6 py-3 rounded-xl font-bold text-coffee-600 dark:text-zinc-400 hover:bg-coffee-50 dark:hover:bg-zinc-800 transition-colors"
+                  className="flex-1 px-6 py-3 rounded-xl font-bold text-coffee-600 hover:bg-coffee-50 transition-colors"
                 >
                   Batal
-                </motion.button>
-                <motion.button 
-                  whileTap={{ scale: 0.95 }}
+                </button>
+                <button 
                   type="submit"
-                  className="flex-1 bg-coffee-900 dark:bg-zinc-700 text-white px-6 py-3 rounded-xl font-bold hover:bg-coffee-800 dark:hover:bg-zinc-600 transition-all shadow-lg shadow-coffee-200 dark:shadow-none"
+                  className="flex-1 bg-coffee-900 text-white px-6 py-3 rounded-xl font-bold hover:bg-coffee-800 transition-all"
                 >
                   Simpan
-                </motion.button>
+                </button>
               </div>
             </form>
           </motion.div>
@@ -11013,7 +10405,11 @@ export default function App() {
               </div>
             </div>
 
-            <DriverMap drivers={drivers} selectedDriverId={selectedDriverForMap || undefined} />
+            <DriverMap 
+              drivers={drivers} 
+              selectedDriverId={selectedDriverForMap || undefined} 
+              merchantLocation={[Number(appSettings.merchant_lat || -6.2), Number(appSettings.merchant_lng || 106.816)]}
+            />
             
             <div className="mt-6 flex justify-end">
               <button 

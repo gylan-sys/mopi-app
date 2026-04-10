@@ -334,6 +334,10 @@ async function startServer() {
   });
   const PORT = 3000;
 
+  app.get("/api/health", (req, res) => {
+    res.json({ status: "ok", timestamp: new Date().toISOString() });
+  });
+
   app.get("/manifest.json", (req, res) => {
     try {
       const settings = db.prepare("SELECT * FROM settings").all();
@@ -734,17 +738,22 @@ async function startServer() {
 
   // Public APIs for Guest Ordering
   app.get("/api/menus/public", (req, res) => {
-    const menus = db.prepare("SELECT * FROM menus").all() as any[];
-    const menusWithIngredients = menus.map(menu => {
-      const ingredients = db.prepare(`
-        SELECT mi.*, i.name as inventory_name, i.unit, i.unit_price, i.quantity as current_stock
-        FROM menu_ingredients mi 
-        JOIN inventory i ON mi.inventory_id = i.id 
-        WHERE mi.menu_id = ?
-      `).all(menu.id);
-      return { ...menu, ingredients };
-    });
-    res.json(menusWithIngredients);
+    try {
+      const menus = db.prepare("SELECT * FROM menus").all() as any[];
+      const menusWithIngredients = menus.map(menu => {
+        const ingredients = db.prepare(`
+          SELECT mi.*, i.name as inventory_name, i.unit, i.unit_price, i.quantity as current_stock
+          FROM menu_ingredients mi 
+          JOIN inventory i ON mi.inventory_id = i.id 
+          WHERE mi.menu_id = ?
+        `).all(menu.id);
+        return { ...menu, ingredients };
+      });
+      res.json(menusWithIngredients);
+    } catch (error) {
+      console.error("Error fetching public menus:", error);
+      res.status(500).json({ error: "Internal Server Error" });
+    }
   });
 
   app.post("/api/orders/public", (req, res) => {
@@ -803,6 +812,12 @@ async function startServer() {
         const orderId = `ORD-${dateStr}-${displayId}`;
         db.prepare("UPDATE settings SET value = ? WHERE key = 'order_counter'").run(String(counter + 1));
 
+        const insertTx = db.prepare(`
+          INSERT INTO transactions (type, category, amount, description, customer_name, table_number, order_id, display_id, source, status, menu_id, quantity, sugar_level, ice_level, date, promo_code, payment_method, notes, order_sequence)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `);
+        const updateInv = db.prepare("UPDATE inventory SET quantity = quantity - ? WHERE id = ?");
+
         let subtotal = 0;
         let sequence = 1;
         for (const item of items) {
@@ -811,10 +826,7 @@ async function startServer() {
           subtotal += menu.price * item.quantity;
 
           // Insert into transactions as pending
-          db.prepare(`
-            INSERT INTO transactions (type, category, amount, description, customer_name, table_number, order_id, display_id, source, status, menu_id, quantity, sugar_level, ice_level, date, promo_code, payment_method, notes, order_sequence)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-          `).run(
+          insertTx.run(
             'income',
             'Sales',
             menu.price * item.quantity,
@@ -835,6 +847,13 @@ async function startServer() {
             notes || null,
             sequence++
           );
+
+          // Deduct inventory
+          const ingredients = db.prepare("SELECT * FROM menu_ingredients WHERE menu_id = ?").all(item.menuId) as any[];
+          for (const ing of ingredients) {
+            updateInv.run(ing.quantity * item.quantity, ing.inventory_id);
+            checkLowStockAndNotify(ing.inventory_id);
+          }
         }
 
         // Insert discount row if any
@@ -1430,47 +1449,53 @@ async function startServer() {
   });
 
   app.get("/api/active-orders", authenticateToken, (req, res) => {
-    const items = db.prepare(`
-      SELECT t.*, m.name as menu_name
-      FROM transactions t
-      LEFT JOIN menus m ON t.menu_id = m.id
-      WHERE t.status IN ('processing', 'pending', 'awaiting_confirmation')
-      OR (t.delivery_method = 'delivery' AND t.delivery_status != 'delivered')
-      ORDER BY t.date ASC
-    `).all() as any[];
+    try {
+      const items = db.prepare(`
+        SELECT t.*, m.name as menu_name
+        FROM transactions t
+        LEFT JOIN menus m ON t.menu_id = m.id
+        WHERE t.status IN ('processing', 'pending', 'awaiting_confirmation')
+        OR (t.delivery_method = 'delivery' AND t.delivery_status != 'delivered')
+        ORDER BY t.date ASC
+      `).all() as any[];
 
-    const orders: any = {};
-    items.forEach(item => {
-      if (!orders[item.order_id]) {
-        orders[item.order_id] = {
-          orderId: item.order_id,
-          displayId: item.display_id,
-          customerName: item.customer_name,
-          date: item.date,
-          source: item.source || 'POS',
-          status: item.status,
-          paymentMethod: item.payment_method,
-          tableNumber: item.table_number,
-          notes: item.notes,
-          proofOfPaymentUrl: item.proof_of_payment_url,
-          deliveryMethod: item.delivery_method,
-          deliveryAddress: item.delivery_address,
-          deliveryFee: item.delivery_fee,
-          deliveryStatus: item.delivery_status,
-          items: []
-        };
-      }
-      orders[item.order_id].items.push({
-        id: item.id,
-        name: item.menu_name,
-        quantity: item.quantity,
-        sugarLevel: item.sugar_level,
-        iceLevel: item.ice_level,
-        notes: item.notes
+      const orders: any = {};
+      items.forEach(item => {
+        if (!item.order_id) return; // Skip if no order_id
+        if (!orders[item.order_id]) {
+          orders[item.order_id] = {
+            orderId: item.order_id,
+            displayId: item.display_id,
+            customerName: item.customer_name,
+            date: item.date,
+            source: item.source || 'POS',
+            status: item.status,
+            paymentMethod: item.payment_method,
+            tableNumber: item.table_number,
+            notes: item.notes,
+            proofOfPaymentUrl: item.proof_of_payment_url,
+            deliveryMethod: item.delivery_method,
+            deliveryAddress: item.delivery_address,
+            deliveryFee: item.delivery_fee,
+            deliveryStatus: item.delivery_status,
+            items: []
+          };
+        }
+        orders[item.order_id].items.push({
+          id: item.id,
+          name: item.menu_name,
+          quantity: item.quantity,
+          sugarLevel: item.sugar_level,
+          iceLevel: item.ice_level,
+          notes: item.notes
+        });
       });
-    });
 
-    res.json(Object.values(orders));
+      res.json(Object.values(orders));
+    } catch (error: any) {
+      console.error("Error fetching active orders:", error);
+      res.status(500).json({ error: "Gagal mengambil orderan aktif: " + error.message });
+    }
   });
 
   app.post("/api/orders/:orderId/proof", upload.single('proof'), (req: any, res) => {
@@ -1866,7 +1891,7 @@ async function startServer() {
         SUM(CASE WHEN category NOT IN ('Discount', 'Tax') THEN quantity ELSE 0 END) as total_items,
         SUM(amount) as total_revenue
       FROM transactions 
-      WHERE date >= ? AND type = 'income' AND status != 'pending'
+      WHERE date >= ? AND type = 'income'
     `).get(today) as any;
 
     const topItems = db.prepare(`
@@ -2069,37 +2094,50 @@ async function startServer() {
 
   // Settings APIs
   app.get("/api/settings/public", (req, res) => {
-    const publicKeys = [
-      "app_name",
-      "app_icon",
-      "app_logo_url",
-      "login_bg",
-      "login_bg_image",
-      "login_title",
-      "login_subtitle",
-      "primary_color",
-      "language",
-      "main_bg",
-      "main_bg_image",
-      "customer_bg_color",
-      "customer_bg_image",
-      "customer_page_title",
-      "customer_page_subtitle",
-      "tax_rate",
-      "timezone",
-      "payment_qris_url",
-      "payment_dana_url",
-      "payment_ovo_url",
-      "payment_shopeepay_url",
-      "payment_instructions",
-      "enable_delivery"
-    ];
-    const settings = db.prepare("SELECT * FROM settings WHERE key IN (" + publicKeys.map(() => "?").join(",") + ")").all(publicKeys) as any[];
-    const settingsObj = settings.reduce((acc: any, curr: any) => {
-      acc[curr.key] = curr.value;
-      return acc;
-    }, {});
-    res.json(settingsObj);
+    try {
+      const publicKeys = [
+        "app_name",
+        "app_icon",
+        "app_logo_url",
+        "login_bg",
+        "login_bg_image",
+        "login_title",
+        "login_subtitle",
+        "primary_color",
+        "language",
+        "main_bg",
+        "main_bg_image",
+        "customer_bg_color",
+        "customer_bg_image",
+        "customer_page_title",
+        "customer_page_subtitle",
+        "customer_header_title_color",
+        "customer_header_subtitle_color",
+        "customer_header_icon_color",
+        "customer_header_bg_color",
+        "customer_status_btn_bg",
+        "customer_status_btn_icon",
+        "customer_cart_btn_bg",
+        "customer_cart_btn_icon",
+        "tax_rate",
+        "timezone",
+        "payment_qris_url",
+        "payment_dana_url",
+        "payment_ovo_url",
+        "payment_shopeepay_url",
+        "payment_instructions",
+        "enable_delivery"
+      ];
+      const settings = db.prepare("SELECT * FROM settings WHERE key IN (" + publicKeys.map(() => "?").join(",") + ")").all(publicKeys) as any[];
+      const settingsObj = settings.reduce((acc: any, curr: any) => {
+        acc[curr.key] = curr.value;
+        return acc;
+      }, {});
+      res.json(settingsObj);
+    } catch (error) {
+      console.error("Error fetching public settings:", error);
+      res.status(500).json({ error: "Internal Server Error" });
+    }
   });
 
   // Advertisements API
@@ -2382,7 +2420,17 @@ async function startServer() {
       main_bg: '#fdfaf7',
       main_bg_image: '',
       primary_color: '#9a684a',
-      app_logo_url: ''
+      app_logo_url: '',
+      customer_bg_color: '#fdfaf7',
+      customer_bg_image: '',
+      customer_header_title_color: '#1a1a1a',
+      customer_header_subtitle_color: '#9a684a',
+      customer_header_icon_color: '#e5e7eb',
+      customer_header_bg_color: '#ffffff',
+      customer_status_btn_bg: '#ffffff',
+      customer_status_btn_icon: '#9a684a',
+      customer_cart_btn_bg: '#9a684a',
+      customer_cart_btn_icon: '#ffffff'
     };
     
     const updateSetting = db.prepare("UPDATE settings SET value = ? WHERE key = ?");
@@ -2390,6 +2438,12 @@ async function startServer() {
       updateSetting.run(value, key);
     }
     res.json({ success: true });
+  });
+
+  // Global Error Handler
+  app.use((err: any, req: any, res: any, next: any) => {
+    console.error("UNCAUGHT ERROR:", err);
+    res.status(500).json({ error: "Internal Server Error", details: err.message });
   });
 
   app.use(express.static(path.join(process.cwd(), "public")));

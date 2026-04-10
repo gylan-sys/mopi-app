@@ -1,25 +1,30 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { 
   LayoutDashboard, 
   ShoppingCart, 
   Clock, 
-  Calendar, 
-  ArrowDownLeft, 
   Package, 
-  Users, 
   Settings, 
   LogOut,
-  UtensilsCrossed,
-  Star,
   Sun,
   Moon,
-  Keyboard,
   RefreshCw,
-  Lock,
-  User
+  Maximize,
+  Minimize,
+  User,
+  Bell,
+  Check,
+  UtensilsCrossed,
+  Star,
+  Calendar,
+  Truck,
+  ChevronLeft,
+  ChevronRight,
+  Menu as MenuIcon,
+  X
 } from 'lucide-react';
-import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../types';
+import { motion, AnimatePresence } from 'motion/react';
 
 interface SidebarProps {
   activeTab: string;
@@ -27,27 +32,19 @@ interface SidebarProps {
   user: any;
   cart: any[];
   activeOrders: any[];
-  isReportsOpen: boolean;
-  setIsReportsOpen: (open: boolean) => void;
-  isInventoryOpen: boolean;
-  setIsInventoryOpen: (open: boolean) => void;
-  isSettingsOpen: boolean;
-  setIsSettingsOpen: (open: boolean) => void;
-  reportSubTab: string;
-  setReportSubTab: (tab: string) => void;
-  invCategoryFilter: string;
-  setInvCategoryFilter: (filter: any) => void;
   appSettings: any;
   t: (key: string) => string;
-  IconComponent: any;
   handleLogout: () => void;
   darkMode: boolean;
   setDarkMode: (dark: boolean) => void;
-  setShowShortcuts: (show: boolean) => void;
   handleRefresh: () => void;
   isRefreshing: boolean;
-  setShowPasswordModal: (show: boolean) => void;
-  stats: any;
+  isFullscreen: boolean;
+  toggleFullscreen: () => void;
+  notifications: any[];
+  showNotifications: boolean;
+  setShowNotifications: (show: boolean) => void;
+  setNotifications: (notifs: any[]) => void;
 }
 
 const Sidebar: React.FC<SidebarProps> = ({
@@ -56,473 +53,371 @@ const Sidebar: React.FC<SidebarProps> = ({
   user,
   cart,
   activeOrders,
-  isReportsOpen,
-  setIsReportsOpen,
-  isInventoryOpen,
-  setIsInventoryOpen,
-  isSettingsOpen,
-  setIsSettingsOpen,
-  reportSubTab,
-  setReportSubTab,
-  invCategoryFilter,
-  setInvCategoryFilter,
   appSettings,
   t,
-  IconComponent,
   handleLogout,
   darkMode,
   setDarkMode,
-  setShowShortcuts,
   handleRefresh,
   isRefreshing,
-  setShowPasswordModal,
-  stats
+  isFullscreen,
+  toggleFullscreen,
+  notifications,
+  showNotifications,
+  setShowNotifications,
+  setNotifications
 }) => {
-  return (
-    <nav className="hidden md:flex w-64 bg-white dark:bg-zinc-900 border-r border-coffee-200 dark:border-zinc-800 p-6 flex-col gap-8 h-screen sticky top-0 no-print overflow-y-auto custom-scrollbar">
-      <div className="flex items-center gap-4 px-2 mb-4">
+  const [isCollapsed, setIsCollapsed] = useState(false);
+  const [isMobileOpen, setIsMobileOpen] = useState(false);
+
+  const navItems = [
+    { id: 'dashboard', label: t('dashboard'), icon: LayoutDashboard, adminOnly: true },
+    { id: 'orders', label: t('orders'), icon: ShoppingCart, adminOnly: false },
+    { id: 'queue', label: t('queue'), icon: Clock, adminOnly: false },
+    { id: 'delivery', label: 'Delivery', icon: Truck, adminOnly: false },
+    { id: 'reports', label: t('reports'), icon: Calendar, adminOnly: false },
+    { id: 'inventory', label: t('inventory'), icon: Package, adminOnly: true },
+    { id: 'menu', label: t('menu'), icon: UtensilsCrossed, adminOnly: true },
+    { id: 'users', label: t('users'), icon: User, adminOnly: true },
+    { id: 'loyalty', label: t('loyalty'), icon: Star, adminOnly: true },
+    { id: 'settings', label: t('settings'), icon: Settings, adminOnly: true },
+  ];
+
+  const toggleSidebar = () => setIsCollapsed(!isCollapsed);
+  const toggleMobile = () => setIsMobileOpen(!isMobileOpen);
+
+  const SidebarContent = () => (
+    <div className="flex flex-col h-full bg-white dark:bg-zinc-950 border-r border-coffee-100 dark:border-zinc-800 transition-all duration-300">
+      {/* Logo Section */}
+      <div className={cn(
+        "p-6 flex items-center gap-3 border-b border-coffee-50 dark:border-zinc-900",
+        isCollapsed ? "justify-center" : "justify-start"
+      )}>
         <div className={cn(
-          "flex items-center justify-center",
-          appSettings.app_logo_url ? "" : "bg-coffee-900 p-2.5 rounded-2xl shadow-md"
+          "flex items-center justify-center shrink-0",
+          appSettings.app_logo_url ? "" : "bg-coffee-900 p-2 rounded-2xl shadow-lg shadow-coffee-200 dark:shadow-none"
         )}>
           {appSettings.app_logo_url ? (
-            <img src={appSettings.app_logo_url} alt="Logo" className="w-14 h-14 object-contain" />
+            <img src={appSettings.app_logo_url} alt="Logo" className="w-8 h-8 object-contain" />
           ) : (
-            <IconComponent className="text-white w-8 h-8" size={32} />
+            <ShoppingCart className="text-white w-5 h-5" size={20} />
           )}
         </div>
-        <span className="font-serif font-bold text-coffee-950 dark:text-zinc-100 text-xl truncate tracking-tight">{appSettings.app_name}</span>
+        {!isCollapsed && (
+          <motion.span 
+            initial={{ opacity: 0, x: -10 }}
+            animate={{ opacity: 1, x: 0 }}
+            className="font-serif font-black text-coffee-950 dark:text-zinc-100 text-xl tracking-tight truncate"
+          >
+            {appSettings.app_name}
+          </motion.span>
+        )}
       </div>
 
-      <div className="flex flex-col gap-2 flex-1 pr-2">
-        {user.role === 'admin' && (
-          <button 
-            onClick={() => {
-              setActiveTab('dashboard');
-              setIsInventoryOpen(false);
-              setIsReportsOpen(false);
-              setIsSettingsOpen(false);
-            }}
-            className={cn(
-              "flex items-center gap-3 px-4 py-3 rounded-2xl transition-all duration-200",
-              activeTab === 'dashboard' ? "bg-coffee-600 text-white shadow-lg shadow-coffee-200 dark:shadow-none" : "text-coffee-600 dark:text-zinc-400 hover:bg-coffee-100 dark:hover:bg-zinc-800"
-            )}
-          >
-            <LayoutDashboard size={20} />
-            <span className="font-medium">{t('dashboard')}</span>
-          </button>
-        )}
-        
-        <button 
-          onClick={() => {
-            setActiveTab('orders');
-            setIsInventoryOpen(false);
-            setIsReportsOpen(false);
-            setIsSettingsOpen(false);
-          }}
-          className={cn(
-            "flex items-center gap-3 px-4 py-3 rounded-2xl transition-all duration-200 relative",
-            activeTab === 'orders' ? "bg-coffee-600 text-white shadow-lg shadow-coffee-200 dark:shadow-none" : "text-coffee-600 dark:text-zinc-400 hover:bg-coffee-100 dark:hover:bg-zinc-800"
-          )}
-        >
-          <ShoppingCart size={20} />
-          <span className="font-medium">{t('orders')}</span>
-          {cart.length > 0 && (
-            <span className="absolute right-2 top-1/2 -translate-y-1/2 bg-rose-500 text-white text-[10px] w-5 h-5 rounded-full flex items-center justify-center font-bold">
-              {cart.reduce((sum, item) => sum + item.quantity, 0)}
-            </span>
-          )}
-        </button>
-
-        <button 
-          onClick={() => {
-            setActiveTab('queue');
-            setIsInventoryOpen(false);
-            setIsReportsOpen(false);
-            setIsSettingsOpen(false);
-          }}
-          className={cn(
-            "flex items-center gap-3 px-4 py-3 rounded-2xl transition-all duration-200 relative",
-            activeTab === 'queue' ? "bg-coffee-600 text-white shadow-lg shadow-coffee-200 dark:shadow-none" : "text-coffee-600 dark:text-zinc-400 hover:bg-coffee-100 dark:hover:bg-zinc-800"
-          )}
-        >
-          <Clock size={20} />
-          <span className="font-medium">{t('queue')}</span>
-          {activeOrders.length > 0 && (
-            <span className="absolute right-2 top-1/2 -translate-y-1/2 bg-amber-500 text-white text-[10px] w-5 h-5 rounded-full flex items-center justify-center font-bold">
-              {activeOrders.length}
-            </span>
-          )}
-        </button>
-
-        <div className="space-y-1">
-          <button 
-            onClick={() => {
-              if (activeTab !== 'reports') {
-                setActiveTab('reports');
-                setIsReportsOpen(true);
-                setIsInventoryOpen(false);
-                setIsSettingsOpen(false);
-              } else {
-                setIsReportsOpen(!isReportsOpen);
-              }
-            }}
-            className={cn(
-              "w-full flex items-center justify-between px-4 py-3 rounded-2xl transition-all duration-200",
-              activeTab === 'reports' ? "bg-coffee-600 text-white shadow-lg shadow-coffee-200 dark:shadow-none" : "text-coffee-600 dark:text-zinc-400 hover:bg-coffee-100 dark:hover:bg-zinc-800"
-            )}
-          >
-            <div className="flex items-center gap-3">
-              <Calendar size={20} />
-              <span className="font-medium">{t('reports')}</span>
-            </div>
-            <motion.div
-              animate={{ rotate: isReportsOpen ? 180 : 0 }}
-              transition={{ duration: 0.2 }}
+      {/* Navigation Items */}
+      <div className="flex-1 overflow-y-auto py-6 px-3 space-y-1 custom-scrollbar">
+        {navItems.map((item) => {
+          if (item.adminOnly && user.role !== 'admin') return null;
+          
+          const isActive = activeTab === item.id;
+          
+          return (
+            <button
+              key={item.id}
+              onClick={() => {
+                setActiveTab(item.id);
+                if (isMobileOpen) setIsMobileOpen(false);
+              }}
+              className={cn(
+                "w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-bold transition-all relative group",
+                isActive 
+                  ? "bg-coffee-900 text-white shadow-lg shadow-coffee-200 dark:shadow-none" 
+                  : "text-coffee-400 dark:text-zinc-500 hover:bg-coffee-50 dark:hover:bg-zinc-900 hover:text-coffee-900 dark:hover:text-zinc-100"
+              )}
+              title={isCollapsed ? item.label : ""}
             >
-              <ArrowDownLeft size={14} className="rotate-45" />
+              <item.icon size={20} className={cn("shrink-0", isActive ? "text-white" : "text-coffee-400 dark:text-zinc-500 group-hover:text-coffee-900 dark:group-hover:text-zinc-100")} />
+              {!isCollapsed && (
+                <motion.span
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  className="truncate"
+                >
+                  {item.label}
+                </motion.span>
+              )}
+              
+              {/* Badges */}
+              {item.id === 'orders' && cart.length > 0 && (
+                <span className={cn(
+                  "absolute bg-rose-500 text-white text-[10px] rounded-full flex items-center justify-center font-black transition-all",
+                  isCollapsed ? "top-2 right-2 w-4 h-4" : "right-4 w-5 h-5"
+                )}>
+                  {cart.reduce((sum, i) => sum + i.quantity, 0)}
+                </span>
+              )}
+              
+              {item.id === 'queue' && activeOrders.length > 0 && (
+                <span className={cn(
+                  "absolute bg-amber-500 text-white text-[10px] rounded-full flex items-center justify-center font-black transition-all",
+                  isCollapsed ? "top-2 right-2 w-4 h-4" : "right-4 w-5 h-5"
+                )}>
+                  {activeOrders.length}
+                </span>
+              )}
+
+              {isActive && !isCollapsed && (
+                <motion.div 
+                  layoutId="activeTab"
+                  className="absolute left-0 w-1 h-6 bg-white rounded-r-full"
+                />
+              )}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Bottom Section */}
+      <div className="p-4 border-t border-coffee-50 dark:border-zinc-900 space-y-4">
+        {/* Quick Actions */}
+        <div className={cn(
+          "flex items-center gap-1 bg-coffee-50 dark:bg-zinc-900/50 p-1 rounded-2xl",
+          isCollapsed ? "flex-col" : "flex-row justify-around"
+        )}>
+          <button 
+            onClick={handleRefresh}
+            disabled={isRefreshing}
+            className="p-2 text-coffee-400 hover:text-coffee-900 dark:hover:text-zinc-100 transition-colors rounded-xl hover:bg-white dark:hover:bg-zinc-800"
+            title="Refresh Data"
+          >
+            <RefreshCw size={18} className={cn(isRefreshing && "animate-spin")} />
+          </button>
+          <button 
+            onClick={() => setDarkMode(!darkMode)}
+            className="p-2 text-coffee-400 hover:text-coffee-900 dark:hover:text-zinc-100 transition-colors rounded-xl hover:bg-white dark:hover:bg-zinc-800"
+            title="Toggle Theme"
+          >
+            {darkMode ? <Sun size={18} /> : <Moon size={18} />}
+          </button>
+          <button 
+            onClick={() => setShowNotifications(!showNotifications)}
+            className={cn(
+              "p-2 rounded-xl transition-all relative hover:bg-white dark:hover:bg-zinc-800",
+              showNotifications ? "text-coffee-900 dark:text-zinc-100 bg-white dark:bg-zinc-800" : "text-coffee-400 hover:text-coffee-900 dark:hover:text-zinc-100"
+            )}
+            title="Notifikasi"
+          >
+            <Bell size={18} />
+            {notifications.length > 0 && (
+              <span className="absolute top-2 right-2 w-2 h-2 bg-rose-500 rounded-full border border-white dark:border-zinc-950" />
+            )}
+          </button>
+          {!isCollapsed && (
+            <button 
+              onClick={toggleFullscreen}
+              className="p-2 text-coffee-400 hover:text-coffee-900 dark:hover:text-zinc-100 transition-colors rounded-xl hover:bg-white dark:hover:bg-zinc-800"
+              title="Fullscreen"
+            >
+              {isFullscreen ? <Minimize size={18} /> : <Maximize size={18} />}
+            </button>
+          )}
+        </div>
+
+        {/* Notifications Dropdown (Desktop) */}
+        <AnimatePresence>
+          {showNotifications && (
+            <motion.div 
+              initial={{ opacity: 0, x: 10, scale: 0.95 }}
+              animate={{ opacity: 1, x: 0, scale: 1 }}
+              exit={{ opacity: 0, x: 10, scale: 0.95 }}
+              className={cn(
+                "absolute bottom-24 bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl border border-coffee-100 dark:border-zinc-800 overflow-hidden z-[150] w-80",
+                isCollapsed ? "left-20" : "left-4"
+              )}
+            >
+              <div className="p-4 border-b border-coffee-50 dark:border-zinc-800 bg-coffee-50/50 dark:bg-zinc-800/50 flex justify-between items-center">
+                <h4 className="font-bold text-coffee-950 dark:text-zinc-100">Notifikasi</h4>
+                <button 
+                  onClick={() => setNotifications([])}
+                  className="text-[10px] font-bold text-coffee-500 uppercase hover:text-rose-500 transition-colors"
+                >
+                  Hapus Semua
+                </button>
+              </div>
+              <div className="max-h-[300px] overflow-y-auto custom-scrollbar">
+                {notifications.length === 0 ? (
+                  <div className="p-8 text-center text-coffee-400">
+                    <Bell size={32} className="mx-auto mb-2 opacity-20" />
+                    <p className="text-xs">Belum ada notifikasi</p>
+                  </div>
+                ) : (
+                  notifications.map(notif => (
+                    <div key={notif.id} className="p-4 border-b border-coffee-50 dark:border-zinc-800 hover:bg-coffee-50/50 dark:hover:bg-zinc-800/50 transition-colors flex gap-3">
+                      <div className="w-8 h-8 rounded-lg bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+                        <Check size={16} />
+                      </div>
+                      <div>
+                        <p className="text-xs text-coffee-900 dark:text-zinc-300 leading-relaxed">{notif.message}</p>
+                        <p className="text-[10px] text-coffee-400 mt-1 font-medium">{notif.time}</p>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
             </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* User Profile */}
+        <div className={cn(
+          "flex items-center gap-3 p-2 rounded-2xl bg-coffee-50/50 dark:bg-zinc-900/30 border border-coffee-50 dark:border-zinc-800",
+          isCollapsed ? "justify-center" : "justify-between"
+        )}>
+          <div className="flex items-center gap-3 overflow-hidden">
+            <div className="w-10 h-10 rounded-xl bg-coffee-900 flex items-center justify-center text-white shrink-0 shadow-md shadow-coffee-200 dark:shadow-none">
+              <User size={20} />
+            </div>
+            {!isCollapsed && (
+              <div className="overflow-hidden">
+                <p className="text-xs font-bold text-coffee-950 dark:text-zinc-100 truncate">{user.username}</p>
+                <p className="text-[10px] text-coffee-400 uppercase font-black tracking-widest truncate">{user.role}</p>
+              </div>
+            )}
+          </div>
+          {!isCollapsed && (
+            <button 
+              onClick={handleLogout}
+              className="p-2 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 rounded-xl transition-all"
+              title="Keluar"
+            >
+              <LogOut size={18} />
+            </button>
+          )}
+        </div>
+
+        {/* Collapse Toggle */}
+        <button 
+          onClick={toggleSidebar}
+          className="hidden lg:flex w-full items-center justify-center p-2 text-coffee-300 hover:text-coffee-600 dark:hover:text-zinc-400 transition-colors"
+        >
+          {isCollapsed ? <ChevronRight size={20} /> : <ChevronLeft size={20} />}
+        </button>
+      </div>
+    </div>
+  );
+
+  return (
+    <>
+      {/* Mobile Header */}
+      <div className="lg:hidden fixed top-0 left-0 right-0 h-16 bg-white dark:bg-zinc-950 border-b border-coffee-100 dark:border-zinc-800 flex items-center justify-between px-4 z-[100] no-print">
+        <div className="flex items-center gap-2">
+          <div className="bg-coffee-900 p-1.5 rounded-xl">
+            <ShoppingCart className="text-white w-4 h-4" size={16} />
+          </div>
+          <span className="font-serif font-black text-coffee-950 dark:text-zinc-100 text-lg tracking-tight">
+            {appSettings.app_name}
+          </span>
+        </div>
+        <div className="flex items-center gap-2">
+          <button 
+            onClick={() => setShowNotifications(!showNotifications)}
+            className="p-2 text-coffee-400 relative"
+          >
+            <Bell size={20} />
+            {notifications.length > 0 && (
+              <span className="absolute top-2 right-2 w-2 h-2 bg-rose-500 rounded-full border border-white dark:border-zinc-950" />
+            )}
           </button>
 
+          {/* Mobile Notifications Dropdown */}
           <AnimatePresence>
-            {isReportsOpen && (
-              <motion.div
-                initial={{ height: 0, opacity: 0 }}
-                animate={{ height: 'auto', opacity: 1 }}
-                exit={{ height: 0, opacity: 0 }}
-                className="overflow-hidden flex flex-col gap-1 pl-4"
+            {showNotifications && (
+              <motion.div 
+                initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                className="fixed top-16 right-4 w-[calc(100vw-32px)] max-w-80 bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl border border-coffee-100 dark:border-zinc-800 overflow-hidden z-[150]"
               >
-                <button
-                  onClick={() => {
-                    setActiveTab('reports');
-                    setReportSubTab('transactions');
-                  }}
-                  className={cn(
-                    "flex items-center gap-3 px-4 py-2 rounded-xl text-sm transition-all",
-                    activeTab === 'reports' && reportSubTab === 'transactions' 
-                      ? "bg-coffee-100 dark:bg-zinc-800 text-coffee-900 dark:text-zinc-100 font-bold" 
-                      : "text-coffee-500 dark:text-zinc-400 hover:bg-coffee-50 dark:hover:bg-zinc-800/50"
+                <div className="p-4 border-b border-coffee-50 dark:border-zinc-800 bg-coffee-50/50 dark:bg-zinc-800/50 flex justify-between items-center">
+                  <h4 className="font-bold text-coffee-950 dark:text-zinc-100">Notifikasi</h4>
+                  <button 
+                    onClick={() => setNotifications([])}
+                    className="text-[10px] font-bold text-coffee-500 uppercase hover:text-rose-500 transition-colors"
+                  >
+                    Hapus Semua
+                  </button>
+                </div>
+                <div className="max-h-[300px] overflow-y-auto custom-scrollbar">
+                  {notifications.length === 0 ? (
+                    <div className="p-8 text-center text-coffee-400">
+                      <Bell size={32} className="mx-auto mb-2 opacity-20" />
+                      <p className="text-xs">Belum ada notifikasi</p>
+                    </div>
+                  ) : (
+                    notifications.map(notif => (
+                      <div key={notif.id} className="p-4 border-b border-coffee-50 dark:border-zinc-800 hover:bg-coffee-50/50 dark:hover:bg-zinc-800/50 transition-colors flex gap-3">
+                        <div className="w-8 h-8 rounded-lg bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+                          <Check size={16} />
+                        </div>
+                        <div>
+                          <p className="text-xs text-coffee-900 dark:text-zinc-300 leading-relaxed">{notif.message}</p>
+                          <p className="text-[10px] text-coffee-400 mt-1 font-medium">{notif.time}</p>
+                        </div>
+                      </div>
+                    ))
                   )}
-                >
-                  <div className={cn(
-                    "w-1.5 h-1.5 rounded-full",
-                    activeTab === 'reports' && reportSubTab === 'transactions' ? "bg-coffee-600" : "bg-coffee-200"
-                  )} />
-                  {t('transaction_report')}
-                </button>
-                {user.role === 'admin' && (
-                  <>
-                    <button
-                      onClick={() => {
-                        setActiveTab('reports');
-                        setReportSubTab('financial');
-                      }}
-                      className={cn(
-                        "flex items-center gap-3 px-4 py-2 rounded-xl text-sm transition-all",
-                        activeTab === 'reports' && reportSubTab === 'financial' 
-                          ? "bg-coffee-100 dark:bg-zinc-800 text-coffee-900 dark:text-zinc-100 font-bold" 
-                          : "text-coffee-500 dark:text-zinc-400 hover:bg-coffee-50 dark:hover:bg-zinc-800/50"
-                      )}
-                    >
-                      <div className={cn(
-                        "w-1.5 h-1.5 rounded-full",
-                        activeTab === 'reports' && reportSubTab === 'financial' ? "bg-coffee-600" : "bg-coffee-200 dark:bg-zinc-700"
-                      )} />
-                      {t('financial_report')}
-                    </button>
-                    <button
-                      onClick={() => {
-                        setActiveTab('reports');
-                        setReportSubTab('consignment');
-                      }}
-                      className={cn(
-                        "flex items-center gap-3 px-4 py-2 rounded-xl text-sm transition-all",
-                        activeTab === 'reports' && reportSubTab === 'consignment' 
-                          ? "bg-coffee-100 dark:bg-zinc-800 text-coffee-900 dark:text-zinc-100 font-bold" 
-                          : "text-coffee-500 dark:text-zinc-400 hover:bg-coffee-50 dark:hover:bg-zinc-800/50"
-                      )}
-                    >
-                      <div className={cn(
-                        "w-1.5 h-1.5 rounded-full",
-                        activeTab === 'reports' && reportSubTab === 'consignment' ? "bg-coffee-600" : "bg-coffee-200 dark:bg-zinc-700"
-                      )} />
-                      {t('consignment_report')}
-                    </button>
-                    <button
-                      onClick={() => {
-                        setActiveTab('transactions');
-                        setIsReportsOpen(true);
-                      }}
-                      className={cn(
-                        "flex items-center gap-3 px-4 py-2 rounded-xl text-sm transition-all",
-                        activeTab === 'transactions' 
-                          ? "bg-coffee-100 dark:bg-zinc-800 text-coffee-900 dark:text-zinc-100 font-bold" 
-                          : "text-coffee-500 dark:text-zinc-400 hover:bg-coffee-50 dark:hover:bg-zinc-800/50"
-                      )}
-                    >
-                      <div className={cn(
-                        "w-1.5 h-1.5 rounded-full",
-                        activeTab === 'transactions' ? "bg-coffee-600" : "bg-coffee-200 dark:bg-zinc-700"
-                      )} />
-                      Semua Transaksi
-                    </button>
-                  </>
-                )}
+                </div>
               </motion.div>
             )}
           </AnimatePresence>
-        </div>
 
-        {user.role === 'admin' && (
-          <div className="space-y-1">
-            <button 
-              onClick={() => {
-                if (activeTab !== 'inventory') {
-                  setActiveTab('inventory');
-                  setIsInventoryOpen(true);
-                  setIsReportsOpen(false);
-                  setIsSettingsOpen(false);
-                } else {
-                  setIsInventoryOpen(!isInventoryOpen);
-                }
-              }}
-              className={cn(
-                "w-full flex items-center justify-between px-4 py-3 rounded-2xl transition-all duration-200",
-                activeTab === 'inventory' ? "bg-coffee-600 text-white shadow-lg shadow-coffee-200 dark:shadow-none" : "text-coffee-600 dark:text-zinc-400 hover:bg-coffee-100 dark:hover:bg-zinc-800"
-              )}
-            >
-              <div className="flex items-center gap-3">
-                <Package size={20} />
-                <span className="font-medium">{t('inventory')}</span>
-              </div>
-              <motion.div
-                animate={{ rotate: isInventoryOpen ? 180 : 0 }}
-                transition={{ duration: 0.2 }}
-              >
-                <ArrowDownLeft size={14} className="rotate-45" />
-              </motion.div>
-            </button>
-
-            <AnimatePresence>
-              {isInventoryOpen && (
-                <motion.div
-                  initial={{ height: 0, opacity: 0 }}
-                  animate={{ height: 'auto', opacity: 1 }}
-                  exit={{ height: 0, opacity: 0 }}
-                  className="overflow-hidden flex flex-col gap-1 pl-4"
-                >
-                  <button
-                    onClick={() => {
-                      setActiveTab('inventory');
-                      setInvCategoryFilter('Semua');
-                    }}
-                    className={cn(
-                      "flex items-center gap-3 px-4 py-2 rounded-xl text-sm transition-all",
-                      activeTab === 'inventory' && invCategoryFilter === 'Semua' 
-                        ? "bg-coffee-100 dark:bg-zinc-800 text-coffee-900 dark:text-zinc-100 font-bold" 
-                        : "text-coffee-500 dark:text-zinc-400 hover:bg-coffee-50 dark:hover:bg-zinc-800/50"
-                    )}
-                  >
-                    <div className={cn(
-                      "w-1.5 h-1.5 rounded-full",
-                      activeTab === 'inventory' && invCategoryFilter === 'Semua' ? "bg-coffee-600" : "bg-coffee-200 dark:bg-zinc-700"
-                    )} />
-                    {t('all_inventory')}
-                  </button>
-                  <button
-                    onClick={() => {
-                      setActiveTab('inventory');
-                      setInvCategoryFilter('Bahan');
-                    }}
-                    className={cn(
-                      "flex items-center gap-3 px-4 py-2 rounded-xl text-sm transition-all",
-                      activeTab === 'inventory' && invCategoryFilter === 'Bahan' 
-                        ? "bg-coffee-100 dark:bg-zinc-800 text-coffee-900 dark:text-zinc-100 font-bold" 
-                        : "text-coffee-500 dark:text-zinc-400 hover:bg-coffee-50 dark:hover:bg-zinc-800/50"
-                    )}
-                  >
-                    <div className={cn(
-                      "w-1.5 h-1.5 rounded-full",
-                      activeTab === 'inventory' && invCategoryFilter === 'Bahan' ? "bg-coffee-600" : "bg-coffee-200 dark:bg-zinc-700"
-                    )} />
-                    {t('raw_material')}
-                  </button>
-                  <button
-                    onClick={() => {
-                      setActiveTab('inventory');
-                      setInvCategoryFilter('Barang');
-                    }}
-                    className={cn(
-                      "flex items-center gap-3 px-4 py-2 rounded-xl text-sm transition-all",
-                      activeTab === 'inventory' && invCategoryFilter === 'Barang' 
-                        ? "bg-coffee-100 dark:bg-zinc-800 text-coffee-900 dark:text-zinc-100 font-bold" 
-                        : "text-coffee-500 dark:text-zinc-400 hover:bg-coffee-50 dark:hover:bg-zinc-800/50"
-                    )}
-                  >
-                    <div className={cn(
-                      "w-1.5 h-1.5 rounded-full",
-                      activeTab === 'inventory' && invCategoryFilter === 'Barang' ? "bg-coffee-600" : "bg-coffee-200 dark:bg-zinc-700"
-                    )} />
-                    {t('goods')}
-                  </button>
-                  <button
-                    onClick={() => {
-                      setActiveTab('inventory');
-                      setInvCategoryFilter('Alat');
-                    }}
-                    className={cn(
-                      "flex items-center gap-3 px-4 py-2 rounded-xl text-sm transition-all",
-                      activeTab === 'inventory' && invCategoryFilter === 'Alat' 
-                        ? "bg-coffee-100 dark:bg-zinc-800 text-coffee-900 dark:text-zinc-100 font-bold" 
-                        : "text-coffee-500 dark:text-zinc-400 hover:bg-coffee-50 dark:hover:bg-zinc-800/50"
-                    )}
-                  >
-                    <div className={cn(
-                      "w-1.5 h-1.5 rounded-full",
-                      activeTab === 'inventory' && invCategoryFilter === 'Alat' ? "bg-coffee-600" : "bg-coffee-200 dark:bg-zinc-700"
-                    )} />
-                    {t('inventory_tools')}
-                  </button>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
-        )}
-
-        {user.role === 'admin' && (
-          <>
-            <button 
-              onClick={() => {
-                setActiveTab('menu');
-                setIsInventoryOpen(false);
-                setIsReportsOpen(false);
-                setIsSettingsOpen(false);
-              }}
-              className={cn(
-                "flex items-center gap-3 px-4 py-3 rounded-2xl transition-all duration-200",
-                activeTab === 'menu' ? "bg-coffee-600 text-white shadow-lg shadow-coffee-200 dark:shadow-none" : "text-coffee-600 dark:text-zinc-400 hover:bg-coffee-100 dark:hover:bg-zinc-800"
-              )}
-            >
-              <UtensilsCrossed size={20} />
-              <span className="font-medium">{t('menu')}</span>
-            </button>
-            <button 
-              onClick={() => {
-                setActiveTab('users');
-                setIsInventoryOpen(false);
-                setIsReportsOpen(false);
-                setIsSettingsOpen(false);
-              }}
-              className={cn(
-                "flex items-center gap-3 px-4 py-3 rounded-2xl transition-all duration-200",
-                activeTab === 'users' ? "bg-coffee-600 text-white shadow-lg shadow-coffee-200 dark:shadow-none" : "text-coffee-600 dark:text-zinc-400 hover:bg-coffee-100 dark:hover:bg-zinc-800"
-              )}
-            >
-              <User size={20} />
-              <span className="font-medium">{t('users')}</span>
-            </button>
-            <button 
-              onClick={() => {
-                setActiveTab('loyalty');
-                setIsInventoryOpen(false);
-                setIsReportsOpen(false);
-                setIsSettingsOpen(false);
-              }}
-              className={cn(
-                "flex items-center gap-3 px-4 py-3 rounded-2xl transition-all duration-200",
-                activeTab === 'loyalty' ? "bg-coffee-600 text-white shadow-lg shadow-coffee-200 dark:shadow-none" : "text-coffee-600 dark:text-zinc-400 hover:bg-coffee-100 dark:hover:bg-zinc-800"
-              )}
-            >
-              <Star size={20} />
-              <span className="font-medium">Loyalty Program</span>
-            </button>
-            <button 
-              onClick={() => {
-                setActiveTab('settings');
-                setIsInventoryOpen(false);
-                setIsReportsOpen(false);
-                setIsSettingsOpen(false);
-              }}
-              className={cn(
-                "flex items-center gap-3 px-4 py-3 rounded-2xl transition-all duration-200",
-                activeTab === 'settings' ? "bg-coffee-600 text-white shadow-lg shadow-coffee-200 dark:shadow-none" : "text-coffee-600 dark:text-zinc-400 hover:bg-coffee-100 dark:hover:bg-zinc-800"
-              )}
-            >
-              <Settings size={20} />
-              <span className="font-medium">{t('settings')}</span>
-            </button>
-
-            <button 
-              onClick={() => setDarkMode(!darkMode)}
-              className="flex items-center gap-3 px-4 py-3 rounded-2xl transition-all duration-200 text-coffee-600 dark:text-zinc-400 hover:bg-coffee-100 dark:hover:bg-zinc-800"
-              title="Toggle Dark Mode"
-            >
-              {darkMode ? <Sun size={20} /> : <Moon size={20} />}
-              <span className="font-medium">{darkMode ? "Mode Terang" : "Mode Gelap"}</span>
-            </button>
-
-            <button 
-              onClick={() => setShowShortcuts(true)}
-              className="flex items-center gap-3 px-4 py-3 rounded-2xl transition-all duration-200 text-coffee-600 dark:text-zinc-400 hover:bg-coffee-100 dark:hover:bg-zinc-800"
-              title="Shortcut Keyboard"
-            >
-              <Keyboard size={20} />
-              <span className="font-medium">{t('shortcuts')}</span>
-            </button>
-
-            <button 
-              onClick={handleRefresh}
-              disabled={isRefreshing}
-              className={cn(
-                "flex items-center gap-3 px-4 py-3 rounded-2xl transition-all duration-200 text-coffee-600 dark:text-zinc-400 hover:bg-coffee-100 dark:hover:bg-zinc-800",
-                isRefreshing && "opacity-50 cursor-not-allowed"
-              )}
-              title="Refresh Data"
-            >
-              <RefreshCw size={20} className={cn(isRefreshing && "animate-spin")} />
-              <span className="font-medium">{isRefreshing ? "Memuat..." : "Refresh"}</span>
-            </button>
-          </>
-        )}
-      </div>
-
-      <div className="pt-6 border-t border-coffee-100 dark:border-zinc-800 space-y-4">
-        <div className="p-4 bg-coffee-100 dark:bg-zinc-800 rounded-3xl">
-          <div className="flex items-center gap-3 mb-3">
-            <div className="w-10 h-10 rounded-xl bg-coffee-900 dark:bg-zinc-700 flex items-center justify-center text-white font-bold">
-              {user.username[0].toUpperCase()}
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-bold text-coffee-950 dark:text-zinc-100 truncate">{user.username}</p>
-              <p className="text-[10px] font-bold text-coffee-50 text-coffee-500 uppercase tracking-widest">{user.role}</p>
-            </div>
-            <button 
-              onClick={() => setShowPasswordModal(true)}
-              className="p-2 text-coffee-400 hover:text-coffee-900 dark:hover:text-zinc-100 transition-colors"
-              title="Ganti Password"
-            >
-              <Lock size={16} />
-            </button>
-          </div>
           <button 
-            onClick={handleLogout}
-            className="w-full flex items-center justify-center gap-2 py-2 rounded-xl bg-white dark:bg-zinc-900 text-rose-600 text-xs font-bold hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-all border border-rose-100 dark:border-rose-900/30"
+            onClick={toggleMobile}
+            className="p-2 text-coffee-900 dark:text-zinc-100"
           >
-            <LogOut size={14} /> Keluar
+            {isMobileOpen ? <X size={24} /> : <MenuIcon size={24} />}
           </button>
         </div>
-
-        <div className="p-4 bg-coffee-100 dark:bg-zinc-800 rounded-3xl">
-          <p className="text-xs text-coffee-500 dark:text-zinc-400 uppercase tracking-wider font-bold mb-2">Status Stok</p>
-          <div className="flex items-center gap-2">
-            <div className={cn("w-2 h-2 rounded-full", stats?.lowStock?.length ? "bg-red-500 animate-pulse" : "bg-green-500")} />
-            <p className="text-sm font-medium text-coffee-800 dark:text-zinc-300">
-              {stats?.lowStock?.length ? `${stats.lowStock.length} Item Menipis` : 'Stok Aman'}
-            </p>
-          </div>
-        </div>
       </div>
-    </nav>
+
+      {/* Desktop Sidebar */}
+      <aside className={cn(
+        "hidden lg:block sticky left-0 top-0 bottom-0 h-screen z-[100] transition-all duration-300 no-print shrink-0",
+        isCollapsed ? "w-20" : "w-72"
+      )}>
+        <SidebarContent />
+      </aside>
+
+      {/* Mobile Sidebar Overlay */}
+      <AnimatePresence>
+        {isMobileOpen && (
+          <>
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={toggleMobile}
+              className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[110] lg:hidden"
+            />
+            <motion.aside 
+              initial={{ x: '-100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '-100%' }}
+              transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+              className="fixed left-0 top-0 bottom-0 w-72 z-[120] lg:hidden"
+            >
+              <SidebarContent />
+            </motion.aside>
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* Spacing for Main Content */}
+      <div className={cn(
+        "transition-all duration-300",
+        isMobileOpen ? "overflow-hidden" : ""
+      )} />
+    </>
   );
 };
 

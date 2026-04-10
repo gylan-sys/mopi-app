@@ -73,6 +73,18 @@ export interface UserAccount {
   role: 'admin' | 'cashier';
 }
 
+export interface Driver {
+  id: number;
+  username: string;
+  full_name: string;
+  phone: string;
+  vehicle_info?: string;
+  status: 'pending' | 'active' | 'inactive' | 'busy';
+  latitude?: number;
+  longitude?: number;
+  created_at: string;
+}
+
 export interface DashboardStats {
   totalIncome: number;
   totalExpense: number;

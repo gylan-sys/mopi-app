@@ -73,6 +73,13 @@ export interface UserAccount {
   role: 'admin' | 'cashier';
 }
 
+export interface CartItem {
+  menu: Menu;
+  quantity: number;
+  sugarLevel?: string;
+  iceLevel?: string;
+}
+
 export interface Driver {
   id: number;
   username: string;

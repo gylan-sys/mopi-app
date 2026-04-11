@@ -1,7 +1,7 @@
 import React from 'react';
 import { motion } from 'motion/react';
 import { 
-  User, Truck, Plus, Search, Edit, Trash2, RefreshCw, MapPin 
+  User, Truck, Plus, Search, Edit, Trash2, RefreshCw, Globe 
 } from 'lucide-react';
 import { formatDate } from '../utils';
 import { cn } from '../types';
@@ -30,10 +30,10 @@ interface UsersTabProps {
   setNewDriverData: (data: any) => void;
   setShowDriverModal: (show: boolean) => void;
   handleUpdateDriverStatus: (id: string, status: string) => void;
-  handleDeleteDriver: (id: string) => void;
   fetchData: () => void;
-  setSelectedDriver: (driver: any) => void;
-  setShowDriverMap: (show: boolean) => void;
+  setSelectedDriverForMap: (id: string) => void;
+  setShowDriverMapModal: (show: boolean) => void;
+  setConfirmDialog: (dialog: any) => void;
   t: (key: string) => string;
 }
 
@@ -61,10 +61,10 @@ const UsersTab: React.FC<UsersTabProps> = ({
   setNewDriverData,
   setShowDriverModal,
   handleUpdateDriverStatus,
-  handleDeleteDriver,
   fetchData,
-  setSelectedDriver,
-  setShowDriverMap,
+  setSelectedDriverForMap,
+  setShowDriverMapModal,
+  setConfirmDialog,
   t
 }) => {
   return (
@@ -321,16 +321,16 @@ const UsersTab: React.FC<UsersTabProps> = ({
                           {d.latitude && d.longitude ? (
                             <button 
                               onClick={() => {
-                                setSelectedDriver(d);
-                                setShowDriverMap(true);
+                                setSelectedDriverForMap(d.id);
+                                setShowDriverMapModal(true);
                               }}
-                              className="flex items-center gap-1 text-blue-600 hover:text-blue-800 font-bold"
+                              className="flex items-center gap-1 text-coffee-600 hover:text-coffee-900 transition-colors"
                             >
-                              <MapPin size={14} />
-                              Lihat Peta
+                              <Globe size={14} />
+                              <span className="text-[10px] font-bold uppercase tracking-widest">Lihat Map</span>
                             </button>
                           ) : (
-                            <span className="text-coffee-300 italic text-xs">Lokasi tidak tersedia</span>
+                            <span className="text-[10px] text-coffee-300 italic">Lokasi tidak tersedia</span>
                           )}
                         </td>
                         <td className="px-6 py-4 text-right">
@@ -338,23 +338,53 @@ const UsersTab: React.FC<UsersTabProps> = ({
                             {d.status === 'pending' && (
                               <button 
                                 onClick={() => handleUpdateDriverStatus(d.id, 'active')}
-                                className="p-2 bg-emerald-50 text-emerald-600 rounded-xl hover:bg-emerald-100 transition-all"
-                                title="Setujui Driver"
+                                className="px-3 py-1.5 bg-emerald-600 text-white rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-emerald-700 transition-all"
                               >
-                                <Plus size={16} />
+                                {t('approve')}
                               </button>
                             )}
+                            {d.status === 'active' ? (
+                              <button 
+                                onClick={() => handleUpdateDriverStatus(d.id, 'suspended')}
+                                className="px-3 py-1.5 bg-rose-50 text-rose-600 rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-rose-100 transition-all"
+                              >
+                                {t('suspend')}
+                              </button>
+                            ) : d.status === 'suspended' ? (
+                              <button 
+                                onClick={() => handleUpdateDriverStatus(d.id, 'active')}
+                                className="px-3 py-1.5 bg-emerald-50 text-emerald-600 rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-emerald-100 transition-all"
+                              >
+                                Aktifkan
+                              </button>
+                            ) : null}
                             <button 
-                              onClick={() => handleDeleteDriver(d.id)}
-                              className="p-2 bg-rose-50 text-rose-600 rounded-xl hover:bg-rose-100 transition-all"
+                              onClick={() => {
+                                setConfirmDialog({
+                                  show: true,
+                                  title: 'Hapus Driver',
+                                  message: 'Apakah Anda yakin ingin menghapus driver ini? Tindakan ini tidak dapat dibatalkan.',
+                                  isDestructive: true,
+                                  onConfirm: async () => {
+                                    await fetch(`/api/admin/drivers/${d.id}`, { 
+                                      method: 'DELETE',
+                                      headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+                                    });
+                                    setConfirmDialog(null);
+                                    fetchData();
+                                  }
+                                });
+                              }}
+                              className="p-1.5 text-rose-300 hover:text-rose-600 transition-colors"
                               title="Hapus Driver"
                             >
-                              <Trash2 size={16} />
+                              <Trash2 size={14} />
                             </button>
                           </div>
                         </td>
                       </tr>
-                    )))}
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>

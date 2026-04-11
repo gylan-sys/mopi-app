@@ -12,7 +12,7 @@ import {
 } from 'recharts';
 import { formatIDR, formatDate, CHART_COLORS } from '../utils';
 import { cn } from '../types';
-import { toast } from 'react-hot-toast';
+import { toast } from 'sonner';
 
 interface ReportsTabProps {
   reportSubTab: 'transactions' | 'daily-summary' | 'financial' | 'consignment';
@@ -864,8 +864,10 @@ const ReportsTab: React.FC<ReportsTabProps> = ({
                 </div>
               </div>
             </div>
-          ) : (
-            <div className="space-y-6">
+          )}
+        </div>
+      ) : (
+        <div className="space-y-6">
               <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div>
                   <p className="text-coffee-500 font-medium uppercase tracking-widest text-[10px] mb-1">Laporan Titipan Barang</p>

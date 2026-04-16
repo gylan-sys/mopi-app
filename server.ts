@@ -243,7 +243,8 @@ function initDb() {
     ['timezone', 'Asia/Jakarta'],
     ['language', 'id'],
     ['order_counter', '1'],
-    ['enable_delivery', 'false']
+    ['enable_delivery', 'false'],
+    ['theme_name', 'coffee']
   ];
 
   const insertSetting = db.prepare("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)");

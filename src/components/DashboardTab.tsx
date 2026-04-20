@@ -113,12 +113,27 @@ const DashboardTab: React.FC<DashboardTabProps> = ({
 
   return (
     <motion.div 
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
+      initial="hidden"
+      animate="show"
+      variants={{
+        hidden: { opacity: 0 },
+        show: {
+          opacity: 1,
+          transition: {
+            staggerChildren: 0.1
+          }
+        }
+      }}
       className="space-y-6 pb-32 min-h-screen"
     >
       {/* Desktop Header */}
-      <header className="hidden lg:flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+      <motion.header 
+        variants={{
+          hidden: { opacity: 0, x: -20 },
+          show: { opacity: 1, x: 0 }
+        }}
+        className="hidden lg:flex flex-col md:flex-row justify-between items-start md:items-center gap-4"
+      >
         <div>
           <h2 className="text-3xl font-bold text-coffee-900 tracking-tight">
             Dashboard
@@ -129,10 +144,16 @@ const DashboardTab: React.FC<DashboardTabProps> = ({
           <Calendar size={18} className="text-coffee-400" />
           <span className="text-sm font-semibold text-coffee-900">{formatDate(new Date(), 'EEEE, d MMMM yyyy', appSettings.timezone)}</span>
         </div>
-      </header>
+      </motion.header>
 
       {/* KPI Stats (Horizontal Scroll on Mobile) */}
-      <div className="flex lg:grid lg:grid-cols-3 xl:grid-cols-6 gap-3 sm:gap-4 overflow-x-auto no-scrollbar -mx-6 px-6 lg:mx-0 lg:px-0 pb-2">
+      <motion.div 
+        variants={{
+          hidden: { opacity: 0 },
+          show: { opacity: 1, transition: { staggerChildren: 0.05 } }
+        }}
+        className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3 sm:gap-4 lg:gap-6"
+      >
         {[
           { label: 'Revenue', value: formatIDR(stats?.totalIncome || 0), icon: TrendingUp, color: 'emerald', trend: '+12%' },
           { label: 'Expenses', value: formatIDR(stats?.totalExpense || 0), icon: ArrowDownRight, color: 'rose', trend: '-5%' },
@@ -141,7 +162,14 @@ const DashboardTab: React.FC<DashboardTabProps> = ({
           { label: 'Active Queue', value: activeOrders.length, icon: Clock, color: 'violet', trend: '0' },
           { label: 'Low Stock', value: stats?.lowStock.length || 0, icon: AlertCircle, color: 'slate', trend: '!' },
         ].map((stat, idx) => (
-          <div key={idx} className="min-w-[130px] sm:min-w-[160px] lg:min-w-0 flex-1 bg-white p-3.5 sm:p-5 rounded-[20px] sm:rounded-[24px] border border-coffee-100 shadow-sm flex flex-col justify-between">
+          <motion.div 
+            key={idx} 
+            variants={{
+              hidden: { opacity: 0, scale: 0.9 },
+              show: { opacity: 1, scale: 1 }
+            }}
+            className="min-w-[130px] sm:min-w-[160px] lg:min-w-0 flex-1 bg-white p-3.5 sm:p-5 rounded-[24px] border border-coffee-100 shadow-[0_4px_20px_-4px_rgba(36,27,20,0.04)] hover:shadow-[0_15px_35px_-8px_rgba(36,27,20,0.08)] transition-all duration-300 hover:-translate-y-1 flex flex-col justify-between"
+          >
             <div className="flex justify-between items-start mb-3 sm:mb-4">
               <div className={cn(
                 "w-8 h-8 sm:w-10 sm:h-10 flex items-center justify-center rounded-[14px] sm:rounded-2xl",
@@ -161,64 +189,74 @@ const DashboardTab: React.FC<DashboardTabProps> = ({
               <p className="text-[8px] sm:text-[10px] font-black uppercase tracking-widest text-coffee-400 mb-0.5 sm:mb-1">{stat.label}</p>
               <p className="text-sm sm:text-lg font-black text-coffee-950 truncate">{stat.value}</p>
             </div>
-          </div>
+          </motion.div>
         ))}
-      </div>
+      </motion.div>
 
       {/* Quick Actions (2-Column Grid on Mobile) */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
-        <button 
+      <motion.div 
+        variants={{
+          hidden: { opacity: 0, y: 20 },
+          show: { opacity: 1, y: 0, transition: { staggerChildren: 0.05, delayChildren: 0.2 } }
+        }}
+        className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4"
+      >
+        <motion.button 
+          variants={{ hidden: { opacity: 0, scale: 0.9 }, show: { opacity: 1, scale: 1 } }}
           onClick={() => setActiveTab('orders')}
-          className="flex flex-col items-center justify-center gap-2 sm:gap-3 p-4 sm:p-6 bg-white border border-coffee-100 rounded-[20px] sm:rounded-[24px] shadow-sm hover:shadow-md transition-all text-center group active:scale-95"
+          className="flex flex-col items-center justify-center gap-2 sm:gap-3 p-4 sm:p-6 bg-white border border-coffee-100 rounded-[24px] shadow-[0_4px_20px_-4px_rgba(36,27,20,0.04)] hover:shadow-xl transition-all text-center group button-press"
         >
-          <div className="w-10 h-10 sm:w-14 sm:h-14 flex items-center justify-center bg-accent-500 text-white rounded-[16px] sm:rounded-[20px] shadow-lg shadow-accent-500/20">
+          <div className="w-10 h-10 sm:w-14 sm:h-14 flex items-center justify-center bg-accent-500 text-white rounded-[20px] shadow-lg shadow-accent-500/20 group-hover:scale-110 transition-transform">
             <Plus size={20} sm:size={28} />
           </div>
           <div>
             <p className="text-xs sm:text-sm font-black text-coffee-950">Buat Order</p>
             <p className="text-[8px] sm:text-[9px] text-coffee-400 uppercase font-black tracking-widest">POS System</p>
           </div>
-        </button>
-        <button 
+        </motion.button>
+        <motion.button 
+          variants={{ hidden: { opacity: 0, scale: 0.9 }, show: { opacity: 1, scale: 1 } }}
           onClick={() => {
             setNewTx({ type: 'expense', category: 'Operational', amount: 0, description: '' });
             setShowTxModal(true);
           }}
-          className="flex flex-col items-center justify-center gap-2 sm:gap-3 p-4 sm:p-6 bg-white border border-coffee-100 rounded-[20px] sm:rounded-[24px] shadow-sm hover:shadow-md transition-all text-center group active:scale-95"
+          className="flex flex-col items-center justify-center gap-2 sm:gap-3 p-4 sm:p-6 bg-white border border-coffee-100 rounded-[24px] shadow-[0_4px_20px_-4px_rgba(36,27,20,0.04)] hover:shadow-xl transition-all text-center group button-press"
         >
-          <div className="w-10 h-10 sm:w-14 sm:h-14 flex items-center justify-center bg-rose-500 text-white rounded-[16px] sm:rounded-[20px] shadow-lg shadow-rose-500/20">
+          <div className="w-10 h-10 sm:w-14 sm:h-14 flex items-center justify-center bg-rose-500 text-white rounded-[20px] shadow-lg shadow-rose-500/20 group-hover:scale-110 transition-transform">
             <ArrowDownLeft size={20} sm:size={28} />
           </div>
           <div>
             <p className="text-xs sm:text-sm font-black text-coffee-950">Catat Biaya</p>
             <p className="text-[8px] sm:text-[9px] text-coffee-400 uppercase font-black tracking-widest">Expense</p>
           </div>
-        </button>
-        <button 
+        </motion.button>
+        <motion.button 
+          variants={{ hidden: { opacity: 0, scale: 0.9 }, show: { opacity: 1, scale: 1 } }}
           onClick={() => setShowInvModal(true)}
-          className="flex flex-col items-center justify-center gap-2 sm:gap-3 p-4 sm:p-6 bg-white border border-coffee-100 rounded-[20px] sm:rounded-[24px] shadow-sm hover:shadow-md transition-all text-center group active:scale-95"
+          className="flex flex-col items-center justify-center gap-2 sm:gap-3 p-4 sm:p-6 bg-white border border-coffee-100 rounded-[24px] shadow-[0_4px_20px_-4px_rgba(36,27,20,0.04)] hover:shadow-xl transition-all text-center group button-press"
         >
-          <div className="w-10 h-10 sm:w-14 sm:h-14 flex items-center justify-center bg-amber-500 text-white rounded-[16px] sm:rounded-[20px] shadow-lg shadow-amber-500/20">
+          <div className="w-10 h-10 sm:w-14 sm:h-14 flex items-center justify-center bg-amber-500 text-white rounded-[20px] shadow-lg shadow-amber-500/20 group-hover:scale-110 transition-transform">
             <Package size={20} sm:size={28} />
           </div>
           <div>
             <p className="text-xs sm:text-sm font-black text-coffee-950">Update Stok</p>
             <p className="text-[8px] sm:text-[9px] text-coffee-400 uppercase font-black tracking-widest">Inventory</p>
           </div>
-        </button>
-        <button 
+        </motion.button>
+        <motion.button 
+          variants={{ hidden: { opacity: 0, scale: 0.9 }, show: { opacity: 1, scale: 1 } }}
           onClick={() => setActiveTab('reports')}
-          className="flex flex-col items-center justify-center gap-2 sm:gap-3 p-4 sm:p-6 bg-white border border-coffee-100 rounded-[20px] sm:rounded-[24px] shadow-sm hover:shadow-md transition-all text-center group active:scale-95"
+          className="flex flex-col items-center justify-center gap-2 sm:gap-3 p-4 sm:p-6 bg-white border border-coffee-100 rounded-[24px] shadow-[0_4px_20px_-4px_rgba(36,27,20,0.04)] hover:shadow-xl transition-all text-center group button-press"
         >
-          <div className="w-10 h-10 sm:w-14 sm:h-14 flex items-center justify-center bg-coffee-600 text-white rounded-[16px] sm:rounded-[20px] shadow-lg shadow-coffee-600/20">
+          <div className="w-10 h-10 sm:w-14 sm:h-14 flex items-center justify-center bg-coffee-600 text-white rounded-[20px] shadow-lg shadow-coffee-600/20 group-hover:scale-110 transition-transform">
             <BarChart3 size={20} sm:size={28} />
           </div>
           <div>
             <p className="text-xs sm:text-sm font-black text-coffee-950">Laporan</p>
             <p className="text-[8px] sm:text-[9px] text-coffee-400 uppercase font-black tracking-widest">Analytics</p>
           </div>
-        </button>
-      </div>
+        </motion.button>
+      </motion.div>
 
       {/* Alert Box (Floating Card) */}
       <div className="bg-coffee-50/50 border border-coffee-100 p-4 sm:p-6 rounded-[20px] sm:rounded-[24px] flex flex-col sm:flex-row items-center justify-between gap-4 shadow-sm">

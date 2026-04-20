@@ -191,16 +191,33 @@ const KitchenTab: React.FC<KitchenTabProps> = ({
         </div>
       </header>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+      <motion.div 
+        initial="hidden"
+        animate="show"
+        variants={{
+          hidden: { opacity: 0 },
+          show: {
+            opacity: 1,
+            transition: {
+              staggerChildren: 0.1
+            }
+          }
+        }}
+        className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 3xl:grid-cols-6 gap-6"
+      >
         <AnimatePresence mode="popLayout">
           {activeOrders.length === 0 ? (
-            <div className="col-span-full py-20 flex flex-col items-center justify-center text-center">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="col-span-full py-20 flex flex-col items-center justify-center text-center"
+            >
               <div className="bg-coffee-50 p-8 rounded-full mb-4">
                 <ChefHat size={64} className="text-coffee-200" />
               </div>
               <h3 className="text-xl font-serif font-bold text-coffee-950">Belum Ada Pesanan</h3>
               <p className="text-coffee-500 mt-2">Dapur sedang santai. Semua pesanan sudah selesai!</p>
-            </div>
+            </motion.div>
           ) : (
             activeOrders
               .sort((a, b) => {
@@ -212,17 +229,24 @@ const KitchenTab: React.FC<KitchenTabProps> = ({
                 return new Date(a.date).getTime() - new Date(b.date).getTime();
               })
               .map(order => (
-                <div key={order.id} className="h-full">
+                <motion.div 
+                  key={order.id} 
+                  variants={{
+                    hidden: { opacity: 0, scale: 0.8 },
+                    show: { opacity: 1, scale: 1, transition: { type: "spring", stiffness: 100, damping: 15 } }
+                  }}
+                  className="h-full"
+                >
                   <OrderCard 
                     order={order} 
                     handleUpdateOrderStatus={handleUpdateOrderStatus}
                     handleReprint={handleReprint}
                   />
-                </div>
+                </motion.div>
               ))
           )}
         </AnimatePresence>
-      </div>
+      </motion.div>
 
       <div className="glass-card p-8 bg-coffee-950 text-white border-none shadow-2xl shadow-coffee-950/20 premium-shadow">
         <div className="flex items-center gap-4 mb-6">

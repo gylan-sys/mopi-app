@@ -191,7 +191,7 @@ const ReportsTab: React.FC<ReportsTabProps> = ({
             </div>
           </header>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 lg:gap-8">
             <div className="glass-card p-8 bg-emerald-50/50 border-emerald-100 text-coffee-950 relative overflow-hidden group">
               <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
                 <TrendingUp size={64} />

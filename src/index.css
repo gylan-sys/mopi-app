@@ -79,15 +79,19 @@
 }
 
 .glass-card {
-  @apply bg-white border border-coffee-100 rounded-2xl shadow-sm transition-all duration-300;
+  @apply bg-white/90 backdrop-blur-md border border-coffee-100 rounded-[24px] shadow-[0_4px_20px_-4px_rgba(36,27,20,0.04)] transition-all duration-500 hover:shadow-[0_20px_40px_-12px_rgba(36,27,20,0.12)] hover:-translate-y-1 hover:border-coffee-200;
+}
+
+.premium-card {
+  @apply bg-white rounded-[32px] border border-coffee-100/50 shadow-[0_8px_30px_rgb(0,0,0,0.04)] transition-all duration-500 hover:shadow-[0_20px_50px_rgba(94,70,50,0.1)] hover:-translate-y-2;
 }
 
 .premium-shadow {
-  @apply shadow-sm;
+  @apply shadow-[0_10px_30px_-5px_rgba(36,27,20,0.1)];
 }
 
 .premium-shadow-hover {
-  @apply hover:shadow-md transition-all duration-300;
+  @apply hover:shadow-[0_20px_40px_-10px_rgba(36,27,20,0.15)] transition-all duration-500;
 }
 
 .coffee-pattern {
@@ -249,7 +253,7 @@
   }
 
   .soft-glow {
-    box-shadow: 0 0 20px rgba(233, 138, 93, 0.15);
+    box-shadow: 0 0 25px rgba(233, 138, 93, 0.2);
   }
 
   .serif-italic {
@@ -267,7 +271,11 @@
   }
 
   .inner-shadow {
-    box-shadow: inset 0 2px 4px 0 rgba(0, 0, 0, 0.06);
+    box-shadow: inset 0 2px 8px 0 rgba(36, 27, 20, 0.05);
+  }
+
+  .button-press {
+    @apply active:scale-[0.95] transition-all duration-200;
   }
 
   .gold-shimmer {

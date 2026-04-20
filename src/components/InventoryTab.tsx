@@ -93,10 +93,33 @@ const InventoryTab: React.FC<InventoryTabProps> = ({
         </div>
       </header>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
+      <motion.div 
+        initial="hidden"
+        animate="show"
+        variants={{
+          hidden: { opacity: 0 },
+          show: {
+            opacity: 1,
+            transition: {
+              staggerChildren: 0.1
+            }
+          }
+        }}
+        className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 3xl:grid-cols-6 gap-4 sm:gap-6 lg:gap-8"
+      >
         {visible.map(item => (
-          <div key={item.id} className="glass-card p-8 group hover:border-coffee-300 transition-all duration-500 relative flex flex-col">
-            <div className="absolute top-6 right-6 flex flex-col items-end gap-2">
+          <motion.div 
+            key={item.id} 
+            variants={{
+              hidden: { opacity: 0, y: 30 },
+              show: { opacity: 1, y: 0, transition: { type: "spring", stiffness: 100, damping: 15 } }
+            }}
+            className="glass-card p-8 group relative flex flex-col overflow-hidden"
+          >
+            {/* Hover Shine Effect */}
+            <div className="absolute inset-0 bg-gradient-to-tr from-white/0 via-white/10 to-white/0 translate-x-[-200%] group-hover:translate-x-[200%] transition-transform duration-1000 ease-in-out pointer-events-none" />
+            
+            <div className="absolute top-6 right-6 flex flex-col items-end gap-2 z-10">
               <span className={cn(
                 "text-[8px] font-sans font-bold uppercase tracking-widest px-2.5 py-1 rounded-full border",
                 item.type === 'Barang' ? "bg-blue-50 text-blue-600 border-blue-100" : "bg-amber-50 text-amber-600 border-amber-100"
@@ -187,12 +210,12 @@ const InventoryTab: React.FC<InventoryTabProps> = ({
                 setPurchaseData({ id: item.id, name: item.name, unit: item.unit, quantity: 1, totalPrice: item.unit_price });
                 setShowPurchaseModal(true);
               }}
-              className="w-full mt-6 bg-coffee-950 text-white py-4 rounded-xl font-sans font-bold text-[11px] sm:text-xs uppercase tracking-widest hover:bg-coffee-900 transition-all flex items-center justify-center gap-2 shadow-lg shadow-coffee-950/10"
+              className="w-full mt-6 bg-coffee-950 text-white py-4 rounded-xl font-sans font-bold text-[11px] sm:text-xs uppercase tracking-widest hover:bg-coffee-900 transition-all flex items-center justify-center gap-2 shadow-lg shadow-coffee-950/10 button-press"
             >
               <Plus size={14} />
               Beli Stok
             </button>
-          </div>
+          </motion.div>
         ))}
         {filtered.length > visible.length && (
           <div className="col-span-full py-12 text-center">
@@ -204,7 +227,7 @@ const InventoryTab: React.FC<InventoryTabProps> = ({
             </button>
           </div>
         )}
-      </div>
+      </motion.div>
     </motion.div>
   );
 };

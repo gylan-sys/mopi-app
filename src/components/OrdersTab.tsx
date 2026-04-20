@@ -170,7 +170,20 @@ const OrdersTab: React.FC<OrdersTabProps> = ({
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6 max-h-[calc(100vh-350px)] overflow-y-auto pr-2 custom-scrollbar pb-32 lg:pb-8">
+              <motion.div 
+                initial="hidden"
+                animate="show"
+                variants={{
+                  hidden: { opacity: 0 },
+                  show: {
+                    opacity: 1,
+                    transition: {
+                      staggerChildren: 0.03
+                    }
+                  }
+                }}
+                className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 3xl:grid-cols-7 gap-3 sm:gap-4 xl:gap-6 max-h-[calc(100vh-350px)] overflow-y-auto pr-2 custom-scrollbar pb-32 lg:pb-8"
+              >
                 {menus
                   .filter(m => {
                     const matchSearch = m.name.toLowerCase().includes(menuSearch.toLowerCase());
@@ -181,14 +194,18 @@ const OrdersTab: React.FC<OrdersTabProps> = ({
                     const available = isMenuAvailable(menu);
                     const cartItem = inCart(menu.id);
                     return (
-                      <button
+                      <motion.button
                         key={menu.id}
+                        variants={{
+                          hidden: { opacity: 0, scale: 0.9, y: 20 },
+                          show: { opacity: 1, scale: 1, y: 0 }
+                        }}
                         disabled={!available}
                         onClick={(e) => handleAddToCart(menu, e)}
                         className={cn(
                           "glass-card p-0 text-left transition-all duration-500 group relative overflow-hidden flex flex-col h-full border-2",
                           available 
-                            ? "hover:border-coffee-300 active:scale-[0.98] bg-white" 
+                            ? "hover:border-coffee-500 hover:-translate-y-1 bg-white hover:shadow-2xl" 
                             : "opacity-60 grayscale cursor-not-allowed bg-slate-50",
                           cartItem ? "border-coffee-950 ring-4 ring-coffee-950/5" : "border-transparent"
                         )}
@@ -249,10 +266,10 @@ const OrdersTab: React.FC<OrdersTabProps> = ({
                             </div>
                           </div>
                         </div>
-                      </button>
+                      </motion.button>
                     );
                   })}
-              </div>
+              </motion.div>
             </div>
           </div>
 

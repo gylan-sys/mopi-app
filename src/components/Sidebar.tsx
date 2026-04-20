@@ -148,24 +148,29 @@ const Sidebar: React.FC<SidebarProps> = ({
       )}>
         {/* Logo Section */}
         <div className={cn(
-          "p-6 flex items-center gap-3 border-b border-coffee-50",
+          "p-8 flex items-center gap-4 border-b border-coffee-50 bg-gradient-to-br from-white to-coffee-50/30",
           (isCollapsed && !isMobile) ? "justify-center" : "justify-start"
         )}>
-          <div className={cn(
-            "flex items-center justify-center shrink-0 transition-all",
-            appSettings.app_logo_url ? "" : "bg-coffee-700 p-2 rounded-xl shadow-sm"
-          )}>
-            {appSettings.app_logo_url ? (
-              <img src={appSettings.app_logo_url} alt="Logo" className="w-10 h-10 object-contain" />
-            ) : (
-              <Coffee className="text-white w-6 h-6" />
+          <motion.div 
+            animate={{ y: [0, -4, 0] }}
+            transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
+            className={cn(
+              "flex items-center justify-center shrink-0 transition-all",
+              appSettings.app_logo_url ? "" : "bg-coffee-950 p-2.5 rounded-[20px] shadow-[0_10px_25px_-5px_rgba(36,27,20,0.2)]"
             )}
-          </div>
+          >
+            {appSettings.app_logo_url ? (
+              <img src={appSettings.app_logo_url} alt="Logo" className="w-12 h-12 object-contain drop-shadow-xl" />
+            ) : (
+              <Coffee className="text-white w-7 h-7" />
+            )}
+          </motion.div>
           {(!isCollapsed || isMobile) && (
             <div className="flex flex-col">
-              <span className="font-bold text-coffee-900 text-lg tracking-tight">
+              <span className="font-serif font-black text-coffee-950 text-xl tracking-tight leading-none">
                 {appSettings.app_name}
               </span>
+              <span className="text-[10px] font-black text-accent-500 uppercase tracking-[0.2em] mt-1 opacity-80">Premium Experience</span>
             </div>
           )}
         </div>

@@ -3804,8 +3804,8 @@ export default function App() {
       />
 
       {/* Main Content */}
-      <main className="flex-1 h-screen overflow-y-auto bg-white relative pt-16 lg:pt-0 pb-24 lg:pb-0">
-        <div className="p-3 sm:p-6 lg:p-10 max-w-[1600px] mx-auto">
+      <main className="flex-1 h-screen overflow-y-auto bg-white relative pt-16 lg:pt-0 pb-24 lg:pb-0 scroll-smooth coffee-pattern">
+        <div className="p-3 sm:p-6 lg:p-8 xl:p-12 2xl:p-16 max-w-[1800px] mx-auto w-full transition-all duration-300 relative z-10">
           <AnimatePresence mode="wait">
           {activeTab === 'dashboard' && user && (
             <DashboardTab 
@@ -3868,329 +3868,39 @@ export default function App() {
           )}
 
           {activeTab === 'orders' && (
-            <motion.div 
-              key="orders"
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              className="space-y-4 sm:space-y-8 pb-20"
-            >
-              {/* Modern Home Header for Mobile */}
-              <div className="lg:hidden flex justify-between items-center mb-3">
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-10 bg-coffee-950 rounded-full flex items-center justify-center shadow-lg shadow-coffee-900/10 relative overflow-hidden shrink-0">
-                    <Coffee className="text-white relative z-10" size={16} />
-                  </div>
-                  <h1 className="text-base font-serif font-black text-coffee-950 leading-none tracking-tight">MOPI</h1>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <button 
-                    onClick={() => setOrderView(orderView === 'pos' ? 'history' : 'pos')}
-                    className="w-8 h-8 flex items-center justify-center bg-white border border-coffee-100 rounded-lg text-coffee-600 shadow-sm active:scale-95 transition-all"
-                  >
-                    <ClipboardList size={14} />
-                  </button>
-                  <button 
-                    onClick={() => setShowMobileCart(true)}
-                    className="w-8 h-8 flex items-center justify-center bg-coffee-900 text-white rounded-lg shadow-lg shadow-coffee-900/10 active:scale-95 transition-all relative"
-                  >
-                    <ShoppingCart size={14} />
-                    {cart.length > 0 && (
-                      <span className="absolute -top-1 -right-1 bg-accent-500 text-white text-[7px] w-3.5 h-3.5 rounded-full flex items-center justify-center font-black border border-white">
-                        {cart.reduce((sum, i) => sum + i.quantity, 0)}
-                      </span>
-                    )}
-                  </button>
-                </div>
-              </div>
-
-              {/* Desktop Header */}
-              <header className="flex justify-between items-center sm:mb-2 text-center lg:text-left">
-                <div className="hidden sm:block">
-                  <p className="text-coffee-500 font-medium uppercase tracking-widest text-[10px] sm:text-xs mb-1">Kasir</p>
-                  <h2 className="text-2xl sm:text-4xl font-serif font-bold text-coffee-950">
-                    {orderView === 'pos' ? 'Orderan Masuk' : 'Histori Orderan'}
-                  </h2>
-                </div>
-                <div className="flex flex-1 sm:flex-none justify-center sm:justify-end gap-4 items-center">
-                  <div className="flex bg-coffee-100 p-0.5 sm:p-1 rounded-xl w-full sm:w-auto">
-                    <button 
-                      onClick={() => setOrderView('pos')}
-                      className={cn(
-                        "flex-1 sm:flex-none px-4 py-2 rounded-lg text-xs sm:text-sm font-bold transition-all",
-                        orderView === 'pos' ? "bg-white text-coffee-900 shadow-sm" : "text-coffee-500 hover:text-coffee-700"
-                      )}
-                    >
-                      POS
-                    </button>
-                    <button 
-                      onClick={() => setOrderView('history')}
-                      className={cn(
-                        "flex-1 sm:flex-none px-4 py-2 rounded-lg text-xs sm:text-sm font-bold transition-all",
-                        orderView === 'history' ? "bg-white text-coffee-900 shadow-sm" : "text-coffee-500 hover:text-coffee-700"
-                      )}
-                    >
-                      Histori
-                    </button>
-                  </div>
-                </div>
-              </header>
-
-              {orderView === 'pos' ? (
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-8">
-                  <div className="lg:col-span-2 space-y-4 sm:space-y-8">
-                    {/* Hero Banner inside POS */}
-                    <div className="relative h-32 sm:h-44 md:h-64 rounded-[24px] sm:rounded-[40px] overflow-hidden shadow-xl sm:shadow-2xl">
-                      <img 
-                        src="https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?auto=format&fit=crop&q=80&w=1200" 
-                        alt="Promo"
-                        className="w-full h-full object-cover"
-                        referrerPolicy="no-referrer"
-                      />
-                      <div className="absolute inset-0 bg-gradient-to-r from-coffee-950/80 to-transparent flex flex-col justify-center px-6 sm:px-10">
-                        <h2 className="text-xl sm:text-4xl font-serif font-bold text-white mb-1 sm:mb-2">Diskon Pagi ☀️</h2>
-                        <p className="text-coffee-100/80 text-[10px] sm:text-sm max-w-[150px] sm:max-w-xs mb-3 sm:mb-6 leading-tight">Nikmati seduhan biji kopi pilihan dengan harga spesial setiap pagi.</p>
-                        <button className="w-fit bg-white text-coffee-950 px-4 py-2 sm:px-8 sm:py-3 rounded-full text-[9px] sm:text-xs font-black uppercase tracking-widest shadow-xl">Klaim</button>
-                      </div>
-                    </div>
-
-                    {/* Search and Categories */}
-                    <div className="space-y-4 sm:space-y-6">
-                      <div className="relative">
-                        <Search className="absolute left-5 sm:left-6 top-1/2 -translate-y-1/2 text-coffee-400" size={18} />
-                        <input 
-                          type="text"
-                          placeholder="Cari menu..."
-                          value={menuSearch}
-                          className="w-full bg-white border border-coffee-100 rounded-2xl sm:rounded-full pl-12 sm:pl-14 pr-6 py-3.5 sm:py-5 text-xs sm:text-sm font-medium focus:outline-none shadow-lg shadow-coffee-900/5 transition-all"
-                          onChange={(e) => setMenuSearch(e.target.value)}
-                        />
-                      </div>
-
-                      <div className="flex gap-2 sm:gap-3 overflow-x-auto pb-2 no-scrollbar -mx-1 px-1">
-                        {['Semua', 'Kopi', 'Non-Kopi', 'Makanan', 'Snack'].map(cat => (
-                          <button
-                            key={cat}
-                            onClick={() => setSelectedCategory(cat)}
-                            className={cn(
-                              "px-4 py-2 sm:px-8 sm:py-3 rounded-full text-[10px] sm:text-xs font-black whitespace-nowrap transition-all border-2",
-                              selectedCategory === cat 
-                                ? "bg-coffee-900 border-coffee-900 text-white shadow-xl" 
-                                : "bg-white border-coffee-50 text-coffee-400 hover:border-coffee-200"
-                            )}
-                          >
-                            {cat}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Grid */}
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-6">
-                      {menus
-                        .filter(m => {
-                          const matchSearch = m.name.toLowerCase().includes(menuSearch.toLowerCase());
-                          const matchCategory = selectedCategory === 'Semua' || m.category === selectedCategory;
-                          return matchSearch && matchCategory;
-                        })
-                        .map(menu => (
-                          <div
-                            key={menu.id}
-                            className="bg-white rounded-[24px] sm:rounded-[32px] overflow-hidden border border-coffee-100 shadow-sm hover:shadow-xl transition-all group"
-                          >
-                            <div className="aspect-square sm:aspect-[4/5] bg-coffee-50 relative overflow-hidden">
-                              {menu.image_url ? (
-                                <img src={menu.image_url} alt={menu.name} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" referrerPolicy="no-referrer" />
-                              ) : (
-                                <div className="w-full h-full flex items-center justify-center text-coffee-200"><Coffee size={24} /></div>
-                              )}
-                            </div>
-                            <div className="p-3 sm:p-5">
-                              <p className="text-[8px] sm:text-[9px] font-black text-coffee-400 uppercase mb-1">{menu.category}</p>
-                              <h4 className="font-serif font-bold text-coffee-950 text-xs sm:text-sm mb-3 sm:mb-4 line-clamp-2 sm:truncate h-8 sm:h-auto leading-tight">{menu.name}</h4>
-                              <div className="flex justify-between items-center mt-auto">
-                                <p className="font-black text-coffee-950 text-xs sm:text-sm">{formatIDR(menu.price)}</p>
-                                <button
-                                  onClick={(e) => handleAddToCart(menu, e)}
-                                  className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl bg-accent-500 text-white flex items-center justify-center shadow-lg active:scale-90 transition-all shrink-0"
-                                >
-                                  <Plus size={16} />
-                                </button>
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-                    </div>
-                  </div>
-
-                  {/* Sidebar */}
-                  <div className="space-y-6">
-                    <div className="glass-card p-8 bg-coffee-950 text-white border-none rounded-[40px] sticky top-8">
-                      <h3 className="text-xl font-serif font-bold mb-6">Ringkasan Order</h3>
-                      
-                      <div className="space-y-4 mb-8">
-                        <input 
-                          type="text"
-                          value={customerName}
-                          onChange={(e) => setCustomerName(e.target.value)}
-                          placeholder="Nama Pembeli"
-                          className="w-full bg-white/10 border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder:text-coffee-700"
-                        />
-                        <div className="flex justify-between text-coffee-400 text-sm">
-                          <span>Total Item</span>
-                          <span className="text-white font-bold">{cart.reduce((sum, i) => sum + i.quantity, 0)}</span>
-                        </div>
-                        <div className="h-px bg-white/10" />
-                        <div className="flex justify-between items-baseline">
-                          <span className="text-coffee-400 text-sm">Total</span>
-                          <span className="text-2xl font-bold text-white">
-                            {formatIDR(cart.reduce((sum, item) => sum + (item.menu.price * item.quantity), 0))}
-                          </span>
-                        </div>
-                      </div>
-
-                      <button 
-                        onClick={() => setShowPaymentModal(true)}
-                        className="w-full bg-emerald-500 text-white py-4 rounded-xl font-bold hover:bg-emerald-600 transition-all disabled:opacity-50"
-                        disabled={cart.length === 0}
-                      >
-                        Pembayaran
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Mobile Floating Cart Button */}
-                  {cart.length > 0 && (
-                    <motion.button
-                      initial={{ scale: 0, y: 20 }}
-                      animate={cartPulse ? { scale: [1, 1.1, 1], y: 0 } : { scale: 1, y: 0 }}
-                      transition={{ duration: 0.3 }}
-                      onClick={() => setShowMobileCart(true)}
-                      className="lg:hidden fixed bottom-20 right-4 z-40 bg-coffee-900 text-white p-3.5 rounded-full shadow-2xl flex items-center gap-3 border-4 border-white active:scale-90 transition-transform"
-                    >
-                      <div className="relative">
-                        <ShoppingCart size={20} />
-                        <span className="absolute -top-2 -right-2 bg-accent-500 text-white text-[8px] font-black w-4 h-4 rounded-full flex items-center justify-center border-2 border-coffee-900">
-                          {cart.reduce((sum, item) => sum + item.quantity, 0)}
-                        </span>
-                      </div>
-                      <span className="font-bold text-xs pr-1">
-                        {formatIDR(cart.reduce((sum, item) => sum + (item.menu.price * item.quantity), 0))}
-                      </span>
-                    </motion.button>
-                  )}
-
-                  {/* Mobile Cart Slide-over */}
-                  <AnimatePresence>
-                    {showMobileCart && (
-                      <div className="fixed inset-0 z-[60] lg:hidden">
-                        <motion.div 
-                          initial={{ opacity: 0 }}
-                          animate={{ opacity: 1 }}
-                          exit={{ opacity: 0 }}
-                          onClick={() => setShowMobileCart(false)}
-                          className="absolute inset-0 bg-coffee-950/60 backdrop-blur-sm"
-                        />
-                        <motion.div 
-                          initial={{ y: "100%" }}
-                          animate={{ y: 0 }}
-                          exit={{ y: "100%" }}
-                          transition={{ type: "spring", damping: 25, stiffness: 200 }}
-                          className="absolute bottom-0 left-0 right-0 bg-white rounded-t-[40px] shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
-                        >
-                          <div className="p-6 border-b border-coffee-100 flex justify-between items-center bg-coffee-50/50">
-                            <div className="flex items-center gap-3">
-                              <div className="bg-coffee-900 text-white p-2 rounded-xl">
-                                <ShoppingCart size={20} />
-                              </div>
-                              <h3 className="text-xl font-serif font-bold text-coffee-950">Keranjang Saya</h3>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              {cart.length > 0 && (
-                                <button 
-                                  onClick={() => setCart([])}
-                                  className="p-2 text-rose-500 hover:bg-rose-50 rounded-full transition-colors"
-                                  title="Hapus Semua"
-                                >
-                                  <Trash2 size={20} />
-                                </button>
-                              )}
-                              <button 
-                                onClick={() => setShowMobileCart(false)}
-                                className="w-10 h-10 rounded-full bg-white border border-coffee-100 flex items-center justify-center text-coffee-400 hover:text-coffee-900"
-                              >
-                                <X size={20} />
-                              </button>
-                            </div>
-                          </div>
-
-                          <div className="flex-1 overflow-y-auto p-6 space-y-6">
-                            {cart.map((item) => (
-                              <div key={item.menu.id} className="flex items-center gap-4 bg-slate-50 p-4 rounded-2xl border border-slate-100">
-                                <div className="w-16 h-16 rounded-xl overflow-hidden bg-white shrink-0 border border-slate-100">
-                                  {item.menu.image_url ? (
-                                    <img src={item.menu.image_url} alt={item.menu.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                                  ) : (
-                                    <div className="w-full h-full flex items-center justify-center text-coffee-200"><Coffee size={20} /></div>
-                                  )}
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                  <h4 className="font-bold text-coffee-950 text-sm truncate">{item.menu.name}</h4>
-                                  <p className="text-xs text-coffee-500">{formatIDR(item.menu.price)}</p>
-                                </div>
-                                <div className="flex items-center gap-3 bg-white p-1 rounded-xl border border-slate-200">
-                                  <button onClick={() => handleUpdateCartQuantity(item.menu.id, -1)} className="w-8 h-8 flex items-center justify-center rounded-lg text-coffee-600 hover:bg-coffee-50"><Minus size={14} /></button>
-                                  <span className="font-bold text-coffee-900 text-sm w-4 text-center">{item.quantity}</span>
-                                  <button onClick={() => handleUpdateCartQuantity(item.menu.id, 1)} className="w-8 h-8 flex items-center justify-center rounded-lg text-coffee-600 hover:bg-coffee-50"><Plus size={14} /></button>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-
-                          <div className="p-6 bg-white border-t border-coffee-100 space-y-4">
-                            <div className="flex justify-between items-baseline">
-                              <span className="text-coffee-950 font-serif font-bold text-lg">Total</span>
-                              <span className="text-2xl font-black text-coffee-900">
-                                {formatIDR(cart.reduce((sum, item) => sum + (item.menu.price * item.quantity), 0))}
-                              </span>
-                            </div>
-                            <button 
-                              onClick={() => {
-                                setShowMobileCart(false);
-                                setShowPaymentModal(true);
-                              }}
-                              className="w-full bg-emerald-500 text-white py-4 rounded-2xl font-black flex items-center justify-center gap-3 hover:bg-emerald-600 shadow-xl shadow-emerald-200"
-                              disabled={cart.length === 0}
-                            >
-                              <CreditCard size={20} />
-                              BAYAR SEKARANG
-                            </button>
-                          </div>
-                        </motion.div>
-                      </div>
-                    )}
-                  </AnimatePresence>
-                </div>
-              ) : (
-                <div className="glass-card p-8">
-                  <h3 className="text-xl font-serif font-bold text-coffee-950 mb-6">Riwayat Penjualan</h3>
-                  <div className="space-y-3">
-                    {transactions
-                      .filter(tx => tx.type === 'income' && tx.category === 'Sales')
-                      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-                      .map(tx => (
-                        <div key={tx.id} className="p-4 bg-slate-50 rounded-2xl flex justify-between items-center">
-                          <div>
-                            <p className="font-bold text-coffee-950">{tx.description}</p>
-                            <p className="text-xs text-coffee-400">{formatDate(new Date(tx.date), 'dd MMM yyyy, HH:mm')}</p>
-                          </div>
-                          <p className="font-black text-emerald-600">{formatIDR(tx.amount)}</p>
-                        </div>
-                      ))}
-                  </div>
-                </div>
-              )}
-            </motion.div>
+            <OrdersTab 
+              orderView={orderView}
+              setOrderView={setOrderView}
+              menuSearch={menuSearch}
+              setMenuSearch={setMenuSearch}
+              selectedCategory={selectedCategory}
+              setSelectedCategory={setSelectedCategory}
+              menus={menus}
+              cart={cart}
+              setCart={setCart}
+              cartPulse={cartPulse}
+              customerName={customerName}
+              setCustomerName={setCustomerName}
+              tableNumber={tableNumber}
+              setTableNumber={setTableNumber}
+              selectedCustomerId={selectedCustomerId}
+              setSelectedCustomerId={setSelectedCustomerId}
+              customers={customers}
+              lastOrder={lastOrder}
+              loading={loading}
+              showMobileCart={showMobileCart}
+              setShowMobileCart={setShowMobileCart}
+              transactions={transactions}
+              appSettings={appSettings}
+              handleAddToCart={handleAddToCart}
+              handleUpdateCartOptions={handleUpdateCartOptions}
+              handleUpdateCartQuantity={handleUpdateCartQuantity}
+              handleRemoveFromCart={handleRemoveFromCart}
+              handleReprint={handleReprint}
+              setShowPaymentModal={setShowPaymentModal}
+              isMenuAvailable={isMenuAvailable}
+              searchInputRef={searchInputRef}
+            />
           )}
 
           {activeTab === 'inventory' && (

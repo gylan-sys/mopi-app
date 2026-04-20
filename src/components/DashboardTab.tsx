@@ -19,7 +19,12 @@ import {
   History, 
   ArrowRight,
   CheckCircle2,
-  Coffee
+  Coffee,
+  Search,
+  Bell,
+  Wallet,
+  ArrowDownRight,
+  Flame
 } from 'lucide-react';
 import { 
   AreaChart, 
@@ -71,6 +76,8 @@ const DashboardTab: React.FC<DashboardTabProps> = ({
   setShowInvModal,
   setConfirmUpdate
 }) => {
+  const [chartRange, setChartRange] = useState<'daily' | 'weekly' | 'monthly'>('daily');
+
   const getDailyInsights = (summary: any) => {
     if (!summary) return [];
     const insights = [];
@@ -108,9 +115,10 @@ const DashboardTab: React.FC<DashboardTabProps> = ({
     <motion.div 
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      className="space-y-6 pb-20 min-h-screen"
+      className="space-y-6 pb-32 min-h-screen"
     >
-      <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 p-4 md:p-0">
+      {/* Desktop Header */}
+      <header className="hidden lg:flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h2 className="text-3xl font-bold text-coffee-900 tracking-tight">
             Dashboard
@@ -123,18 +131,52 @@ const DashboardTab: React.FC<DashboardTabProps> = ({
         </div>
       </header>
 
-      {/* Quick Actions */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 px-4 md:px-0">
+      {/* KPI Stats (Horizontal Scroll on Mobile) */}
+      <div className="flex lg:grid lg:grid-cols-3 xl:grid-cols-6 gap-3 sm:gap-4 overflow-x-auto no-scrollbar -mx-6 px-6 lg:mx-0 lg:px-0 pb-2">
+        {[
+          { label: 'Revenue', value: formatIDR(stats?.totalIncome || 0), icon: TrendingUp, color: 'emerald', trend: '+12%' },
+          { label: 'Expenses', value: formatIDR(stats?.totalExpense || 0), icon: ArrowDownRight, color: 'rose', trend: '-5%' },
+          { label: 'Items Sold', value: stats?.dailySalesCount || 0, icon: ShoppingCart, color: 'amber', trend: '+8%' },
+          { label: 'Monthly Sold', value: stats?.monthlySalesCount || 0, icon: Calendar, color: 'indigo', trend: '+15%' },
+          { label: 'Active Queue', value: activeOrders.length, icon: Clock, color: 'violet', trend: '0' },
+          { label: 'Low Stock', value: stats?.lowStock.length || 0, icon: AlertCircle, color: 'slate', trend: '!' },
+        ].map((stat, idx) => (
+          <div key={idx} className="min-w-[130px] sm:min-w-[160px] lg:min-w-0 flex-1 bg-white p-3.5 sm:p-5 rounded-[20px] sm:rounded-[24px] border border-coffee-100 shadow-sm flex flex-col justify-between">
+            <div className="flex justify-between items-start mb-3 sm:mb-4">
+              <div className={cn(
+                "w-8 h-8 sm:w-10 sm:h-10 flex items-center justify-center rounded-[14px] sm:rounded-2xl",
+                `bg-${stat.color}-50 text-${stat.color}-600`
+              )}>
+                <stat.icon size={16} sm:size={20} />
+              </div>
+              <span className={cn(
+                "text-[8px] sm:text-[10px] font-black px-1.5 py-0.5 sm:px-2 sm:py-1 rounded-lg",
+                stat.trend.startsWith('+') ? "bg-emerald-50 text-emerald-600" : 
+                stat.trend.startsWith('-') ? "bg-rose-50 text-rose-600" : "bg-coffee-50 text-coffee-400"
+              )}>
+                {stat.trend}
+              </span>
+            </div>
+            <div>
+              <p className="text-[8px] sm:text-[10px] font-black uppercase tracking-widest text-coffee-400 mb-0.5 sm:mb-1">{stat.label}</p>
+              <p className="text-sm sm:text-lg font-black text-coffee-950 truncate">{stat.value}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Quick Actions (2-Column Grid on Mobile) */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
         <button 
           onClick={() => setActiveTab('orders')}
-          className="flex flex-col gap-4 p-5 sm:p-6 bg-white border border-coffee-100 rounded-2xl shadow-sm hover:shadow-md transition-all text-left group active:scale-95"
+          className="flex flex-col items-center justify-center gap-2 sm:gap-3 p-4 sm:p-6 bg-white border border-coffee-100 rounded-[20px] sm:rounded-[24px] shadow-sm hover:shadow-md transition-all text-center group active:scale-95"
         >
-          <div className="w-10 h-10 sm:w-12 sm:h-12 flex items-center justify-center bg-accent-500 text-white rounded-xl shadow-sm">
-            <Plus size={20} className="sm:w-6 sm:h-6" />
+          <div className="w-10 h-10 sm:w-14 sm:h-14 flex items-center justify-center bg-accent-500 text-white rounded-[16px] sm:rounded-[20px] shadow-lg shadow-accent-500/20">
+            <Plus size={20} sm:size={28} />
           </div>
           <div>
-            <p className="text-xs sm:text-sm font-bold text-coffee-900">Buat Order</p>
-            <p className="text-[9px] sm:text-[10px] text-coffee-400 uppercase font-bold tracking-wider">POS System</p>
+            <p className="text-xs sm:text-sm font-black text-coffee-950">Buat Order</p>
+            <p className="text-[8px] sm:text-[9px] text-coffee-400 uppercase font-black tracking-widest">POS System</p>
           </div>
         </button>
         <button 
@@ -142,124 +184,92 @@ const DashboardTab: React.FC<DashboardTabProps> = ({
             setNewTx({ type: 'expense', category: 'Operational', amount: 0, description: '' });
             setShowTxModal(true);
           }}
-          className="flex flex-col gap-4 p-5 sm:p-6 bg-white border border-coffee-100 rounded-2xl shadow-sm hover:shadow-md transition-all text-left group active:scale-95"
+          className="flex flex-col items-center justify-center gap-2 sm:gap-3 p-4 sm:p-6 bg-white border border-coffee-100 rounded-[20px] sm:rounded-[24px] shadow-sm hover:shadow-md transition-all text-center group active:scale-95"
         >
-          <div className="w-10 h-10 sm:w-12 sm:h-12 flex items-center justify-center bg-rose-500 text-white rounded-xl shadow-sm">
-            <ArrowDownLeft size={20} className="sm:w-6 sm:h-6" />
+          <div className="w-10 h-10 sm:w-14 sm:h-14 flex items-center justify-center bg-rose-500 text-white rounded-[16px] sm:rounded-[20px] shadow-lg shadow-rose-500/20">
+            <ArrowDownLeft size={20} sm:size={28} />
           </div>
           <div>
-            <p className="text-xs sm:text-sm font-bold text-coffee-900">Catat Biaya</p>
-            <p className="text-[9px] sm:text-[10px] text-coffee-400 uppercase font-bold tracking-wider">Expense</p>
+            <p className="text-xs sm:text-sm font-black text-coffee-950">Catat Biaya</p>
+            <p className="text-[8px] sm:text-[9px] text-coffee-400 uppercase font-black tracking-widest">Expense</p>
           </div>
         </button>
         <button 
           onClick={() => setShowInvModal(true)}
-          className="flex flex-col gap-4 p-5 sm:p-6 bg-white border border-coffee-100 rounded-2xl shadow-sm hover:shadow-md transition-all text-left group active:scale-95"
+          className="flex flex-col items-center justify-center gap-2 sm:gap-3 p-4 sm:p-6 bg-white border border-coffee-100 rounded-[20px] sm:rounded-[24px] shadow-sm hover:shadow-md transition-all text-center group active:scale-95"
         >
-          <div className="w-10 h-10 sm:w-12 sm:h-12 flex items-center justify-center bg-amber-500 text-white rounded-xl shadow-sm">
-            <Package size={20} className="sm:w-6 sm:h-6" />
+          <div className="w-10 h-10 sm:w-14 sm:h-14 flex items-center justify-center bg-amber-500 text-white rounded-[16px] sm:rounded-[20px] shadow-lg shadow-amber-500/20">
+            <Package size={20} sm:size={28} />
           </div>
           <div>
-            <p className="text-xs sm:text-sm font-bold text-coffee-900">Update Stok</p>
-            <p className="text-[9px] sm:text-[10px] text-coffee-400 uppercase font-bold tracking-wider">Inventory</p>
+            <p className="text-xs sm:text-sm font-black text-coffee-950">Update Stok</p>
+            <p className="text-[8px] sm:text-[9px] text-coffee-400 uppercase font-black tracking-widest">Inventory</p>
           </div>
         </button>
         <button 
           onClick={() => setActiveTab('reports')}
-          className="flex flex-col gap-4 p-5 sm:p-6 bg-white border border-coffee-100 rounded-2xl shadow-sm hover:shadow-md transition-all text-left group active:scale-95"
+          className="flex flex-col items-center justify-center gap-2 sm:gap-3 p-4 sm:p-6 bg-white border border-coffee-100 rounded-[20px] sm:rounded-[24px] shadow-sm hover:shadow-md transition-all text-center group active:scale-95"
         >
-          <div className="w-10 h-10 sm:w-12 sm:h-12 flex items-center justify-center bg-coffee-600 text-white rounded-xl shadow-sm">
-            <BarChart3 size={20} className="sm:w-6 sm:h-6" />
+          <div className="w-10 h-10 sm:w-14 sm:h-14 flex items-center justify-center bg-coffee-600 text-white rounded-[16px] sm:rounded-[20px] shadow-lg shadow-coffee-600/20">
+            <BarChart3 size={20} sm:size={28} />
           </div>
           <div>
-            <p className="text-xs sm:text-sm font-bold text-coffee-900">Laporan</p>
-            <p className="text-[9px] sm:text-[10px] text-coffee-400 uppercase font-bold tracking-wider">Analytics</p>
+            <p className="text-xs sm:text-sm font-black text-coffee-950">Laporan</p>
+            <p className="text-[8px] sm:text-[9px] text-coffee-400 uppercase font-black tracking-widest">Analytics</p>
           </div>
         </button>
       </div>
 
-      {/* Insights Section */}
-      {user.role === 'admin' && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 px-4 md:px-0">
-          {getDailyInsights(dashboardExtra.dailySummary).map((insight, idx) => (
-            <div 
-              key={idx}
-              className={cn(
-                "p-4 rounded-2xl border flex gap-4 items-center shadow-sm",
-                insight.type === 'success' ? "bg-emerald-50 border-emerald-100 text-emerald-900" :
-                insight.type === 'warning' ? "bg-amber-50 border-amber-100 text-amber-900" :
-                "bg-coffee-50 border-coffee-100 text-coffee-900"
-              )}
-            >
-              <div className={cn(
-                "w-10 h-10 rounded-xl flex items-center justify-center shrink-0",
-                insight.type === 'success' ? "bg-emerald-500 text-white" :
-                insight.type === 'warning' ? "bg-amber-500 text-white" :
-                "bg-coffee-600 text-white"
-              )}>
-                {insight.type === 'success' ? <TrendingUp size={20} /> : 
-                 insight.type === 'warning' ? <AlertTriangle size={20} /> : 
-                 <Lightbulb size={20} />}
-              </div>
-              <div>
-                <p className="text-[10px] font-bold uppercase tracking-wider">{insight.title}</p>
-                <p className="text-xs opacity-80">{insight.message}</p>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Stats Grid */}
-      <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 px-4 md:px-0">
-        {[
-          { label: 'Revenue', value: formatIDR(stats?.totalIncome || 0), icon: TrendingUp, color: 'emerald' },
-          { label: 'Expenses', value: formatIDR(stats?.totalExpense || 0), icon: ArrowDownLeft, color: 'rose' },
-          { label: 'Items Sold', value: stats?.dailySalesCount || 0, icon: ShoppingCart, color: 'amber' },
-          { label: 'Monthly Sold', value: stats?.monthlySalesCount || 0, icon: Calendar, color: 'indigo' },
-          { label: 'Active Queue', value: activeOrders.length, icon: Clock, color: 'violet' },
-          { label: 'Low Stock', value: stats?.lowStock.length || 0, icon: AlertCircle, color: 'slate' },
-        ].map((stat, idx) => (
-          <div key={idx} className="bg-white p-6 rounded-2xl border border-coffee-100 shadow-sm">
-            <div className={cn(
-              "w-10 h-10 flex items-center justify-center rounded-xl mb-4",
-              `bg-${stat.color}-50 text-${stat.color}-600`
-            )}>
-              <stat.icon size={20} />
-            </div>
-            <p className="text-[10px] font-bold uppercase tracking-wider text-coffee-400 mb-1">{stat.label}</p>
-            <p className="text-lg font-bold text-coffee-900 truncate">{stat.value}</p>
+      {/* Alert Box (Floating Card) */}
+      <div className="bg-coffee-50/50 border border-coffee-100 p-4 sm:p-6 rounded-[20px] sm:rounded-[24px] flex flex-col sm:flex-row items-center justify-between gap-4 shadow-sm">
+        <div className="flex items-center gap-3 sm:gap-4">
+          <div className="w-10 h-10 sm:w-12 sm:h-12 bg-white rounded-xl sm:rounded-2xl flex items-center justify-center text-accent-500 shadow-sm">
+            <Zap size={20} sm:size={24} />
           </div>
-        ))}
+          <div>
+            <h4 className="font-black text-sm sm:text-base text-coffee-950">Tingkatkan Penjualan!</h4>
+            <p className="text-[10px] sm:text-xs text-coffee-500">Buat promo khusus untuk pelanggan setia hari ini.</p>
+          </div>
+        </div>
+        <button className="w-full sm:w-auto px-6 py-2.5 sm:py-3 bg-coffee-950 text-white rounded-xl sm:rounded-2xl font-black text-xs sm:text-sm active:scale-95 transition-all shadow-lg shadow-coffee-900/20">
+          Buat Promo
+        </button>
       </div>
 
       {/* Main Visual Data Section */}
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 px-4 md:px-0">
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
         {/* Revenue Trend Chart */}
-        <div className="xl:col-span-2 bg-white p-6 rounded-2xl border border-coffee-100 shadow-sm">
-          <div className="flex justify-between items-center mb-8">
-            <h3 className="text-lg font-bold text-coffee-900">Performa Keuangan</h3>
-            <div className="flex gap-4">
-              <div className="flex items-center gap-2">
-                <div className="w-2 h-2 rounded-full bg-emerald-500" />
-                <span className="text-[10px] font-bold text-coffee-400 uppercase">Income</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-2 h-2 rounded-full bg-rose-500" />
-                <span className="text-[10px] font-bold text-coffee-400 uppercase">Expense</span>
-              </div>
+        <div className="xl:col-span-2 bg-white p-6 rounded-[24px] border border-coffee-100 shadow-sm">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
+            <div>
+              <h3 className="text-lg font-black text-coffee-950">Performa Keuangan</h3>
+              <p className="text-[10px] font-black text-coffee-400 uppercase tracking-widest">Revenue vs Expense</p>
+            </div>
+            <div className="flex bg-coffee-50 p-1 rounded-xl">
+              {['daily', 'weekly', 'monthly'].map((range) => (
+                <button
+                  key={range}
+                  onClick={() => setChartRange(range as any)}
+                  className={cn(
+                    "px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all",
+                    chartRange === range ? "bg-white text-coffee-950 shadow-sm" : "text-coffee-400 hover:text-coffee-600"
+                  )}
+                >
+                  {range === 'daily' ? 'Harian' : range === 'weekly' ? 'Mingguan' : 'Bulanan'}
+                </button>
+              ))}
             </div>
           </div>
-          <div className="h-[350px] w-full">
+          <div className="h-[300px] w-full">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={dashboardExtra.financialTrend}>
                 <defs>
                   <linearGradient id="colorIncome" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#10b981" stopOpacity={0.1}/>
+                    <stop offset="5%" stopColor="#10b981" stopOpacity={0.2}/>
                     <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
                   </linearGradient>
                   <linearGradient id="colorExpense" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#f43f5e" stopOpacity={0.1}/>
+                    <stop offset="5%" stopColor="#f43f5e" stopOpacity={0.2}/>
                     <stop offset="95%" stopColor="#f43f5e" stopOpacity={0}/>
                   </linearGradient>
                 </defs>
@@ -268,60 +278,70 @@ const DashboardTab: React.FC<DashboardTabProps> = ({
                   dataKey="date" 
                   axisLine={false} 
                   tickLine={false} 
-                  tick={{ fill: '#9c7c5d', fontSize: 10 }}
+                  tick={{ fill: '#9c7c5d', fontSize: 10, fontWeight: 700 }}
                   tickFormatter={(val) => formatDate(val, 'dd MMM')}
                 />
                 <YAxis 
                   axisLine={false} 
                   tickLine={false} 
-                  tick={{ fill: '#9c7c5d', fontSize: 10 }}
+                  tick={{ fill: '#9c7c5d', fontSize: 10, fontWeight: 700 }}
                   tickFormatter={(val) => `Rp${val/1000}k`}
                 />
                 <Tooltip 
-                  contentStyle={{ borderRadius: '12px', border: '1px solid #f0f0f0', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}
+                  contentStyle={{ borderRadius: '20px', border: 'none', boxShadow: '0 10px 30px rgba(0,0,0,0.1)', padding: '12px' }}
                   formatter={(value: number) => [formatIDR(value), '']}
                 />
-                <Area type="monotone" dataKey="income" stroke="#10b981" strokeWidth={2} fillOpacity={1} fill="url(#colorIncome)" />
-                <Area type="monotone" dataKey="expense" stroke="#f43f5e" strokeWidth={2} fillOpacity={1} fill="url(#colorExpense)" />
+                <Area type="monotone" dataKey="income" stroke="#10b981" strokeWidth={3} fillOpacity={1} fill="url(#colorIncome)" />
+                <Area type="monotone" dataKey="expense" stroke="#f43f5e" strokeWidth={3} fillOpacity={1} fill="url(#colorExpense)" />
               </AreaChart>
             </ResponsiveContainer>
           </div>
         </div>
 
-        {/* Top Selling Products */}
-        <div className="bg-white p-6 rounded-2xl border border-coffee-100 shadow-sm">
-          <h3 className="text-lg font-bold text-coffee-900 mb-6">Produk Terlaris</h3>
-          <div className="space-y-6">
+        {/* Top Selling Products (Horizontal Scroll on Mobile) */}
+        <div className="bg-white p-6 rounded-[24px] border border-coffee-100 shadow-sm overflow-hidden">
+          <div className="flex justify-between items-center mb-6">
+            <h3 className="text-lg font-black text-coffee-950">Produk Terlaris</h3>
+            <div className="flex items-center gap-1 text-accent-500">
+              <Flame size={16} />
+              <span className="text-[10px] font-black uppercase tracking-widest">Trending</span>
+            </div>
+          </div>
+          
+          <div className="flex lg:flex-col gap-4 overflow-x-auto no-scrollbar -mx-6 px-6 lg:mx-0 lg:px-0">
             {dashboardExtra.topItems.length === 0 ? (
-              <div className="text-center py-12 text-coffee-300">
+              <div className="text-center py-12 text-coffee-300 w-full">
                 <p className="text-sm italic">Belum ada data penjualan.</p>
               </div>
             ) : (
               dashboardExtra.topItems.map((item, idx) => (
-                <div key={idx}>
-                  <div className="flex justify-between items-center mb-2">
-                    <p className="text-sm font-semibold text-coffee-900">{item.name}</p>
-                    <p className="text-xs font-bold text-coffee-500">{item.quantity} terjual</p>
+                <div key={idx} className="min-w-[200px] lg:min-w-0 bg-coffee-50/50 p-4 rounded-[20px] border border-coffee-100/50 flex flex-col lg:flex-row items-center gap-4 relative overflow-hidden group">
+                  <div className="absolute top-2 right-2 bg-accent-500 text-white text-[8px] font-black px-2 py-1 rounded-full z-10 shadow-lg">
+                    BEST SELLER
                   </div>
-                  <div className="h-1.5 w-full bg-coffee-50 rounded-full overflow-hidden">
-                    <motion.div 
-                      initial={{ width: 0 }}
-                      animate={{ width: `${(item.quantity / Math.max(...dashboardExtra.topItems.map(i => i.quantity))) * 100}%` }}
-                      className="h-full bg-coffee-600 rounded-full"
-                    />
+                  <div className="w-full lg:w-16 h-24 lg:h-16 rounded-2xl bg-white overflow-hidden shadow-sm">
+                    {item.image_url ? (
+                      <img src={item.image_url} alt={item.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-coffee-200">
+                        <Coffee size={24} />
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex-1 text-center lg:text-left">
+                    <p className="text-sm font-black text-coffee-950 truncate">{item.name}</p>
+                    <p className="text-[10px] font-bold text-coffee-400 uppercase tracking-widest">{item.quantity} Terjual</p>
+                    <div className="h-1 w-full bg-coffee-100 rounded-full mt-2 overflow-hidden">
+                      <motion.div 
+                        initial={{ width: 0 }}
+                        animate={{ width: `${(item.quantity / Math.max(...dashboardExtra.topItems.map(i => i.quantity))) * 100}%` }}
+                        className="h-full bg-accent-500 rounded-full"
+                      />
+                    </div>
                   </div>
                 </div>
               ))
             )}
-          </div>
-          
-          <div className="mt-8 p-6 bg-coffee-700 rounded-2xl text-white relative overflow-hidden">
-            <div className="relative z-10">
-              <p className="text-[10px] font-bold uppercase tracking-wider opacity-60 mb-1">Total Order Hari Ini</p>
-              <p className="text-4xl font-bold">{dashboardExtra.dailySummary?.totalOrders || 0}</p>
-              <p className="text-[10px] mt-2 opacity-60 uppercase tracking-widest">Transaksi Berhasil</p>
-            </div>
-            <Coffee className="absolute -right-4 -bottom-4 opacity-10" size={100} />
           </div>
         </div>
       </div>

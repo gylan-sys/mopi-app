@@ -91,11 +91,13 @@
 }
 
 .coffee-pattern {
-  @apply bg-coffee-50;
+  background-color: var(--color-coffee-50);
+  background-image: radial-gradient(var(--color-coffee-100) 0.5px, transparent 0.5px);
+  background-size: 24px 24px;
 }
 
 .premium-gradient {
-  @apply bg-coffee-900;
+  background: linear-gradient(135deg, var(--color-coffee-950) 0%, var(--color-coffee-800) 100%);
 }
 
 .gradient-text {

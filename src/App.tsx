@@ -80,7 +80,9 @@ import {
   FileDown,
   QrCode,
   History,
-  Zap
+  Zap,
+  Flame,
+  Mic
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -2439,24 +2441,18 @@ export default function App() {
         {/* Right Side: Ordering Interface */}
         <div className="flex-1 flex flex-col h-screen overflow-hidden relative">
           {/* Header */}
-          <header className="bg-white/80 backdrop-blur-2xl border-b border-coffee-100 sticky top-0 z-30 px-6 py-6 md:px-12 flex items-center justify-between shrink-0 shadow-sm">
-            <div className="flex items-center gap-6">
+          <header className="bg-white/80 backdrop-blur-2xl border-b border-coffee-100 sticky top-0 z-30 px-4 py-4 md:px-12 flex items-center justify-between shrink-0 shadow-sm">
+            <div className="flex items-center gap-3">
               <div className={cn(
-                "w-14 h-14 rounded-2xl shadow-2xl shadow-coffee-200 flex items-center justify-center relative group",
+                "w-8 h-10 rounded-full shadow-lg shadow-coffee-900/10 flex items-center justify-center relative group shrink-0",
                 appSettings.app_logo_url ? "bg-white" : "bg-coffee-900 text-white"
               )}>
-                <IconComponent size={32} />
-                <div className="absolute inset-0 bg-coffee-900/5 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity" />
+                <IconComponent size={18} />
+                <div className="absolute inset-0 bg-coffee-900/5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity" />
               </div>
-              <div className="flex flex-col">
-                <h1 className="text-2xl font-display text-coffee-950 tracking-tighter leading-none">{appSettings.customer_page_title || appSettings.app_name}</h1>
-                <div className="flex items-center gap-2 mt-1.5">
-                  <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                  <p className="text-[10px] text-coffee-500 font-black uppercase tracking-[0.2em]">{appSettings.customer_page_subtitle || 'Premium Experience'}</p>
-                </div>
-              </div>
+              <h1 className="text-lg font-serif font-black text-coffee-950 tracking-tight leading-none">{appSettings.customer_page_title || appSettings.app_name}</h1>
             </div>
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
               {/* Subtle Login Access (Hidden) */}
               <button 
                 onClick={() => setIsCustomerMode(false)}
@@ -2468,9 +2464,9 @@ export default function App() {
               
               <button 
                 onClick={() => setShowCustomerOrderStatus(true)}
-                className="p-4 bg-white border border-coffee-100 text-coffee-600 rounded-2xl shadow-sm hover:bg-coffee-50 transition-all active:scale-95 premium-shadow-hover"
+                className="w-8 h-8 flex items-center justify-center bg-white border border-coffee-100 text-coffee-600 rounded-lg shadow-sm hover:bg-coffee-50 transition-all active:scale-95"
               >
-                <ClipboardList size={24} />
+                <ClipboardList size={14} />
               </button>
 
               <motion.button 
@@ -2478,12 +2474,12 @@ export default function App() {
                 animate={cartPulse ? { scale: [1, 1.1, 1] } : {}}
                 transition={{ duration: 0.3 }}
                 onClick={() => setShowMobileCart(true)}
-                className="relative p-4 bg-coffee-700 text-white rounded-2xl shadow-lg active:scale-95 group"
+                className="relative w-8 h-8 flex items-center justify-center bg-coffee-900 text-white rounded-lg shadow-lg active:scale-95 group"
               >
-                <ShoppingCart size={24} />
-                <div className="absolute inset-0 bg-white/10 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity" />
+                <ShoppingCart size={14} />
+                <div className="absolute inset-0 bg-white/10 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity" />
                 {cart.length > 0 && (
-                  <span className="absolute -top-2 -right-2 bg-accent-500 text-white text-[10px] font-black w-6 h-6 rounded-full flex items-center justify-center border-2 border-white shadow-lg">
+                  <span className="absolute -top-1 -right-1 bg-accent-500 text-white text-[7px] font-black w-3.5 h-3.5 rounded-full flex items-center justify-center border border-white shadow-sm">
                     {cart.reduce((sum, item) => sum + item.quantity, 0)}
                   </span>
                 )}
@@ -3604,8 +3600,7 @@ export default function App() {
                 </div>
               )}
             </div>
-            <h2 className="text-4xl font-serif text-coffee-950 mb-2 tracking-tight">{appSettings.login_title}</h2>
-            <p className="text-coffee-400 font-sans font-light uppercase tracking-[0.2em] text-[10px]">{appSettings.login_subtitle}</p>
+            <h2 className="text-4xl font-serif text-coffee-950 mb-6 tracking-tight">{appSettings.login_title}</h2>
           </div>
 
           <div className="flex bg-coffee-50/50 p-1.5 rounded-2xl mb-10 border border-coffee-100/50">
@@ -3810,7 +3805,7 @@ export default function App() {
 
       {/* Main Content */}
       <main className="flex-1 h-screen overflow-y-auto bg-white relative pt-16 lg:pt-0 pb-24 lg:pb-0">
-        <div className="p-4 md:p-10 max-w-[1600px] mx-auto">
+        <div className="p-3 sm:p-6 lg:p-10 max-w-[1600px] mx-auto">
           <AnimatePresence mode="wait">
           {activeTab === 'dashboard' && user && (
             <DashboardTab 
@@ -3875,24 +3870,54 @@ export default function App() {
           {activeTab === 'orders' && (
             <motion.div 
               key="orders"
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -20 }}
-              className="space-y-8"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              className="space-y-4 sm:space-y-8 pb-20"
             >
-              <header className="flex justify-between items-center">
-                <div>
-                  <p className="text-coffee-500 font-medium uppercase tracking-widest text-xs mb-1">Kasir</p>
-                  <h2 className="text-4xl font-serif font-bold text-coffee-950">
+              {/* Modern Home Header for Mobile */}
+              <div className="lg:hidden flex justify-between items-center mb-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-10 bg-coffee-950 rounded-full flex items-center justify-center shadow-lg shadow-coffee-900/10 relative overflow-hidden shrink-0">
+                    <Coffee className="text-white relative z-10" size={16} />
+                  </div>
+                  <h1 className="text-base font-serif font-black text-coffee-950 leading-none tracking-tight">MOPI</h1>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <button 
+                    onClick={() => setOrderView(orderView === 'pos' ? 'history' : 'pos')}
+                    className="w-8 h-8 flex items-center justify-center bg-white border border-coffee-100 rounded-lg text-coffee-600 shadow-sm active:scale-95 transition-all"
+                  >
+                    <ClipboardList size={14} />
+                  </button>
+                  <button 
+                    onClick={() => setShowMobileCart(true)}
+                    className="w-8 h-8 flex items-center justify-center bg-coffee-900 text-white rounded-lg shadow-lg shadow-coffee-900/10 active:scale-95 transition-all relative"
+                  >
+                    <ShoppingCart size={14} />
+                    {cart.length > 0 && (
+                      <span className="absolute -top-1 -right-1 bg-accent-500 text-white text-[7px] w-3.5 h-3.5 rounded-full flex items-center justify-center font-black border border-white">
+                        {cart.reduce((sum, i) => sum + i.quantity, 0)}
+                      </span>
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              {/* Desktop Header */}
+              <header className="flex justify-between items-center sm:mb-2 text-center lg:text-left">
+                <div className="hidden sm:block">
+                  <p className="text-coffee-500 font-medium uppercase tracking-widest text-[10px] sm:text-xs mb-1">Kasir</p>
+                  <h2 className="text-2xl sm:text-4xl font-serif font-bold text-coffee-950">
                     {orderView === 'pos' ? 'Orderan Masuk' : 'Histori Orderan'}
                   </h2>
                 </div>
-                <div className="flex gap-4 items-center">
-                  <div className="flex bg-coffee-100 p-1 rounded-xl">
+                <div className="flex flex-1 sm:flex-none justify-center sm:justify-end gap-4 items-center">
+                  <div className="flex bg-coffee-100 p-0.5 sm:p-1 rounded-xl w-full sm:w-auto">
                     <button 
                       onClick={() => setOrderView('pos')}
                       className={cn(
-                        "px-4 py-2 rounded-lg text-sm font-bold transition-all",
+                        "flex-1 sm:flex-none px-4 py-2 rounded-lg text-xs sm:text-sm font-bold transition-all",
                         orderView === 'pos' ? "bg-white text-coffee-900 shadow-sm" : "text-coffee-500 hover:text-coffee-700"
                       )}
                     >
@@ -3901,7 +3926,7 @@ export default function App() {
                     <button 
                       onClick={() => setOrderView('history')}
                       className={cn(
-                        "px-4 py-2 rounded-lg text-sm font-bold transition-all",
+                        "flex-1 sm:flex-none px-4 py-2 rounded-lg text-xs sm:text-sm font-bold transition-all",
                         orderView === 'history' ? "bg-white text-coffee-900 shadow-sm" : "text-coffee-500 hover:text-coffee-700"
                       )}
                     >
@@ -3912,387 +3937,144 @@ export default function App() {
               </header>
 
               {orderView === 'pos' ? (
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                  <div className="lg:col-span-2 space-y-8">
-                    {/* Menu Selection Section */}
-                    <div className="space-y-6">
-                      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                        <h3 className="text-xl font-serif font-bold text-coffee-950">Pilih Menu</h3>
-                        <div className="relative w-full md:w-64">
-                          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-coffee-400" size={18} />
-                          <input 
-                            ref={searchInputRef}
-                            type="text"
-                            placeholder="Cari menu... (/)"
-                            value={menuSearch}
-                            className="w-full bg-white border border-coffee-200 rounded-2xl pl-10 pr-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-coffee-500 shadow-sm transition-all"
-                            onChange={(e) => setMenuSearch(e.target.value)}
-                          />
-                        </div>
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-8">
+                  <div className="lg:col-span-2 space-y-4 sm:space-y-8">
+                    {/* Hero Banner inside POS */}
+                    <div className="relative h-32 sm:h-44 md:h-64 rounded-[24px] sm:rounded-[40px] overflow-hidden shadow-xl sm:shadow-2xl">
+                      <img 
+                        src="https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?auto=format&fit=crop&q=80&w=1200" 
+                        alt="Promo"
+                        className="w-full h-full object-cover"
+                        referrerPolicy="no-referrer"
+                      />
+                      <div className="absolute inset-0 bg-gradient-to-r from-coffee-950/80 to-transparent flex flex-col justify-center px-6 sm:px-10">
+                        <h2 className="text-xl sm:text-4xl font-serif font-bold text-white mb-1 sm:mb-2">Diskon Pagi ☀️</h2>
+                        <p className="text-coffee-100/80 text-[10px] sm:text-sm max-w-[150px] sm:max-w-xs mb-3 sm:mb-6 leading-tight">Nikmati seduhan biji kopi pilihan dengan harga spesial setiap pagi.</p>
+                        <button className="w-fit bg-white text-coffee-950 px-4 py-2 sm:px-8 sm:py-3 rounded-full text-[9px] sm:text-xs font-black uppercase tracking-widest shadow-xl">Klaim</button>
+                      </div>
+                    </div>
+
+                    {/* Search and Categories */}
+                    <div className="space-y-4 sm:space-y-6">
+                      <div className="relative">
+                        <Search className="absolute left-5 sm:left-6 top-1/2 -translate-y-1/2 text-coffee-400" size={18} />
+                        <input 
+                          type="text"
+                          placeholder="Cari menu..."
+                          value={menuSearch}
+                          className="w-full bg-white border border-coffee-100 rounded-2xl sm:rounded-full pl-12 sm:pl-14 pr-6 py-3.5 sm:py-5 text-xs sm:text-sm font-medium focus:outline-none shadow-lg shadow-coffee-900/5 transition-all"
+                          onChange={(e) => setMenuSearch(e.target.value)}
+                        />
                       </div>
 
-                      {/* Category Tabs */}
-                      <div className="flex gap-3 overflow-x-auto pb-4 no-scrollbar -mx-2 px-2">
-                        {[
-                          { id: 'Semua', icon: <LayoutDashboard size={16} /> },
-                          { id: 'Kopi', icon: <Coffee size={16} /> },
-                          { id: 'Non-Kopi', icon: <Milk size={16} /> },
-                          { id: 'Makanan', icon: <Utensils size={16} /> },
-                          { id: 'Snack', icon: <Cookie size={16} /> }
-                        ].map(cat => (
+                      <div className="flex gap-2 sm:gap-3 overflow-x-auto pb-2 no-scrollbar -mx-1 px-1">
+                        {['Semua', 'Kopi', 'Non-Kopi', 'Makanan', 'Snack'].map(cat => (
                           <button
-                            key={cat.id}
-                            onClick={() => setSelectedCategory(cat.id)}
+                            key={cat}
+                            onClick={() => setSelectedCategory(cat)}
                             className={cn(
-                              "flex items-center gap-2 px-6 py-3 rounded-2xl text-sm font-black whitespace-nowrap transition-all duration-300 border-2",
-                              selectedCategory === cat.id 
-                                ? "bg-coffee-900 border-coffee-900 text-white shadow-xl shadow-coffee-200 -translate-y-1" 
-                                : "bg-white border-coffee-50 text-coffee-400 hover:border-coffee-200 hover:text-coffee-600"
+                              "px-4 py-2 sm:px-8 sm:py-3 rounded-full text-[10px] sm:text-xs font-black whitespace-nowrap transition-all border-2",
+                              selectedCategory === cat 
+                                ? "bg-coffee-900 border-coffee-900 text-white shadow-xl" 
+                                : "bg-white border-coffee-50 text-coffee-400 hover:border-coffee-200"
                             )}
                           >
-                            {cat.icon}
-                            {cat.id}
+                            {cat}
                           </button>
                         ))}
                       </div>
-                           <div className="grid grid-cols-1 min-[400px]:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4 max-h-[calc(100vh-320px)] overflow-y-auto pr-2 custom-scrollbar pb-4">
-                        {menus
-                          .filter(m => {
-                            const matchSearch = m.name.toLowerCase().includes(menuSearch.toLowerCase());
-                            const matchCategory = selectedCategory === 'Semua' || m.category === selectedCategory;
-                            return matchSearch && matchCategory;
-                          })
-                          .map(menu => {
-                            const available = isMenuAvailable(menu);
-                            const inCart = cart.find(c => c.menu.id === menu.id);
-                            return (
-                              <button
-                                key={menu.id}
-                                disabled={!available}
-                                onClick={(e) => handleAddToCart(menu, e)}
-                                className={cn(
-                                  "glass-card p-0 text-left transition-all group relative overflow-hidden flex flex-row min-[400px]:flex-col h-full border-2",
-                                  available 
-                                    ? "hover:border-coffee-400 active:scale-95 bg-white" 
-                                    : "opacity-60 grayscale cursor-not-allowed bg-slate-50",
-                                  inCart ? "border-coffee-600 bg-coffee-50/30" : "border-transparent"
-                                )}
-                              >
-                                {/* Image Section */}
-                                <div className="relative w-24 min-[400px]:w-full aspect-square overflow-hidden bg-coffee-50 shrink-0">
-                                  {menu.image_url ? (
-                                    <img 
-                                      src={menu.image_url} 
-                                      alt={menu.name} 
-                                      className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
-                                      referrerPolicy="no-referrer"
-                                    />
-                                  ) : (
-                                    <div className="w-full h-full flex items-center justify-center text-coffee-200">
-                                      <Coffee size={32} className="min-[400px]:hidden" />
-                                      <Coffee size={48} className="hidden min-[400px]:block" />
-                                    </div>
-                                  )}
-                                  
-                                  {/* Overlay for actions */}
-                                  <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors" />
-                                  
-                                  {!available && (
-                                    <div className="absolute top-1.5 right-1.5 bg-rose-500 text-white px-1.5 py-0.5 rounded-lg text-[8px] font-black uppercase tracking-wider shadow-lg">
-                                      Habis
-                                    </div>
-                                  )}
-                                  
-                                  {available && !inCart && (
-                                    <div className="absolute bottom-2 right-2 bg-white/90 backdrop-blur-sm text-coffee-900 p-2 rounded-xl opacity-0 group-hover:opacity-100 transition-all duration-300 translate-y-2 group-hover:translate-y-0 shadow-lg hidden min-[400px]:block">
-                                      <Plus size={18} />
-                                    </div>
-                                  )}
- 
-                                  {inCart && (
-                                    <motion.div 
-                                      initial={{ scale: 0 }}
-                                      animate={{ scale: 1 }}
-                                      className="absolute top-1.5 left-1.5 min-[400px]:top-2 min-[400px]:left-2 bg-coffee-900 text-white text-[8px] min-[400px]:text-[10px] font-black w-5 h-5 min-[400px]:w-7 min-[400px]:h-7 rounded-full flex items-center justify-center shadow-xl border-2 border-white z-10"
-                                    >
-                                      {inCart.quantity}
-                                    </motion.div>
-                                  )}
-                                </div>
- 
-                                <div className="p-3 min-[400px]:p-4 flex-1 flex flex-col min-w-0">
-                                  <div className="flex justify-between items-start mb-1">
-                                    <p className="text-[8px] min-[400px]:text-[10px] font-black text-coffee-400 uppercase tracking-widest">{menu.category || 'Menu'}</p>
-                                  </div>
-                                  <h4 className="font-bold text-coffee-950 text-xs min-[400px]:text-sm mb-2 line-clamp-2 leading-tight group-hover:text-coffee-700 transition-colors">{menu.name}</h4>
-                                  <div className="mt-auto flex justify-between items-center">
-                                    <p className="text-xs min-[400px]:text-sm text-coffee-900 font-black">{formatIDR(menu.price)}</p>
-                                    <div className={cn(
-                                      "w-7 h-7 min-[400px]:w-8 min-[400px]:h-8 rounded-full flex items-center justify-center transition-all duration-300",
-                                      inCart ? "bg-coffee-900 text-white" : "bg-coffee-50 text-coffee-400 group-hover:bg-coffee-100"
-                                    )}>
-                                      {inCart ? <Check size={14} /> : <Coffee size={14} />}
-                                    </div>
-                                  </div>
-                                </div>
-                              </button>
-                            );
-                          })}
-                      </div>
+                    </div>
+
+                    {/* Grid */}
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-6">
+                      {menus
+                        .filter(m => {
+                          const matchSearch = m.name.toLowerCase().includes(menuSearch.toLowerCase());
+                          const matchCategory = selectedCategory === 'Semua' || m.category === selectedCategory;
+                          return matchSearch && matchCategory;
+                        })
+                        .map(menu => (
+                          <div
+                            key={menu.id}
+                            className="bg-white rounded-[24px] sm:rounded-[32px] overflow-hidden border border-coffee-100 shadow-sm hover:shadow-xl transition-all group"
+                          >
+                            <div className="aspect-square sm:aspect-[4/5] bg-coffee-50 relative overflow-hidden">
+                              {menu.image_url ? (
+                                <img src={menu.image_url} alt={menu.name} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" referrerPolicy="no-referrer" />
+                              ) : (
+                                <div className="w-full h-full flex items-center justify-center text-coffee-200"><Coffee size={24} /></div>
+                              )}
+                            </div>
+                            <div className="p-3 sm:p-5">
+                              <p className="text-[8px] sm:text-[9px] font-black text-coffee-400 uppercase mb-1">{menu.category}</p>
+                              <h4 className="font-serif font-bold text-coffee-950 text-xs sm:text-sm mb-3 sm:mb-4 line-clamp-2 sm:truncate h-8 sm:h-auto leading-tight">{menu.name}</h4>
+                              <div className="flex justify-between items-center mt-auto">
+                                <p className="font-black text-coffee-950 text-xs sm:text-sm">{formatIDR(menu.price)}</p>
+                                <button
+                                  onClick={(e) => handleAddToCart(menu, e)}
+                                  className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl bg-accent-500 text-white flex items-center justify-center shadow-lg active:scale-90 transition-all shrink-0"
+                                >
+                                  <Plus size={16} />
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
                     </div>
                   </div>
 
-                  {/* Desktop Sidebar Summary - Hidden on Mobile */}
-                  <div className="hidden lg:block space-y-6">
-                    {/* Desktop Cart Section - Moved to Right Column */}
-                    <motion.div 
-                      id="desktop-cart-icon" 
-                      animate={cartPulse ? { scale: [1, 1.02, 1] } : {}}
-                      transition={{ duration: 0.3 }}
-                      className="space-y-4"
-                    >
-                      <div className="flex justify-between items-center">
-                        <h3 className="text-xl font-serif font-bold text-coffee-950">Daftar Orderan</h3>
-                        {cart.length > 0 && (
-                          <button 
-                            onClick={() => setCart([])}
-                            className="text-[10px] font-black uppercase text-rose-500 hover:text-rose-600 transition-colors tracking-widest flex items-center gap-1"
-                          >
-                            <Trash2 size={12} />
-                            Hapus Semua
-                          </button>
-                        )}
-                      </div>
-                      {cart.length === 0 ? (
-                        <div className="glass-card p-8 flex flex-col items-center justify-center text-center bg-white/50 border-dashed border-2">
-                          <div className="bg-coffee-50 p-4 rounded-full mb-3">
-                            <ShoppingCart size={32} className="text-coffee-200" />
-                          </div>
-                          <p className="text-sm text-coffee-500 font-medium">Keranjang Kosong</p>
-                        </div>
-                      ) : (
-                        <div className="glass-card overflow-hidden bg-white shadow-sm border-coffee-100">
-                          <div className="max-h-[calc(100vh-450px)] overflow-y-auto custom-scrollbar">
-                            <table className="w-full">
-                              <thead className="sticky top-0 z-10">
-                                <tr className="border-b border-coffee-100 bg-coffee-50/90 backdrop-blur-sm">
-                                  <th className="px-4 py-3 text-left text-[10px] font-black uppercase tracking-wider text-coffee-400">Item</th>
-                                  <th className="px-4 py-3 text-center text-[10px] font-black uppercase tracking-wider text-coffee-400">Qty</th>
-                                  <th className="px-4 py-3 text-right text-[10px] font-black uppercase tracking-wider text-coffee-400">Subtotal</th>
-                                  <th className="px-4 py-3 text-right text-[10px] font-black uppercase tracking-wider text-coffee-400"></th>
-                                </tr>
-                              </thead>
-                              <tbody className="divide-y divide-coffee-50">
-                                {(Object.entries(
-                                  cart.reduce((acc, item) => {
-                                    const category = item.menu.category || 'Lainnya';
-                                    if (!acc[category]) acc[category] = [];
-                                    acc[category].push(item);
-                                    return acc;
-                                  }, {} as Record<string, CartItem[]>)
-                                ) as [string, CartItem[]][]).map(([category, items]) => (
-                                  <React.Fragment key={category}>
-                                    <tr className="bg-coffee-50/50">
-                                      <td colSpan={4} className="px-4 py-1.5 text-[9px] font-black text-coffee-400 uppercase tracking-widest border-y border-coffee-100/50">
-                                        {category}
-                                      </td>
-                                    </tr>
-                                    {items.map((item) => (
-                                      <tr key={item.menu.id} className="hover:bg-coffee-50/30 transition-colors">
-                                        <td className="px-4 py-3">
-                                          <div>
-                                            <p className="font-bold text-coffee-950 text-xs">{item.menu.name}</p>
-                                            <p className="text-[10px] text-coffee-500">{formatIDR(item.menu.price)}</p>
-                                            
-                                            {/* Sugar and Ice Options */}
-                                            {(item.menu.category?.toLowerCase().includes('kopi') || 
-                                              item.menu.category?.toLowerCase().includes('teh') || 
-                                              item.menu.category?.toLowerCase().includes('coffee') || 
-                                              item.menu.category?.toLowerCase().includes('tea') || 
-                                              item.menu.category?.toLowerCase().includes('drink') || 
-                                              item.menu.category?.toLowerCase().includes('minuman')) && (
-                                              <div className="mt-2 flex gap-2">
-                                                <select 
-                                                  value={item.sugarLevel || 'Normal'}
-                                                  onChange={(e) => handleUpdateCartOptions(item.menu.id, { sugarLevel: e.target.value })}
-                                                  className="bg-coffee-50 border border-coffee-100 rounded text-[9px] py-0.5 px-1 focus:outline-none"
-                                                  title="Sugar Level"
-                                                >
-                                                  <option value="No Sugar">No Sugar</option>
-                                                  <option value="Less Sugar">Less Sugar</option>
-                                                  <option value="Normal">Normal</option>
-                                                  <option value="Extra Sugar">Extra</option>
-                                                </select>
-                                                <select 
-                                                  value={item.iceLevel || 'Normal'}
-                                                  onChange={(e) => handleUpdateCartOptions(item.menu.id, { iceLevel: e.target.value })}
-                                                  className="bg-coffee-50 border border-coffee-100 rounded text-[9px] py-0.5 px-1 focus:outline-none"
-                                                  title="Ice Level"
-                                                >
-                                                  <option value="No Ice">No Ice</option>
-                                                  <option value="Less Ice">Less Ice</option>
-                                                  <option value="Normal">Normal</option>
-                                                  <option value="Extra Ice">Extra</option>
-                                                </select>
-                                              </div>
-                                            )}
-                                          </div>
-                                        </td>
-                                        <td className="px-4 py-3">
-                                          <div className="flex items-center justify-center gap-2">
-                                            <button 
-                                              onClick={() => handleUpdateCartQuantity(item.menu.id, -1)}
-                                              className="w-8 h-8 flex items-center justify-center rounded-xl border border-coffee-200 text-coffee-600 hover:bg-coffee-50 text-sm active:scale-90 transition-all"
-                                            >
-                                              <Minus size={14} />
-                                            </button>
-                                            <span className="font-bold text-coffee-900 text-xs w-5 text-center">{item.quantity}</span>
-                                            <button 
-                                              onClick={() => handleUpdateCartQuantity(item.menu.id, 1)}
-                                              className="w-8 h-8 flex items-center justify-center rounded-xl border border-coffee-200 text-coffee-600 hover:bg-coffee-50 text-sm active:scale-90 transition-all"
-                                            >
-                                              <Plus size={14} />
-                                            </button>
-                                          </div>
-                                        </td>
-                                        <td className="px-4 py-3 text-right font-bold text-coffee-950 text-xs">
-                                          {formatIDR(item.menu.price * item.quantity)}
-                                        </td>
-                                        <td className="px-4 py-3 text-right">
-                                          <button 
-                                            onClick={() => handleRemoveFromCart(item.menu.id)}
-                                            className="text-coffee-300 hover:text-rose-500 transition-colors p-2"
-                                          >
-                                            <Trash2 size={16} />
-                                          </button>
-                                        </td>
-                                      </tr>
-                                    ))}
-                                  </React.Fragment>
-                                ))}
-                              </tbody>
-                            </table>
-                          </div>
-                        </div>
-                      )}
-                    </motion.div>
-
-                    <div className="glass-card p-6 bg-coffee-950 text-white border-none sticky top-24 shadow-2xl shadow-coffee-900/20 max-h-[calc(100vh-120px)] overflow-y-auto custom-scrollbar">
-                      <h3 className="text-lg font-serif font-bold mb-6">Ringkasan Order</h3>
+                  {/* Sidebar */}
+                  <div className="space-y-6">
+                    <div className="glass-card p-8 bg-coffee-950 text-white border-none rounded-[40px] sticky top-8">
+                      <h3 className="text-xl font-serif font-bold mb-6">Ringkasan Order</h3>
                       
-                      <div className="mb-6">
-                        <label className="block text-[10px] font-bold uppercase text-coffee-400 mb-3 tracking-widest">Nama Pembeli</label>
-                        <div className="relative">
-                          <User className="absolute left-3 top-1/2 -translate-y-1/2 text-coffee-400" size={14} />
-                          <input 
-                            type="text"
-                            value={customerName}
-                            onChange={(e) => setCustomerName(e.target.value)}
-                            placeholder="Nama pembeli..."
-                            className="w-full bg-white/5 border border-white/10 rounded-xl pl-10 pr-4 py-3 text-sm text-coffee-100 focus:outline-none focus:ring-2 focus:ring-coffee-500 transition-all placeholder:text-coffee-600"
-                          />
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-3 mb-6">
-                        <div>
-                          <label className="block text-[10px] font-bold uppercase text-coffee-400 mb-3 tracking-widest">No. Meja</label>
-                          <div className="relative">
-                            <Hash className="absolute left-3 top-1/2 -translate-y-1/2 text-coffee-400" size={14} />
-                            <input 
-                              type="text"
-                              value={tableNumber}
-                              onChange={(e) => setTableNumber(e.target.value)}
-                              placeholder="Meja..."
-                              className="w-full bg-white/5 border border-white/10 rounded-xl pl-10 pr-4 py-3 text-sm text-coffee-100 focus:outline-none focus:ring-2 focus:ring-coffee-500 transition-all placeholder:text-coffee-600"
-                            />
-                          </div>
-                        </div>
-                        <div>
-                          <label className="block text-[10px] font-bold uppercase text-coffee-400 mb-3 tracking-widest">Loyalty</label>
-                          <div className="relative">
-                            <Users className="absolute left-3 top-1/2 -translate-y-1/2 text-coffee-400" size={14} />
-                            <select 
-                              value={selectedCustomerId || ''}
-                              onChange={(e) => {
-                                const id = e.target.value ? Number(e.target.value) : null;
-                                setSelectedCustomerId(id);
-                                if (id) {
-                                  const cust = customers.find(c => c.id === id);
-                                  if (cust) setCustomerName(cust.name);
-                                }
-                              }}
-                              className="w-full bg-white/5 border border-white/10 rounded-xl pl-10 pr-4 py-3 text-sm text-coffee-100 focus:outline-none focus:ring-2 focus:ring-coffee-500 transition-all appearance-none"
-                            >
-                              <option value="" className="bg-coffee-950">Umum</option>
-                              {customers.map(c => (
-                                <option key={c.id} value={c.id} className="bg-coffee-950">{c.name} ({c.points} pts)</option>
-                              ))}
-                            </select>
-                          </div>
-                        </div>
-                      </div>
-
                       <div className="space-y-4 mb-8">
+                        <input 
+                          type="text"
+                          value={customerName}
+                          onChange={(e) => setCustomerName(e.target.value)}
+                          placeholder="Nama Pembeli"
+                          className="w-full bg-white/10 border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder:text-coffee-700"
+                        />
                         <div className="flex justify-between text-coffee-400 text-sm">
                           <span>Total Item</span>
-                          <span className="text-white font-bold">{cart.reduce((sum, item) => sum + item.quantity, 0)}</span>
+                          <span className="text-white font-bold">{cart.reduce((sum, i) => sum + i.quantity, 0)}</span>
                         </div>
                         <div className="h-px bg-white/10" />
                         <div className="flex justify-between items-baseline">
-                          <span className="text-coffee-400 text-sm">Total Bayar</span>
-                          <span className="text-3xl font-bold text-white">
+                          <span className="text-coffee-400 text-sm">Total</span>
+                          <span className="text-2xl font-bold text-white">
                             {formatIDR(cart.reduce((sum, item) => sum + (item.menu.price * item.quantity), 0))}
                           </span>
                         </div>
                       </div>
+
                       <button 
                         onClick={() => setShowPaymentModal(true)}
-                        className="w-full bg-emerald-500 text-white py-4 rounded-2xl font-bold flex items-center justify-center gap-2 hover:bg-emerald-600 transition-all disabled:opacity-50 shadow-lg shadow-emerald-900/20"
-                        disabled={loading || cart.length === 0}
+                        className="w-full bg-emerald-500 text-white py-4 rounded-xl font-bold hover:bg-emerald-600 transition-all disabled:opacity-50"
+                        disabled={cart.length === 0}
                       >
-                        <CreditCard size={20} />
-                        Pilih Pembayaran
+                        Pembayaran
                       </button>
-
-                      {lastOrder && (
-                        <button 
-                          onClick={() => handleReprint()}
-                          className="w-full mt-3 bg-coffee-100 text-coffee-900 py-3 rounded-2xl font-bold flex items-center justify-center gap-2 hover:bg-coffee-200 transition-all"
-                        >
-                          <Printer size={16} />
-                          Cetak Ulang Struk Terakhir
-                        </button>
-                      )}
-                    </div>
-
-                    <div className="glass-card p-6 border-dashed border-2 border-coffee-200 bg-transparent">
-                      <p className="text-xs font-bold uppercase tracking-widest text-coffee-400 mb-4 flex items-center gap-2">
-                        <AlertCircle size={14} /> Catatan Kasir
-                      </p>
-                      <p className="text-sm text-coffee-600 italic">
-                        "Pastikan stok bahan baku mencukupi sebelum memproses pembayaran. Sistem akan memvalidasi stok secara otomatis."
-                      </p>
                     </div>
                   </div>
 
                   {/* Mobile Floating Cart Button */}
                   {cart.length > 0 && (
                     <motion.button
-                      id="mobile-floating-cart"
                       initial={{ scale: 0, y: 20 }}
                       animate={cartPulse ? { scale: [1, 1.1, 1], y: 0 } : { scale: 1, y: 0 }}
                       transition={{ duration: 0.3 }}
                       onClick={() => setShowMobileCart(true)}
-                      className="lg:hidden fixed bottom-24 right-6 z-40 bg-coffee-900 text-white p-4 rounded-full shadow-2xl flex items-center gap-3 border-4 border-white active:scale-90 transition-transform"
+                      className="lg:hidden fixed bottom-20 right-4 z-40 bg-coffee-900 text-white p-3.5 rounded-full shadow-2xl flex items-center gap-3 border-4 border-white active:scale-90 transition-transform"
                     >
                       <div className="relative">
-                        <ShoppingCart size={24} />
-                        <span className="absolute -top-2 -right-2 bg-emerald-500 text-white text-[10px] font-black w-5 h-5 rounded-full flex items-center justify-center border-2 border-coffee-900">
+                        <ShoppingCart size={20} />
+                        <span className="absolute -top-2 -right-2 bg-accent-500 text-white text-[8px] font-black w-4 h-4 rounded-full flex items-center justify-center border-2 border-coffee-900">
                           {cart.reduce((sum, item) => sum + item.quantity, 0)}
                         </span>
                       </div>
-                      <span className="font-bold text-sm pr-2">
+                      <span className="font-bold text-xs pr-1">
                         {formatIDR(cart.reduce((sum, item) => sum + (item.menu.price * item.quantity), 0))}
                       </span>
                     </motion.button>
@@ -4342,106 +4124,32 @@ export default function App() {
                             </div>
                           </div>
 
-                          <div className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar">
-                            <div className="space-y-6">
-                              {(Object.entries(
-                                cart.reduce((acc, item) => {
-                                  const category = item.menu.category || 'Lainnya';
-                                  if (!acc[category]) acc[category] = [];
-                                  acc[category].push(item);
-                                  return acc;
-                                }, {} as Record<string, CartItem[]>)
-                              ) as [string, CartItem[]][]).map(([category, items]) => (
-                                <div key={category} className="space-y-3">
-                                  <h4 className="text-[10px] font-black uppercase text-coffee-400 tracking-widest px-1">{category}</h4>
-                                  <div className="space-y-3">
-                                    {items.map((item) => (
-                                      <div key={item.menu.id} className="flex items-center gap-3 min-[400px]:gap-4 bg-slate-50 p-3 min-[400px]:p-4 rounded-2xl border border-slate-100">
-                                        <div className="w-12 h-12 min-[400px]:w-16 min-[400px]:h-16 rounded-xl overflow-hidden bg-white shrink-0 shadow-sm border border-slate-100">
-                                          {item.menu.image_url ? (
-                                            <img src={item.menu.image_url} alt={item.menu.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                                          ) : (
-                                            <div className="w-full h-full flex items-center justify-center text-coffee-200">
-                                              <Coffee size={20} />
-                                            </div>
-                                          )}
-                                        </div>
-                                        <div className="flex-1 min-w-0">
-                                          <h4 className="font-bold text-coffee-950 text-xs min-[400px]:text-sm truncate">{item.menu.name}</h4>
-                                          <p className="text-[10px] min-[400px]:text-xs text-coffee-500">{formatIDR(item.menu.price)}</p>
-                                          
-                                          {/* Sugar and Ice Options */}
-                                          {(item.menu.category?.toLowerCase().includes('kopi') || 
-                                            item.menu.category?.toLowerCase().includes('teh') || 
-                                            item.menu.category?.toLowerCase().includes('coffee') || 
-                                            item.menu.category?.toLowerCase().includes('tea') || 
-                                            item.menu.category?.toLowerCase().includes('drink') || 
-                                            item.menu.category?.toLowerCase().includes('minuman')) && (
-                                            <div className="mt-1.5 flex gap-1.5">
-                                              <select 
-                                                value={item.sugarLevel || 'Normal'}
-                                                onChange={(e) => handleUpdateCartOptions(item.menu.id, { sugarLevel: e.target.value })}
-                                                className="bg-white border border-slate-200 rounded-lg text-[9px] min-[400px]:text-[10px] py-0.5 min-[400px]:py-1 px-1.5 min-[400px]:px-2 focus:outline-none focus:ring-1 focus:ring-coffee-500"
-                                              >
-                                                <option value="No Sugar">No Sugar</option>
-                                                <option value="Less Sugar">Less Sugar</option>
-                                                <option value="Normal">Normal</option>
-                                                <option value="Extra Sugar">Extra</option>
-                                              </select>
-                                              <select 
-                                                value={item.iceLevel || 'Normal'}
-                                                onChange={(e) => handleUpdateCartOptions(item.menu.id, { iceLevel: e.target.value })}
-                                                className="bg-white border border-slate-200 rounded-lg text-[9px] min-[400px]:text-[10px] py-0.5 min-[400px]:py-1 px-1.5 min-[400px]:px-2 focus:outline-none focus:ring-1 focus:ring-coffee-500"
-                                              >
-                                                <option value="No Ice">No Ice</option>
-                                                <option value="Less Ice">Less Ice</option>
-                                                <option value="Normal">Normal</option>
-                                                <option value="Extra Ice">Extra</option>
-                                              </select>
-                                            </div>
-                                          )}
-                                        </div>
-                                        <div className="flex items-center gap-2 min-[400px]:gap-3 bg-white p-1 rounded-xl border border-slate-200">
-                                          <button 
-                                            onClick={() => handleUpdateCartQuantity(item.menu.id, -1)}
-                                            className="w-8 h-8 min-[400px]:w-10 min-[400px]:h-10 flex items-center justify-center rounded-xl text-coffee-600 hover:bg-coffee-50 active:bg-coffee-100 active:scale-90 transition-all"
-                                          >
-                                            <Minus size={16} />
-                                          </button>
-                                          <span className="font-bold text-coffee-900 text-xs min-[400px]:text-sm w-4 text-center">{item.quantity}</span>
-                                          <button 
-                                            onClick={() => handleUpdateCartQuantity(item.menu.id, 1)}
-                                            className="w-8 h-8 min-[400px]:w-10 min-[400px]:h-10 flex items-center justify-center rounded-xl text-coffee-600 hover:bg-coffee-50 active:bg-coffee-100 active:scale-90 transition-all"
-                                          >
-                                            <Plus size={16} />
-                                          </button>
-                                        </div>
-                                      </div>
-                                    ))}
-                                  </div>
+                          <div className="flex-1 overflow-y-auto p-6 space-y-6">
+                            {cart.map((item) => (
+                              <div key={item.menu.id} className="flex items-center gap-4 bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                                <div className="w-16 h-16 rounded-xl overflow-hidden bg-white shrink-0 border border-slate-100">
+                                  {item.menu.image_url ? (
+                                    <img src={item.menu.image_url} alt={item.menu.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                                  ) : (
+                                    <div className="w-full h-full flex items-center justify-center text-coffee-200"><Coffee size={20} /></div>
+                                  )}
                                 </div>
-                              ))}
-                            </div>
-
-                            <div className="space-y-4">
-                              <div className="bg-coffee-50 p-6 rounded-3xl space-y-4 border border-coffee-100">
-                                <div className="space-y-2">
-                                  <label className="block text-[10px] font-black uppercase text-coffee-400 tracking-widest">Nama Pembeli</label>
-                                  <input 
-                                    type="text"
-                                    value={customerName}
-                                    onChange={(e) => setCustomerName(e.target.value)}
-                                    placeholder="Ketik nama pembeli..."
-                                    className="w-full bg-white border border-coffee-200 rounded-2xl px-4 py-3 text-sm text-coffee-900 focus:outline-none focus:ring-2 focus:ring-coffee-500 shadow-sm"
-                                  />
+                                <div className="flex-1 min-w-0">
+                                  <h4 className="font-bold text-coffee-950 text-sm truncate">{item.menu.name}</h4>
+                                  <p className="text-xs text-coffee-500">{formatIDR(item.menu.price)}</p>
+                                </div>
+                                <div className="flex items-center gap-3 bg-white p-1 rounded-xl border border-slate-200">
+                                  <button onClick={() => handleUpdateCartQuantity(item.menu.id, -1)} className="w-8 h-8 flex items-center justify-center rounded-lg text-coffee-600 hover:bg-coffee-50"><Minus size={14} /></button>
+                                  <span className="font-bold text-coffee-900 text-sm w-4 text-center">{item.quantity}</span>
+                                  <button onClick={() => handleUpdateCartQuantity(item.menu.id, 1)} className="w-8 h-8 flex items-center justify-center rounded-lg text-coffee-600 hover:bg-coffee-50"><Plus size={14} /></button>
                                 </div>
                               </div>
-                            </div>
+                            ))}
                           </div>
 
                           <div className="p-6 bg-white border-t border-coffee-100 space-y-4">
-                            <div className="flex justify-between items-baseline px-2">
-                              <span className="text-coffee-950 font-serif font-bold text-lg">Total Bayar</span>
+                            <div className="flex justify-between items-baseline">
+                              <span className="text-coffee-950 font-serif font-bold text-lg">Total</span>
                               <span className="text-2xl font-black text-coffee-900">
                                 {formatIDR(cart.reduce((sum, item) => sum + (item.menu.price * item.quantity), 0))}
                               </span>
@@ -4451,11 +4159,11 @@ export default function App() {
                                 setShowMobileCart(false);
                                 setShowPaymentModal(true);
                               }}
-                              className="w-full bg-emerald-500 text-white py-4 rounded-2xl font-black flex items-center justify-center gap-3 hover:bg-emerald-600 active:scale-95 transition-all shadow-xl shadow-emerald-200"
-                              disabled={loading || cart.length === 0}
+                              className="w-full bg-emerald-500 text-white py-4 rounded-2xl font-black flex items-center justify-center gap-3 hover:bg-emerald-600 shadow-xl shadow-emerald-200"
+                              disabled={cart.length === 0}
                             >
                               <CreditCard size={20} />
-                              LANJUT PEMBAYARAN
+                              BAYAR SEKARANG
                             </button>
                           </div>
                         </motion.div>
@@ -4464,87 +4172,19 @@ export default function App() {
                   </AnimatePresence>
                 </div>
               ) : (
-                <div className="glass-card p-4 md:p-8">
-                  <div className="flex justify-between items-center mb-6">
-                    <h3 className="text-xl font-serif font-bold text-coffee-950">Riwayat Penjualan</h3>
-                  </div>
-                  <div className="hidden md:block overflow-x-auto">
-                    <table className="w-full">
-                      <thead>
-                        <tr className="text-left text-coffee-500 text-xs uppercase tracking-widest border-b border-coffee-100">
-                          <th className="pb-4 font-bold">Waktu</th>
-                          <th className="pb-4 font-bold">Metode</th>
-                          <th className="pb-4 font-bold">Deskripsi</th>
-                          <th className="pb-4 font-bold text-right">Total</th>
-                          <th className="pb-4 font-bold text-right">Aksi</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-coffee-50">
-                        {transactions
-                          .filter(tx => tx.type === 'income' && tx.category === 'Sales')
-                          .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-                          .map(tx => (
-                            <tr key={tx.id} className="hover:bg-coffee-50/50 transition-colors">
-                              <td className="py-4 text-sm text-coffee-600">
-                                {formatDate(new Date(tx.date), 'HH:mm')}
-                                <span className="text-[10px] block text-coffee-400">{formatDate(new Date(tx.date), 'dd MMM yyyy')}</span>
-                              </td>
-                              <td className="py-4">
-                                <span className="px-2 py-1 bg-coffee-100 rounded text-[10px] font-bold text-coffee-600 uppercase">
-                                  {tx.payment_method || 'Cash'}
-                                </span>
-                              </td>
-                              <td className="py-4 text-sm text-coffee-900 font-medium">{tx.description}</td>
-                              <td className="py-4 text-sm font-bold text-right text-emerald-600">
-                                {formatIDR(tx.amount)}
-                              </td>
-                              <td className="py-4 text-right">
-                                {tx.order_id && (
-                                  <button
-                                    onClick={() => handleReprint(tx.order_id)}
-                                    className="inline-flex items-center gap-2 px-3 py-1.5 text-coffee-600 hover:text-coffee-900 hover:bg-coffee-100 rounded-lg transition-all border border-coffee-100"
-                                    title="Cetak Ulang Struk"
-                                  >
-                                    <Printer size={14} />
-                                    <span className="text-[10px] font-bold uppercase">Struk</span>
-                                  </button>
-                                )}
-                              </td>
-                            </tr>
-                          ))}
-                      </tbody>
-                    </table>
-                  </div>
-
-                  {/* Mobile List */}
-                  <div className="md:hidden space-y-4">
+                <div className="glass-card p-8">
+                  <h3 className="text-xl font-serif font-bold text-coffee-950 mb-6">Riwayat Penjualan</h3>
+                  <div className="space-y-3">
                     {transactions
                       .filter(tx => tx.type === 'income' && tx.category === 'Sales')
                       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
                       .map(tx => (
-                        <div key={tx.id} className="bg-slate-50 p-4 rounded-2xl border border-slate-100 flex justify-between items-center">
-                          <div className="space-y-1">
-                            <div className="flex items-center gap-2">
-                              <span className="text-xs font-black text-coffee-900">{formatDate(new Date(tx.date), 'HH:mm')}</span>
-                              <span className="px-1.5 py-0.5 bg-coffee-100 rounded text-[8px] font-black text-coffee-600 uppercase">
-                                {tx.payment_method || 'Cash'}
-                              </span>
-                            </div>
-                            <p className="text-xs text-coffee-600 font-medium line-clamp-1">{tx.description}</p>
-                            <p className="text-[10px] text-coffee-400">{formatDate(new Date(tx.date), 'dd MMM yyyy')}</p>
+                        <div key={tx.id} className="p-4 bg-slate-50 rounded-2xl flex justify-between items-center">
+                          <div>
+                            <p className="font-bold text-coffee-950">{tx.description}</p>
+                            <p className="text-xs text-coffee-400">{formatDate(new Date(tx.date), 'dd MMM yyyy, HH:mm')}</p>
                           </div>
-                          <div className="text-right space-y-2">
-                            <p className="text-sm font-black text-emerald-600">{formatIDR(tx.amount)}</p>
-                            {tx.order_id && (
-                              <button 
-                                onClick={() => handleReprint(tx.order_id)}
-                                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-coffee-100 text-coffee-600 rounded-xl shadow-sm active:scale-90 transition-transform"
-                              >
-                                <Printer size={12} />
-                                <span className="text-[10px] font-black uppercase">Struk</span>
-                              </button>
-                            )}
-                          </div>
+                          <p className="font-black text-emerald-600">{formatIDR(tx.amount)}</p>
                         </div>
                       ))}
                   </div>

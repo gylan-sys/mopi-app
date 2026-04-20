@@ -25,7 +25,8 @@ import {
   X,
   Coffee,
   TrendingUp,
-  Wallet
+  Wallet,
+  Search
 } from 'lucide-react';
 import { cn } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
@@ -92,20 +93,25 @@ const Sidebar: React.FC<SidebarProps> = ({
   const toggleMobile = () => setIsMobileOpen(!isMobileOpen);
 
   const mobileGridItems = [
-    { id: 'reports', label: 'Laporan Transaksi', icon: Calendar, color: 'bg-orange-50 text-orange-700' },
-    { id: 'reports', label: 'Laporan Keuangan', icon: TrendingUp, color: 'bg-emerald-50 text-emerald-600' },
-    { id: 'reports', label: 'Catatan Keuangan', icon: Wallet, color: 'bg-blue-50 text-blue-600' },
-    { id: 'inventory', label: 'Stok', icon: Package, color: 'bg-amber-50 text-amber-600' },
-    { id: 'menu', label: 'Menu', icon: Coffee, color: 'bg-indigo-50 text-indigo-600' },
-    { id: 'settings', label: 'Setting', icon: Settings, color: 'bg-slate-50 text-slate-600' },
-    { id: 'logout', label: 'Keluar', icon: LogOut, color: 'bg-rose-50 text-rose-600' },
+    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, color: 'bg-indigo-50 text-indigo-600' },
+    { id: 'orders', label: 'Kasir POS', icon: ShoppingCart, color: 'bg-accent-50 text-accent-600' },
+    { id: 'queue', label: 'Antrian', icon: Clock, color: 'bg-violet-50 text-violet-600' },
+    { id: 'reports', label: 'Laporan', icon: Calendar, color: 'bg-orange-50 text-orange-700' },
+    { id: 'inventory', label: 'Stok Barang', icon: Package, color: 'bg-amber-50 text-amber-600' },
+    { id: 'menu', label: 'Daftar Menu', icon: Coffee, color: 'bg-emerald-50 text-emerald-600' },
+    { id: 'delivery', label: 'Delivery', icon: Truck, color: 'bg-blue-50 text-blue-600' },
+    { id: 'kitchen', label: 'Dapur', icon: ChefHat, color: 'bg-rose-50 text-rose-600' },
+    { id: 'users', label: 'Karyawan', icon: User, color: 'bg-slate-50 text-slate-600' },
+    { id: 'loyalty', label: 'Pelanggan', icon: Star, color: 'bg-yellow-50 text-yellow-600' },
+    { id: 'settings', label: 'Pengaturan', icon: Settings, color: 'bg-coffee-50 text-coffee-600' },
+    { id: 'logout', label: 'Keluar', icon: LogOut, color: 'bg-red-50 text-red-600' },
   ];
 
   const SidebarContent = ({ isMobile = false }: { isMobile?: boolean }) => {
     if (isMobile) {
       return (
-        <div className="flex flex-col h-full bg-white p-8">
-          <div className="grid grid-cols-3 gap-y-10 gap-x-4">
+        <div className="flex flex-col h-full bg-white p-6 sm:p-8">
+          <div className="grid grid-cols-3 gap-y-6 sm:gap-y-10 gap-x-4">
             {mobileGridItems.map((item) => (
               <button
                 key={item.label}
@@ -117,15 +123,15 @@ const Sidebar: React.FC<SidebarProps> = ({
                   }
                   setIsMobileOpen(false);
                 }}
-                className="flex flex-col items-center gap-3 group active:scale-95 transition-all"
+                className="flex flex-col items-center gap-2 sm:gap-3 group active:scale-95 transition-all"
               >
                 <div className={cn(
-                  "w-16 h-16 rounded-[24px] flex items-center justify-center shadow-sm transition-all group-hover:shadow-md",
+                  "w-14 h-14 sm:w-16 sm:h-16 rounded-[20px] sm:rounded-[24px] flex items-center justify-center shadow-sm transition-all group-hover:shadow-md",
                   item.color
                 )}>
-                  <item.icon size={28} strokeWidth={2} />
+                  <item.icon size={24} sm:size={28} strokeWidth={2} />
                 </div>
-                <span className="text-[11px] font-bold text-coffee-900 text-center leading-tight px-1">
+                <span className="text-[10px] sm:text-[11px] font-bold text-coffee-900 text-center leading-tight px-1">
                   {item.label}
                 </span>
               </button>
@@ -160,7 +166,6 @@ const Sidebar: React.FC<SidebarProps> = ({
               <span className="font-bold text-coffee-900 text-lg tracking-tight">
                 {appSettings.app_name}
               </span>
-              <span className="text-[10px] text-coffee-400 uppercase tracking-wider">Point of Sale</span>
             </div>
           )}
         </div>
@@ -296,31 +301,28 @@ const Sidebar: React.FC<SidebarProps> = ({
 
   return (
     <>
-      {/* Mobile Header */}
-      <div className="lg:hidden fixed top-0 left-0 right-0 h-20 bg-white/90 dark:bg-coffee-900/90 backdrop-blur-2xl border-b border-coffee-100 dark:border-coffee-800 flex items-center justify-between px-6 z-[100] no-print safe-top shadow-sm">
-        <div className="flex items-center gap-4">
-          <div className="bg-coffee-700 p-2.5 rounded-2xl shadow-xl shadow-coffee-900/30">
-            {appSettings.app_logo_url ? (
-              <img src={appSettings.app_logo_url} alt="Logo" className="w-6 h-6 object-contain" />
-            ) : (
-              <Coffee className="text-white w-6 h-6" size={24} />
-            )}
-          </div>
-          <div className="flex flex-col">
-            <span className="font-display text-coffee-950 dark:text-coffee-100 text-xl tracking-tighter leading-none">
-              {appSettings.app_name}
-            </span>
-            <span className="text-[9px] font-sans font-black text-coffee-400 uppercase tracking-[0.2em] mt-1">Premium POS</span>
-          </div>
+      {/* Mobile Top Header */}
+      <div className="lg:hidden fixed top-0 left-0 right-0 h-13 sm:h-14 bg-white/70 dark:bg-coffee-950/70 backdrop-blur-xl border-b border-coffee-100/30 dark:border-coffee-800/30 flex items-center justify-between px-4 sm:px-5 z-[100] no-print safe-top shadow-sm">
+        <div className="flex flex-col">
+          <p className="text-[7px] sm:text-[8px] font-black text-coffee-400 uppercase tracking-[0.15em] leading-none mb-1">
+            Good Morning ☕
+          </p>
+          <h1 className="text-sm sm:text-base font-serif font-bold text-coffee-950 dark:text-coffee-50 leading-none">
+            {user.username}
+          </h1>
         </div>
-        <div className="flex items-center gap-2">
+        
+        <div className="flex items-center gap-1.5">
+          <button className="p-2 text-coffee-500 hover:text-coffee-950 dark:hover:text-coffee-100 transition-all bg-coffee-50/50 dark:bg-coffee-800/50 rounded-xl active:scale-90">
+            <Search size={18} />
+          </button>
           <button 
             onClick={() => setShowNotifications(!showNotifications)}
-            className="p-4 text-coffee-400 hover:text-coffee-950 dark:hover:text-coffee-100 transition-colors relative bg-coffee-50 dark:bg-coffee-800 rounded-2xl active:scale-90"
+            className="p-2 text-coffee-500 hover:text-coffee-950 dark:hover:text-coffee-100 transition-all relative bg-coffee-50/50 dark:bg-coffee-800/50 rounded-xl active:scale-90"
           >
-            <Bell size={24} />
+            <Bell size={18} />
             {notifications.length > 0 && (
-              <span className="absolute top-3 right-3 w-2.5 h-2.5 bg-accent-500 rounded-full border-2 border-white dark:border-coffee-950" />
+              <span className="absolute top-2 right-2 w-1.5 h-1.5 bg-accent-500 rounded-full border border-white dark:border-coffee-950" />
             )}
           </button>
         </div>
@@ -332,32 +334,32 @@ const Sidebar: React.FC<SidebarProps> = ({
               initial={{ opacity: 0, y: 10, scale: 0.95 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 10, scale: 0.95 }}
-              className="fixed top-16 right-4 w-[calc(100vw-32px)] max-w-80 bg-white dark:bg-coffee-900 rounded-2xl shadow-2xl border border-coffee-100 dark:border-coffee-800 overflow-hidden z-[150]"
+              className="fixed top-14 right-4 w-[calc(100vw-32px)] max-w-80 bg-white/95 dark:bg-coffee-900/95 backdrop-blur-xl rounded-[24px] shadow-2xl border border-coffee-100/50 dark:border-coffee-800/50 overflow-hidden z-[150]"
             >
-              <div className="p-4 border-b border-coffee-50 dark:border-coffee-800 bg-coffee-50/50 dark:bg-coffee-800/50 flex justify-between items-center">
-                <h4 className="font-bold text-coffee-950 dark:text-coffee-100">Notifikasi</h4>
+              <div className="p-4 border-b border-coffee-50 dark:border-coffee-800 bg-coffee-50/30 dark:bg-coffee-800/30 flex justify-between items-center">
+                <h4 className="font-black text-sm text-coffee-950 dark:text-coffee-100">Notifikasi</h4>
                 <button 
                   onClick={() => setNotifications([])}
-                  className="text-[10px] font-bold text-coffee-500 uppercase hover:text-rose-500 transition-colors"
+                  className="text-[10px] font-black text-coffee-400 uppercase hover:text-rose-500 transition-colors"
                 >
-                  Hapus Semua
+                  Hapus
                 </button>
               </div>
               <div className="max-h-[300px] overflow-y-auto custom-scrollbar">
                 {notifications.length === 0 ? (
                   <div className="p-8 text-center text-coffee-400">
                     <Bell size={32} className="mx-auto mb-2 opacity-20" />
-                    <p className="text-xs">Belum ada notifikasi</p>
+                    <p className="text-xs font-medium">Belum ada notifikasi</p>
                   </div>
                 ) : (
                   notifications.map(notif => (
                     <div key={notif.id} className="p-4 border-b border-coffee-50 dark:border-coffee-800 hover:bg-coffee-50/50 dark:hover:bg-coffee-800/50 transition-colors flex gap-3">
-                      <div className="w-8 h-8 rounded-lg bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+                      <div className="w-8 h-8 rounded-xl bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
                         <Check size={16} />
                       </div>
                       <div>
-                        <p className="text-xs text-coffee-900 dark:text-coffee-300 leading-relaxed">{notif.message}</p>
-                        <p className="text-[10px] text-coffee-400 mt-1 font-medium">{notif.time}</p>
+                        <p className="text-xs text-coffee-900 dark:text-coffee-300 leading-relaxed font-medium">{notif.message}</p>
+                        <p className="text-[10px] text-coffee-400 mt-1 font-bold">{notif.time}</p>
                       </div>
                     </div>
                   ))
@@ -369,7 +371,7 @@ const Sidebar: React.FC<SidebarProps> = ({
       </div>
 
       {/* Bottom Navigation for Mobile */}
-      <nav className="lg:hidden fixed bottom-0 left-0 right-0 mobile-bottom-nav-height bg-white/90 dark:bg-coffee-900/90 backdrop-blur-2xl border-t border-coffee-100 dark:border-coffee-800 flex items-center justify-around px-2 z-[100] no-print safe-bottom shadow-[0_-8px_30px_rgba(0,0,0,0.04)]">
+      <nav className="lg:hidden fixed bottom-4 left-4 right-4 h-16 bg-white/80 dark:bg-coffee-900/80 backdrop-blur-2xl border border-coffee-100/50 dark:border-coffee-800/50 flex items-center justify-around px-2 z-[100] no-print safe-bottom rounded-[24px] sm:rounded-[32px] shadow-[0_15px_40px_rgba(0,0,0,0.1)]">
         {[
           { id: 'orders', label: t('orders'), icon: ShoppingCart },
           { id: 'queue', label: t('queue'), icon: Clock },
@@ -392,22 +394,29 @@ const Sidebar: React.FC<SidebarProps> = ({
                 }
               }}
               className={cn(
-                "flex flex-col items-center justify-center gap-1 flex-1 h-full transition-all relative active:scale-90",
+                "flex flex-col items-center justify-center gap-1 flex-1 h-full transition-all relative active:scale-95",
                 isActive ? "text-coffee-950 dark:text-coffee-100" : "text-coffee-300 dark:text-coffee-600"
               )}
             >
               <div className={cn(
-                "p-2.5 rounded-2xl transition-all duration-300",
-                isActive ? "bg-coffee-700 text-white shadow-lg shadow-coffee-900/20 scale-110 -translate-y-1" : "hover:bg-coffee-50 dark:hover:bg-coffee-800"
+                "p-2 rounded-2xl transition-all duration-300",
+                isActive 
+                  ? "bg-coffee-700 text-white shadow-lg shadow-coffee-900/20 scale-105 -translate-y-1.5" 
+                  : "hover:bg-coffee-50 dark:hover:bg-coffee-800"
               )}>
-                <item.icon size={22} strokeWidth={isActive ? 2.5 : 2} />
+                <item.icon size={isActive ? 22 : 20} strokeWidth={isActive ? 2.5 : 2} />
               </div>
-              <span className={cn(
-                "text-[11px] font-sans font-bold uppercase tracking-tighter transition-all duration-300",
-                isActive ? "opacity-100 translate-y-0" : "opacity-60 translate-y-0.5"
-              )}>
-                {item.label}
-              </span>
+              <AnimatePresence>
+                {isActive && (
+                  <motion.span 
+                    initial={{ opacity: 0, y: 5 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="text-[10px] font-sans font-black uppercase tracking-tighter absolute bottom-2"
+                  >
+                    {item.label}
+                  </motion.span>
+                )}
+              </AnimatePresence>
               
               {/* Badges */}
               {item.id === 'orders' && cart.length > 0 && (

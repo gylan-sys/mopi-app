@@ -66,6 +66,9 @@ export interface Menu {
   supplier_name?: string;
   supplier_price?: number;
   ingredients: MenuIngredient[];
+  rating?: number;
+  isBestSeller?: boolean;
+  isPromo?: boolean;
 }
 
 export interface UserAccount {

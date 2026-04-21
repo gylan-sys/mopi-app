@@ -2213,6 +2213,12 @@ async function startServer() {
     res.json(promo);
   });
 
+  app.get("/api/public/promos", (req, res) => {
+    const promos = db.prepare("SELECT * FROM promos WHERE active = 1").all() as any[];
+    promos.forEach(p => p.target_ids = JSON.parse(p.target_ids || '[]'));
+    res.json(promos);
+  });
+
   app.get("/api/settings", authenticateToken, (req, res) => {
     const settings = db.prepare("SELECT * FROM settings").all() as any[];
     const settingsObj = settings.reduce((acc, curr) => {

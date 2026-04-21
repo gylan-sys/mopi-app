@@ -310,15 +310,6 @@ const AdCarousel = () => {
             >
               {currentAd.subtitle}
             </motion.p>
-            
-            <motion.button
-              initial={{ y: 20, opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              transition={{ duration: 1, delay: 1 }}
-              className="mt-12 px-10 py-5 bg-white text-coffee-950 rounded-full font-black uppercase tracking-[0.2em] text-xs shadow-2xl hover:bg-accent-500 hover:text-white transition-all active:scale-95"
-            >
-              Lihat Penawaran
-            </motion.button>
           </div>
         </motion.div>
       </AnimatePresence>
@@ -705,6 +696,7 @@ export default function App() {
 
   const [isCustomerMode, setIsCustomerMode] = useState(true);
   const [ads, setAds] = useState<any[]>([]);
+  const [publicPromos, setPublicPromos] = useState<any[]>([]);
   const [promos, setPromos] = useState<any[]>([]);
   const [activePromo, setActivePromo] = useState<any>(null);
   const [promoCode, setPromoCode] = useState('');
@@ -1485,15 +1477,23 @@ export default function App() {
     }
   };
 
-  const handleDeleteUser = async (id: number) => {
+  const handleDeleteUser = (id: number) => {
     if (user?.id === id) {
       toast.error('Tidak bisa menghapus akun sendiri');
       return;
     }
-    if (confirm('Hapus user ini?')) {
-      await fetch(`/api/users/${id}`, { method: 'DELETE' });
-      fetchData();
-    }
+    setConfirmDialog({
+      show: true,
+      title: 'Hapus User',
+      message: 'Apakah Anda yakin ingin menghapus user ini?',
+      isDestructive: true,
+      onConfirm: async () => {
+        await fetch(`/api/users/${id}`, { method: 'DELETE' });
+        setConfirmDialog(null);
+        fetchData();
+        toast.success('User berhasil dihapus');
+      }
+    });
   };
 
   const handleAddCustomer = async (e: React.FormEvent) => {
@@ -1522,18 +1522,25 @@ export default function App() {
     }
   };
 
-  const handleDeleteCustomer = async (id: number) => {
-    if (confirm('Hapus customer ini?')) {
-      try {
-        const res = await fetch(`/api/customers/${id}`, { method: 'DELETE' });
-        if (res.ok) {
-          fetchData();
-          toast.success('Customer berhasil dihapus');
+  const handleDeleteCustomer = (id: number) => {
+    setConfirmDialog({
+      show: true,
+      title: 'Hapus Pelanggan',
+      message: 'Apakah Anda yakin ingin menghapus data pelanggan ini?',
+      isDestructive: true,
+      onConfirm: async () => {
+        try {
+          const res = await fetch(`/api/customers/${id}`, { method: 'DELETE' });
+          if (res.ok) {
+            setConfirmDialog(null);
+            fetchData();
+            toast.success('Customer berhasil dihapus');
+          }
+        } catch (err) {
+          toast.error('Gagal menghapus customer');
         }
-      } catch (err) {
-        toast.error('Gagal menghapus customer');
       }
-    }
+    });
   };
 
   useEffect(() => {
@@ -1552,7 +1559,18 @@ export default function App() {
           console.error('Failed to fetch public menus');
         }
       };
+
+      const fetchPublicPromos = async () => {
+        try {
+          const res = await fetch('/api/public/promos');
+          if (res.ok) setPublicPromos(await res.json());
+        } catch (err) {
+          console.error('Failed to fetch public promos');
+        }
+      };
+
       fetchPublicMenus();
+      fetchPublicPromos();
     }
   }, [isCustomerMode, user]);
 
@@ -1848,17 +1866,28 @@ export default function App() {
     const url = editingInvId ? `/api/inventory/${editingInvId}` : '/api/inventory';
     const method = editingInvId ? 'PUT' : 'POST';
 
-    await fetch(url, {
-      method,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(newInv)
-    });
-    setShowInvModal(false);
-    setEditingInvId(null);
-    setNewInv({ name: '', quantity: 0, unit: 'pcs', min_stock: 0, unit_price: 0, category: 'Bahan', type: 'Bahan', expiration_date: '' });
-    setCalcPurchase({ qty: 1, content: 0, totalPrice: 0 });
-    setShowCalculator(false);
-    fetchData();
+    try {
+      const res = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newInv)
+      });
+      
+      if (res.ok) {
+        setShowInvModal(false);
+        setEditingInvId(null);
+        setNewInv({ name: '', quantity: 0, unit: 'pcs', min_stock: 0, unit_price: 0, category: 'Bahan', type: 'Bahan', expiration_date: '' });
+        setCalcPurchase({ qty: 1, content: 0, totalPrice: 0 });
+        setShowCalculator(false);
+        fetchData();
+        toast.success(editingInvId ? 'Item inventory berhasil diperbarui' : 'Item inventory berhasil ditambah');
+      } else {
+        const data = await res.json();
+        toast.error(data.error || 'Gagal menyimpan item inventory');
+      }
+    } catch (error) {
+      toast.error('Terjadi kesalahan koneksi');
+    }
   };
 
   const handleEditInventory = (item: InventoryItem) => {
@@ -1900,16 +1929,26 @@ export default function App() {
     const url = editingMenuId ? `/api/menus/${editingMenuId}` : '/api/menus';
     const method = editingMenuId ? 'PUT' : 'POST';
 
-    await fetch(url, {
-      method,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(newMenu)
-    });
-    
-    setShowMenuModal(false);
-    setEditingMenuId(null);
-    setNewMenu({ name: '', price: 0, size: '', category: 'Kopi', image_url: '', description: '', ingredients: [], type: 'Internal', supplier_name: '', supplier_price: 0 });
-    fetchData();
+    try {
+      const res = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newMenu)
+      });
+      
+      if (res.ok) {
+        setShowMenuModal(false);
+        setEditingMenuId(null);
+        setNewMenu({ name: '', price: 0, size: '', category: 'Kopi', image_url: '', description: '', ingredients: [], type: 'Internal', supplier_name: '', supplier_price: 0 });
+        fetchData();
+        toast.success(editingMenuId ? 'Menu berhasil diperbarui' : 'Menu berhasil ditambah');
+      } else {
+        const data = await res.json();
+        toast.error(data.error || 'Gagal menyimpan menu');
+      }
+    } catch (error) {
+      toast.error('Terjadi kesalahan koneksi');
+    }
   };
 
   const handleEditMenu = (menu: Menu) => {
@@ -2162,18 +2201,34 @@ export default function App() {
     }
   };
 
-  const handleDeleteMenu = async (id: number) => {
-    if (confirm('Hapus menu ini?')) {
-      await fetch(`/api/menus/${id}`, { method: 'DELETE' });
-      fetchData();
-    }
+  const handleDeleteMenu = (id: number) => {
+    setConfirmDialog({
+      show: true,
+      title: 'Hapus Menu',
+      message: 'Apakah Anda yakin ingin menghapus menu ini?',
+      isDestructive: true,
+      onConfirm: async () => {
+        await fetch(`/api/menus/${id}`, { method: 'DELETE' });
+        setConfirmDialog(null);
+        fetchData();
+        toast.success('Menu berhasil dihapus');
+      }
+    });
   };
 
-  const handleDeleteInventory = async (id: number) => {
-    if (confirm('Hapus item ini?')) {
-      await fetch(`/api/inventory/${id}`, { method: 'DELETE' });
-      fetchData();
-    }
+  const handleDeleteInventory = (id: number) => {
+    setConfirmDialog({
+      show: true,
+      title: 'Hapus Item Inventory',
+      message: 'Apakah Anda yakin ingin menghapus item ini dari inventory?',
+      isDestructive: true,
+      onConfirm: async () => {
+        await fetch(`/api/inventory/${id}`, { method: 'DELETE' });
+        setConfirmDialog(null);
+        fetchData();
+        toast.success('Item inventory berhasil dihapus');
+      }
+    });
   };
 
   const updateStock = async (id: number, currentQty: number, delta: number) => {
@@ -2493,6 +2548,64 @@ export default function App() {
               <div className="lg:hidden h-64 rounded-[2rem] overflow-hidden shadow-lg">
                 <AdCarousel />
               </div>
+
+              {/* Public Promos Showcase */}
+              {publicPromos.length > 0 && (
+                <div className="bg-gradient-to-br from-coffee-900 to-coffee-950 rounded-[2.5rem] p-8 text-white shadow-2xl relative overflow-hidden group border border-white/5">
+                  <div className="absolute -right-20 -top-20 w-64 h-64 bg-accent-500/10 rounded-full blur-3xl group-hover:bg-accent-500/20 transition-all duration-1000" />
+                  <div className="absolute -left-20 -bottom-20 w-64 h-64 bg-coffee-500/10 rounded-full blur-3xl group-hover:bg-coffee-500/20 transition-all duration-1000" />
+                  
+                  <div className="relative">
+                    <div className="flex items-center justify-between mb-8">
+                      <div>
+                        <div className="flex items-center gap-3 mb-2">
+                          <div className="p-2.5 bg-accent-500/20 rounded-2xl backdrop-blur-md border border-accent-500/30">
+                            <Tag size={20} className="text-accent-400" />
+                          </div>
+                          <h3 className="text-xl font-serif font-bold text-white tracking-tight">Kupon Promo Hari Ini</h3>
+                        </div>
+                        <p className="text-coffee-300 text-sm font-medium">Klik untuk salin kode dan gunakan saat check-out.</p>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {publicPromos.map(promo => (
+                        <motion.div 
+                          key={promo.id}
+                          whileHover={{ scale: 1.02, y: -4 }}
+                          whileTap={{ scale: 0.98 }}
+                          onClick={() => {
+                            navigator.clipboard.writeText(promo.code);
+                            toast.success(`Kode ${promo.code} disalin!`);
+                            setPromoCode(promo.code);
+                          }}
+                          className="cursor-pointer bg-white/5 hover:bg-white/10 backdrop-blur-md border border-white/10 p-5 rounded-3xl flex flex-col justify-between transition-all group"
+                        >
+                          <div className="flex justify-between items-start mb-6">
+                            <div className="flex flex-col">
+                              <span className="text-[10px] font-black uppercase tracking-[0.2em] text-accent-400 mb-1">Kode Promo</span>
+                              <span className="text-2xl font-black tracking-tighter text-white group-hover:text-accent-400 transition-colors">{promo.code}</span>
+                            </div>
+                            <div className="p-2 bg-white/5 rounded-xl border border-white/5 text-white/50 group-hover:text-white transition-colors">
+                              <Copy size={16} />
+                            </div>
+                          </div>
+                          
+                          <div className="flex items-end justify-between">
+                            <div className="bg-accent-500/20 border border-accent-500/30 px-3 py-1.5 rounded-xl">
+                              <span className="text-sm font-black text-accent-400 uppercase tracking-tight">
+                                {promo.discount_type === 'percentage' ? `${promo.discount_value}% OFF` : `Rp ${promo.discount_value.toLocaleString('id-ID')} OFF`}
+                              </span>
+                            </div>
+                            <span className="text-[10px] font-bold text-white/30 uppercase tracking-widest">{promo.target_type}</span>
+                          </div>
+                        </motion.div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+
             {/* Search & Categories */}
             <div className="flex flex-col md:flex-row gap-4">
               <div className="relative flex-1">
@@ -4166,15 +4279,21 @@ export default function App() {
                                 <Edit size={16} />
                               </button>
                               <button
-                                onClick={async () => {
-                                  if (confirm('Hapus iklan ini?')) {
+                                onClick={() => setConfirmDialog({
+                                  show: true,
+                                  title: 'Hapus Iklan',
+                                  message: 'Apakah Anda yakin ingin menghapus iklan ini?',
+                                  isDestructive: true,
+                                  onConfirm: async () => {
                                     await fetch(`/api/ads/${ad.id}`, {
                                       method: 'DELETE',
                                       headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
                                     });
+                                    setConfirmDialog(null);
                                     fetchAds();
+                                    toast.success('Iklan berhasil dihapus');
                                   }
-                                }}
+                                })}
                                 className="p-2 bg-white/90 backdrop-blur rounded-xl text-rose-600 hover:bg-white shadow-lg"
                               >
                                 <Trash2 size={16} />
@@ -4259,15 +4378,21 @@ export default function App() {
                                 <Edit size={20} />
                               </button>
                               <button
-                                onClick={async () => {
-                                  if (confirm('Hapus promo ini?')) {
+                                onClick={() => setConfirmDialog({
+                                  show: true,
+                                  title: 'Hapus Promo',
+                                  message: 'Apakah Anda yakin ingin menghapus promo ini?',
+                                  isDestructive: true,
+                                  onConfirm: async () => {
                                     await fetch(`/api/promos/${promo.id}`, {
                                       method: 'DELETE',
                                       headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
                                     });
+                                    setConfirmDialog(null);
                                     fetchPromos();
+                                    toast.success('Promo berhasil dihapus');
                                   }
-                                }}
+                                })}
                                 className="p-2 text-coffee-400 hover:text-rose-500 hover:bg-rose-50 rounded-xl transition-all"
                               >
                                 <Trash2 size={20} />

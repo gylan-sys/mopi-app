@@ -89,18 +89,18 @@ const MenuTab: React.FC<MenuTabProps> = ({
                         </span>
                       )}
                     </div>
-                    <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-all duration-500 translate-x-4 group-hover:translate-x-0">
+                    <div className="absolute top-4 right-4 flex gap-2 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-all duration-500 lg:translate-x-4 lg:group-hover:translate-x-0 z-10">
                       <button 
                         onClick={() => handleEditMenu(menu)}
                         className="bg-white/90 backdrop-blur-md text-coffee-600 p-3 rounded-2xl shadow-xl hover:bg-coffee-950 hover:text-white transition-all border border-white/20"
                       >
-                        <Edit size={16} />
+                        <Edit size={18} />
                       </button>
                       <button 
                         onClick={() => handleDeleteMenu(menu.id)}
                         className="bg-white/90 backdrop-blur-md text-rose-600 p-3 rounded-2xl shadow-xl hover:bg-rose-600 hover:text-white transition-all border border-white/20"
                       >
-                        <Trash2 size={16} />
+                        <Trash2 size={18} />
                       </button>
                     </div>
                   </div>

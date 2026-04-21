@@ -137,18 +137,18 @@ const InventoryTab: React.FC<InventoryTabProps> = ({
               <div className="bg-coffee-50 p-4 rounded-2xl group-hover:bg-coffee-100 transition-colors border border-coffee-100/50">
                 <Package className="text-coffee-600" size={24} />
               </div>
-              <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+              <div className="flex gap-2 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-all duration-300 lg:translate-x-4 lg:group-hover:translate-x-0 z-10">
                 <button 
                   onClick={() => handleEditInventory(item)}
-                  className="p-2 text-coffee-300 hover:text-coffee-600 hover:bg-coffee-50 rounded-lg transition-all"
+                  className="p-3 bg-white lg:bg-transparent text-coffee-600 lg:text-coffee-300 hover:text-coffee-600 hover:bg-coffee-50 rounded-xl transition-all shadow-sm lg:shadow-none border border-coffee-100 lg:border-transparent"
                 >
-                  <Edit size={16} />
+                  <Edit size={18} />
                 </button>
                 <button 
                   onClick={() => handleDeleteInventory(item.id)}
-                  className="p-2 text-coffee-300 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-all"
+                  className="p-3 bg-white lg:bg-transparent text-rose-500 lg:text-coffee-300 hover:text-white hover:bg-rose-500 rounded-xl transition-all shadow-sm lg:shadow-none border border-coffee-100 lg:border-transparent"
                 >
-                  <Trash2 size={16} />
+                  <Trash2 size={18} />
                 </button>
               </div>
             </div>
